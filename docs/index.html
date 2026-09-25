@@ -18,7 +18,7 @@
 </head>
 <body>
 
-<div class="wrap">
+<div class="wrap hdr">
   <header class="top">
     <p class="eyebrow">Enjoyer OS · 50/30/20 bei Trade Republic</p>
     <h1>Regel-Depot</h1>
@@ -36,16 +36,15 @@
   <div class="sec-head">
     <p class="eyebrow">Status</p>
     <h2 id="h-status">Was die Regeln gerade sagen</h2>
-    <p>Zustand jeder Regel zum letzten Wochenschluss, abgeglichen mit deinem Depot. Die Charts zeigen die Wochenschlüsse in US-Dollar mit dem 50-Wochen-Durchschnitt (SMA50); darunter der Abstand zum SMA50 gegen die Schwelle der Regel.</p>
+    <p>Stand jeder Regel zum letzten Wochenschluss, abgeglichen mit deinem Depot. Charts in US-Dollar: Wochenschlüsse, SMA50 gestrichelt, darunter der Abstand zur Schwelle.</p>
   </div>
   <div class="todo" id="todo"></div>
   <div class="toolbar">
-    <div class="summary" id="statusSummary" aria-label="Übersicht"></div>
+    <div class="chart-legend" id="chLegend"></div>
     <div class="seg" id="rangeSeg" role="group" aria-label="Zeitraum der Charts">
       <button type="button" data-r="52" aria-pressed="false">1 J</button><button type="button" data-r="156" aria-pressed="true">3 J</button><button type="button" data-r="260" aria-pressed="false">5 J</button><button type="button" data-r="520" aria-pressed="false">10 J</button><button type="button" data-r="0" aria-pressed="false">Max</button>
     </div>
   </div>
-  <div class="chart-legend" id="chLegend"></div>
   <div class="scards" id="statusCards"></div>
 </section>
 
@@ -53,7 +52,7 @@
   <div class="sec-head">
     <p class="eyebrow">Depot</p>
     <h2 id="h-depot">Dein Depot bei Trade Republic</h2>
-    <p>Bewertet mit den letzten Euro-Kursen. Das Geld einer Position, die gerade nicht investiert ist, zählt als Cash dieser Position. Die Depotdaten liegen nur in diesem Browser.</p>
+    <p>Bewertet mit den letzten Euro-Kursen. Geld einer Position, die laut Regel nicht investiert ist, zählt als Cash dieser Position.</p>
   </div>
   <div id="depotBanner"></div>
   <div class="kpis" id="kpis"></div>
@@ -68,11 +67,9 @@
   <div class="card">
     <div class="pad" style="padding-bottom:6px"><p class="subhd">Positionen</p></div>
     <div class="tablewrap" id="posTable"></div>
-    <div class="pad cardhead tight topline"><p class="subhd">Kauflose (FIFO)</p><button type="button" class="fold" data-fold="lots" aria-controls="lotsTable" aria-expanded="true">Einklappen</button></div>
-    <div class="tablewrap" id="lotsTable"></div>
   </div>
   <div class="card">
-    <div class="pad cardhead tight"><p class="subhd">Käufe und Verkäufe</p><button type="button" class="fold" data-fold="tx" aria-controls="txTable" aria-expanded="true">Einklappen</button></div>
+    <div class="pad cardhead tight"><p class="subhd">Buchungen und Kauflose</p><div class="row"><button type="button" class="fold plain" id="btnNotes" aria-pressed="false">Notizen</button><button type="button" class="fold" data-fold="tx" aria-controls="txTable" aria-expanded="true">Einklappen</button></div></div>
     <div class="tablewrap" id="txTable"></div>
   </div>
   <details class="box" id="accBox">
@@ -114,7 +111,7 @@
   <div class="sec-head">
     <p class="eyebrow">Signale</p>
     <h2 id="h-signale">Signale, Vorwarnungen und Benachrichtigungen</h2>
-    <p>Bei jedem Kauf- oder Verkaufssignal bekommst du eine Push-Nachricht, dazu eine Vorwarnung, wenn der Kurs kurz vor dem Wochenschluss ein Signal auslösen würde. Hier stehen alle gesammelt.</p>
+    <p>Push-Nachricht bei jedem Signal und als Vorwarnung, wenn der Kurs kurz vor dem Wochenschluss auf der Signalseite liegt. Hier der Verlauf, die nächsten Läufe und die Einrichtung.</p>
   </div>
   <div class="grid2">
     <div style="display:grid;gap:14px;min-width:0">
@@ -124,10 +121,10 @@
     <div class="card">
       <div class="pad" style="padding-bottom:8px"><p class="subhd">Nächste Aktualisierungen</p></div>
       <div class="sched" id="sched"></div>
-      <div class="pad cardhead tight topline"><p class="subhd">Letzte Läufe</p><button type="button" class="fold" data-fold="runs" aria-controls="runBody" aria-expanded="true">Einklappen</button></div>
+      <div class="pad cardhead tight topline"><p class="subhd">Letzte Läufe</p><button type="button" class="fold" data-fold="runs" aria-controls="runBody" aria-expanded="false" data-open="0">Ausklappen</button></div>
       <div id="runBody">
         <div class="runlog" id="runlog"></div>
-        <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Kurse holt ein automatischer Lauf bei GitHub (Yahoo Finance und LBMA, bei Störungen Ersatzquellen). LBMA veröffentlicht den Goldpreis erst um Mitternacht (London), deshalb kommt das Gold-Signal in der Nacht auf Montag; die Push-Nachrichten vom Wochenende werden Montag früh verschickt. GitHub startet geplante Läufe oft einige Minuten später.</div>
+        <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Läufe laufen automatisch bei GitHub und können sich um einige Minuten verschieben. Das Gold-Signal kommt erst in der Nacht auf Montag (LBMA veröffentlicht spät), die Push-Nachrichten vom Wochenende am Montagmorgen. Der stündliche Kurs-Ticker erscheint hier nicht.</div>
       </div>
     </div>
   </div>

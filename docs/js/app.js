@@ -126,8 +126,8 @@
     var val = P.val ? ' (ca. ' + eur(P.val) + ')' : '';
     if (L.changed && fresh) return { cls: 'sell', title: 'Verkaufen', text: 'Verkaufssignal: alle ' + units(a, P.u) + val + ' verkaufen ' + dueText(due) + '.', tax: saleTax(a, Mo), todo: true };
     var fx = D.eur && D.eur.latest && D.eur.latest.eurusd && D.eur.latest.eurusd.p, pxThr = (fi.can && fx && P.px) ? Math.min(P.px, fi.thr / fx) : null;
-    return { cls: 'sell', title: 'Verkaufen', text: 'Laut Regel nicht investiert' + (ls ? ' seit ' + dDE(ls.d) : '') + '. Du hältst noch ' + units(a, P.u) + val + '.', todo: true,
-      next: fi.can ? 'Nächster Wochenschluss am ' + dShort(nc) + ': Über ' + usd(a, fi.thr) + ' gibt es ein Kaufsignal, dann behältst du die Position. Sonst verkaufen zur Eröffnung am Montag, ' + dShort(due2) : 'Verkaufen, sobald es passt.',
+    return { cls: 'sell', title: 'Verkaufen', text: 'Laut Regel' + (ls ? ' seit ' + dDE(ls.d) : '') + ' nicht investiert, du hältst noch ' + units(a, P.u) + val + '.', todo: true,
+      next: fi.can ? 'Verkaufen zur Eröffnung am Montag, ' + dShort(due2) + ' – außer der Wochenschluss am ' + dShort(nc) + ' liegt über ' + usd(a, fi.thr) + ', dann gibt es ein Kaufsignal und du behältst die Position.' : 'Verkaufen, sobald es passt.',
       tax: saleTax(a, Mo, pxThr) };
   }
   function streakText(L) { if (L.up > 0) return L.up + '× über SMA50'; if (L.dn > 0) return L.dn + '× unter SMA50'; return 'auf dem SMA50'; }
@@ -158,9 +158,9 @@
     var h = $('topMeta'); h.textContent = '';
     function s(label, val, cls) { var e = el('span', cls || null); e.appendChild(el('b', null, label + ' ')); e.appendChild(document.createTextNode(val)); h.appendChild(e); }
     s('Wochenschluss', 'FTSE ' + dShort(C.ftse.E.last.d) + ' · Gold ' + dShort(C.gold.E.last.d) + ' · Bitcoin ' + dShort(C.btc.E.last.d));
-    var p = pxOf('ftse') || pxOf('btc'); if (p) s('Euro-Kurse', 'vom ' + dShort(p.d));
-    if (D.live && D.live.t) s('Kurs-Ticker', dtDE(D.live.t) + (D.browserLive.btc ? ' · Bitcoin live' : ''));
-    var r = lastRun(); if (r) s('Letzter Lauf', dtDE(r.t) + (r.ok ? '' : ' · mit Fehlern'), r.ok ? null : 'bad');
+    var p = pxOf('ftse') || pxOf('btc'); if (p) s('Euro-Kurse', dShort(p.d));
+    if (D.live && D.live.t) s('Live-Kurse', dtDE(D.live.t) + (D.browserLive.btc ? ' · Bitcoin im Browser live' : ''));
+    var r = lastRun(); if (r && !r.ok) s('Letzter Lauf', dtDE(r.t) + ' · mit Fehlern', 'bad');
     s('Depot', Mo.ready ? 'in diesem Browser' : 'noch nicht importiert');
   }
   function renderGlobal(Mo) {
@@ -175,10 +175,10 @@
     var host = $('todo'); host.textContent = ''; var items = [];
     A.forEach(function (a) {
       var act = actionFor(a, Mo), L = C[a].E.last, w = currentWarn(a), st = D.state && D.state.assets && D.state.assets[a];
-      if (act.todo) items.push({ cls: act.cls, ic: act.cls === 'buy' ? '▲' : '▼', title: CFG.assets[a].name + ': ' + act.title, text: act.text + (act.next ? ' ' + act.next : ''), href: '#card-' + a });
+      var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, liveTxt = rn && rn.would ? 'Aktuell ' + usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle): so käme das ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal') + '; es zählt allein der Wochenschluss ' + (CFG.assets[a].week === 'sun' ? 'am Sonntag um 24 Uhr UTC' : 'am Freitag') + '.' : '';
+      if (act.todo) items.push({ cls: act.cls, ic: act.cls === 'buy' ? '▲' : '▼', title: CFG.assets[a].name + ': ' + act.title, text: act.text + (act.next ? ' ' + act.next : '') + (liveTxt ? ' ' + liveTxt : ''), href: '#card-' + a });
       if (w && w.level !== 'none') items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Vorwarnung ' + dtDE(w.t), text: w.text, href: '#card-' + a });
-      var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
-      if (rn && rn.would && !(w && w.level !== 'none')) items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Kurs aktuell auf der Signalseite', text: 'Aktuell ' + usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + '). Schließt die Woche so, gibt es ein ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal') + '. Entscheidend ist allein der Wochenschluss ' + (CFG.assets[a].week === 'sun' ? 'am Sonntag um 24 Uhr UTC' : 'am Freitag') + '.', href: '#card-' + a });
+      else if (liveTxt && !act.todo) items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Kurs auf der Signalseite', text: liveTxt, href: '#card-' + a });
       if (st && st.pending) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Wochenschluss fehlt noch', text: st.pending.reason + ' (Stand ' + dtDE(st.pending.at) + '). Die Seite zeigt bis dahin die Vorwoche.', href: '#signale' });
       if (st && st.fallback) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Ersatzquelle', text: 'Der letzte Wochenschluss stammt aus einer Ersatzquelle (' + st.src + '), weil Yahoo nicht erreichbar war. Nah an der Schwelle mit Yahoo gegenprüfen.', href: '#card-' + a });
     });
@@ -188,12 +188,6 @@
   }
 
   /* ---------- Status-Karten ---------- */
-  function renderSummary() {
-    var h = $('statusSummary'); h.textContent = '';
-    var inv = A.filter(function (a) { return C[a].E.last.st === 1; }).length;
-    h.appendChild(el('span', 'sumchip strong', inv + ' von 3 investiert'));
-    A.forEach(function (a) { var L = C[a].E.last, c = el('a', 'sumchip'); c.href = '#card-' + a; c.appendChild(el('i', 'dot ' + (L.st === 1 ? 'in' : 'out'))); c.appendChild(document.createTextNode(CFG.assets[a].name + (L.st === 1 ? '' : ' · Cash'))); h.appendChild(c); });
-  }
   function renderChartLegend() {
     var h = $('chLegend'); h.textContent = '';
     var items = [{ t: 'Wochenschluss', c: 'var(--ink-2)' }, { t: 'SMA50', c: 'var(--ink-2)', dash: true }, { t: 'Regel investiert', box: 'color-mix(in srgb, var(--ink-2) 16%, transparent)' }, { t: 'Band ±3 % (Bitcoin)', box: 'var(--band)' }, { t: 'Kaufsignal', tri: 'up' }, { t: 'Verkaufssignal', tri: 'dn' }, { t: 'Abstand zum SMA50 (unten)', box: 'color-mix(in srgb, var(--ink-2) 35%, transparent)' }];
@@ -206,7 +200,7 @@
     t.appendChild(tb); return t;
   }
   function renderStatus(Mo) {
-    renderSummary(); renderChartLegend();
+    renderChartLegend();
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
       var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch, st = D.state && D.state.assets && D.state.assets[a];
@@ -223,7 +217,7 @@
         var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : 'Aktuell ' + (lp.t ? new Date(lp.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
         var what = rn.would ? ('Schließt die Woche so: ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal')) : (CFG.assets[a].rule.type === 'confirm' && ((rn.st === 1 && lp.usd < rn.thr) || (rn.st === 0 && lp.usd > rn.thr)) ? 'So wäre das der ' + (lp.usd > rn.thr ? rn.up : rn.dn) + '. Schluss ' + (lp.usd > rn.thr ? 'über' : 'unter') + ' dem SMA50, Signal erst nach ' + CFG.assets[a].rule.n : 'Schließt die Woche so, bleibt die Regel ' + (rn.wouldSt ? 'investiert' : 'auf Cash'));
         lv.appendChild(el('p', 'ld', pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + ' · ' + what + '.'));
-        if (lp.live || lp.src) lv.appendChild(el('p', 'ls', (lp.live ? 'Live im Browser' : lp.spot ? 'Spotpreis, stündlich' : lp.eod ? 'Tagesschluss, kein Intraday-Kurs verfügbar' : 'stündlich') + (lp.src ? ' · ' + lp.src.replace(/ \(Ersatzquelle\)/, '') : '')));
+        var ls1 = el('p', 'ls', lp.live ? 'Live im Browser' : lp.spot ? 'Spotpreis, stündlich aktualisiert' : lp.eod ? 'Tagesschluss (für den ETF gibt es keinen Live-Kurs)' : 'stündlich aktualisiert'); if (lp.src) ls1.title = 'Quelle: ' + lp.src; lv.appendChild(ls1);
         top.appendChild(lv);
       }
       var row = el('div', 'row'), ti = thresholdInfo(a);
@@ -239,12 +233,11 @@
       var cw = el('div', 'cchart'), ch = el('div', 'chart'); ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
-      if (act.next) bot.appendChild(el('p', 'nextact', act.next));
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
       var dl = el('dl');
-      kv(dl, 'SMA50', usd(a, L.m)); kv(dl, 'Serie', streakText(L)); kv(dl, 'Letztes Signal', ls ? (ls.to ? 'Kauf ' : 'Verkauf ') + dDE(ls.d) : '–');
-      if (ls && ls.c > 0) kv(dl, 'Kurs seit dem Signal', pct(L.c / ls.c - 1, 1));
-      if (st && st.src) kv(dl, 'Quelle', st.src.replace(/ adjclose/, ' bereinigt'));
+      kv(dl, 'SMA50', usd(a, L.m)); kv(dl, 'Serie', streakText(L));
+      if (ls && ls.c > 0) kv(dl, 'Kurs seit dem ' + (ls.to ? 'Kauf' : 'Verkauf') + 'signal', pct(L.c / ls.c - 1, 1));
+      if (st && st.fallback && st.src) kv(dl, 'Quelle', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt').replace(/ \(Ersatzquelle\)/, ''));
       bot.appendChild(dl);
       var nx = el('p', 'next'); nx.appendChild(document.createTextNode(ti.text[0])); nx.appendChild(el('b', null, ti.text[1])); nx.appendChild(document.createTextNode(ti.text[2])); bot.appendChild(nx);
       var det = el('details', 'box mini'); det.appendChild(el('summary', null, 'Letzte 12 Wochen als Tabelle')); var twr = el('div', 'body'), tw = el('div', 'tablewrap'); tw.appendChild(weeksTable(a)); twr.appendChild(tw); det.appendChild(twr); bot.appendChild(det);
@@ -317,15 +310,6 @@
       var sum = (P.val || 0) + P.cash; r.appendChild(el('td', 'n', eur(sum))); r.appendChild(el('td', 'n', tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', sgnEur(sum - tot * CFG.assets[a].w))); tb.appendChild(r); });
     t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td', 'n', eur(inv))); fr.appendChild(el('td', 'n', eur(cashT))); fr.appendChild(el('td', 'n', eur(tot))); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
     pt.appendChild(t);
-    var lt = el('table'), lh = el('thead'), lr = el('tr'); ['Position', 'Kaufdatum', 'Stück', 'Einstand je Stück', 'Wert', 'Gewinn', 'Steuerlich'].forEach(function (h, i) { var c = el('th', i >= 2 && i <= 5 ? 'n' : null, h); c.scope = 'col'; lr.appendChild(c); }); lh.appendChild(lr); lt.appendChild(lh);
-    var lb = el('tbody'), any = false;
-    A.forEach(function (a) { Mo.pos[a].lots.forEach(function (l) { any = true; var P = Mo.pos[a], r = el('tr'); var c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst + ' ')); if (l.est) c0.appendChild(el('span', 'tag est', 'geschätzt')); r.appendChild(c0);
-      r.appendChild(el('td', null, dDE(l.d))); r.appendChild(el('td', 'n', a === 'btc' ? de(l.units, 6) : de(l.units, 3))); r.appendChild(el('td', 'n', eur(l.cpu, a === 'btc' ? 0 : 2)));
-      var val = P.px ? l.units * P.px : null, g = val != null ? val - l.units * l.cpu : null; r.appendChild(el('td', 'n', val != null ? eur(val) : '–')); r.appendChild(el('td', 'n ' + (g >= 0 ? 'up' : 'down'), g != null ? sgnEur(g) + ' (' + pct(g / (l.units * l.cpu), 1) + ')' : '–'));
-      var note = a === 'ftse' ? '§ 20: Abgeltungsteuer, 30 % Teilfreistellung' : (ENG.isLongTerm(l.d, todayISO()) ? '§ 23: Haltefrist vorbei, steuerfrei' : '§ 23: steuerfrei ' + (l.est ? 'spätestens ' : '') + 'ab ' + dDE(ENG.taxFreeFrom(l.d)));
-      r.appendChild(el('td', null, note)); lb.appendChild(r); }); });
-    if (!any) { var er = el('tr'), ec = el('td', null, Mo.ready ? 'Noch keine Käufe erfasst.' : 'Depotdaten noch nicht importiert.'); ec.colSpan = 7; er.appendChild(ec); lb.appendChild(er); }
-    lt.appendChild(lb); var lw = $('lotsTable'); lw.textContent = ''; lw.appendChild(lt);
     renderTx(Mo);
   }
   function renderAlloc(Mo, tot, cashT) {
@@ -336,31 +320,51 @@
     A.forEach(function (a) { var w = CFG.assets[a].w * tot; if (C[a].E.last.st === 1) ziel[a] += w; else { ziel.cash += w; outs.push(CFG.assets[a].name); } });
     function parts(o, which) { return CAT.map(function (c) { var note = null; if (which === 'ziel' && c.k === 'cash' && outs.length) note = 'Anteil von ' + outs.join(' und ') + ', Regel auf Cash'; if (which === 'ist' && c.k === 'cash') { var bits = A.filter(function (a) { return Mo.pos[a].cash > 0.5; }).map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }); if (bits.length) note = 'davon ' + bits.join(', '); } return { k: c.k, label: c.label, color: c.color, v: o[c.k], note: note }; }); }
     var wrap = el('div', 'donuts');
-    wrap.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', parts(ist, 'ist'), tot));
-    wrap.appendChild(CH.donut('Ziel', 'laut Regeln', parts(ziel, 'ziel'), tot));
+    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = el('i', 'sw'); sw.style.background = 'var(' + q.color + ')'; it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
+    var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
+    d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', pi, tot)); d1.appendChild(legend(pi));
+    d2.appendChild(CH.donut('Ziel', 'laut Regeln', pz, tot)); d2.appendChild(legend(pz));
+    wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
-    al.appendChild(el('p', 'small muted', 'Ziel: 50 % FTSE All-World, 30 % Bitcoin, 20 % Gold. ' + (outs.length ? outs.join(' und ') + (outs.length > 1 ? ' stehen' : ' steht') + ' laut Regel auf Cash, deshalb liegt ' + (outs.length > 1 ? 'ihr Anteil' : 'sein Anteil') + ' im Ziel als Cash.' : 'Alle drei Regeln sind investiert.')));
-    var tw = el('div', 'tablewrap'), t = el('table'), th = el('thead'), tr = el('tr');
-    ['Anlage', 'Ist', 'Ziel', 'Differenz'].forEach(function (h, i) { var c = el('th', i > 0 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
-    var tb = el('tbody');
-    CAT.forEach(function (c) { var r = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + c.color + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(c.label)); r.appendChild(c0);
-      function cell(v, d) { var td = el('td', 'n'); td.appendChild(document.createTextNode(eur(v))); td.appendChild(el('span', 'sub', pctPlain(v / tot, d))); return td; }
-      var d = ziel[c.k] - ist[c.k], dtxt = Math.abs(d) < 0.5 ? '–' : sgnEur(d);
-      r.appendChild(cell(ist[c.k], 1)); var zc = cell(ziel[c.k], 0); if (dtxt !== '–') zc.appendChild(el('span', 'sub dm', 'Differenz ' + dtxt)); r.appendChild(zc);
-      r.appendChild(el('td', 'n', dtxt)); tb.appendChild(r); });
-    t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td', 'n', eur(tot))); fr.appendChild(el('td', 'n', eur(tot))); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
-    tw.appendChild(t); al.appendChild(tw);
+    al.appendChild(el('p', 'small muted', 'Ziel 50 / 30 / 20 (FTSE / Bitcoin / Gold). ' + (outs.length ? outs.join(' und ') + (outs.length > 1 ? ' stehen' : ' steht') + ' laut Regel auf Cash, deshalb zählt ' + (outs.length > 1 ? 'ihr Anteil' : 'sein Anteil') + ' im Ziel als Cash. Abweichungen je Position stehen in der Tabelle unten.' : 'Alle drei Regeln sind investiert.')));
   }
   var pendingDelete = null;
+  /* Buchungen und Kauflose in einer Tabelle: jede Buchung mit dem, was heute daraus geworden ist (Restbestand nach FIFO, Wert, Gewinn, steuerliche Lage) */
+  var SHOW_NOTES = false; try { SHOW_NOTES = localStorage.getItem('regelDepot.notes') === '1'; } catch (e) { /* still */ }
   function renderTx(Mo) {
     var h = $('txTable'); h.textContent = '';
-    var t = el('table'), th = el('thead'), tr = el('tr'); ['Datum', 'Position', 'Art', 'Stück', 'Kurs', 'Gebühr', 'Betrag', ''].forEach(function (x, i) { var c = el('th', i >= 3 && i <= 6 ? 'n' : null, x); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
-    var tb = el('tbody'), list = Mo.dep.tx.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : 0; });
-    if (!list.length) { var er = el('tr'), ec = el('td', null, 'Noch keine Buchungen.'); ec.colSpan = 8; er.appendChild(ec); tb.appendChild(er); }
-    list.forEach(function (x) { var r = el('tr'), cashMove = x.type === 'einzahlung' || x.type === 'auszahlung'; r.appendChild(el('td', null, dDE(x.d))); var c1 = el('td', null, CFG.assets[x.a].inst + ' '); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt')); if (x.note) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } r.appendChild(c1); r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung'));
-      if (cashMove) { r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', (x.type === 'einzahlung' ? '+' : '−') + eur(x.amount, 2))); }
-      else { r.appendChild(el('td', 'n', x.a === 'btc' ? de(x.units, 6) : de(x.units, 3))); r.appendChild(el('td', 'n', eur(x.price, x.a === 'btc' ? 0 : 2))); r.appendChild(el('td', 'n', eur(x.fee || 0, 2))); r.appendChild(el('td', 'n', eur(x.units * x.price + (x.type === 'kauf' ? 1 : -1) * (x.fee || 0), 2))); }
-      var c = el('td', 'n'); var b = el('button', 'btn sm ' + (pendingDelete === x.id ? 'danger' : 'ghost'), pendingDelete === x.id ? 'Wirklich löschen' : 'Löschen'); b.type = 'button'; b.addEventListener('click', function () { if (pendingDelete !== x.id) { pendingDelete = x.id; renderTx(model()); return; } pendingDelete = null; deleteTx(x); }); c.appendChild(b); if (pendingDelete === x.id) { var cn = el('button', 'btn sm ghost', 'Abbrechen'); cn.type = 'button'; cn.style.marginLeft = '6px'; cn.addEventListener('click', function () { pendingDelete = null; renderTx(model()); }); c.appendChild(cn); } r.appendChild(c); tb.appendChild(r); });
+    var nb = $('btnNotes'); if (nb) { nb.setAttribute('aria-pressed', SHOW_NOTES ? 'true' : 'false'); nb.textContent = SHOW_NOTES ? 'Notizen ausblenden' : 'Notizen'; }
+    var rest = {}; A.forEach(function (a) { Mo.pos[a].lots.forEach(function (l) { if (l.id) rest[l.id] = l; }); });
+    var realBy = {}; Mo.B.real.forEach(function (r) { if (r.id) realBy[r.id] = r; });
+    var t = el('table'), th = el('thead'), tr = el('tr'); ['Datum', 'Position', 'Art', 'Stück', 'Kurs', 'Betrag', 'Wert heute', 'Gewinn', 'Steuerlich', ''].forEach(function (x, i) { var c = el('th', i >= 3 && i <= 7 ? 'n' : null, x); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
+    var tb = el('tbody'), list = Mo.dep.tx.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : (b.ts || 0) - (a.ts || 0); }), today = todayISO();
+    if (!list.length) { var er = el('tr'), ec = el('td', null, Mo.ready ? 'Noch keine Buchungen.' : 'Depotdaten noch nicht importiert.'); ec.colSpan = 10; er.appendChild(ec); tb.appendChild(er); }
+    list.forEach(function (x) {
+      var r = el('tr'), a = x.a, P = Mo.pos[a], cashMove = x.type === 'einzahlung' || x.type === 'auszahlung';
+      r.appendChild(el('td', null, dDE(x.d)));
+      var c1 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c1.appendChild(sw); c1.appendChild(document.createTextNode(CFG.assets[a].short + ' ')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
+      if (x.note) { if (SHOW_NOTES) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } else { c1.title = x.note; var ni = el('span', 'noteic', 'i'); ni.setAttribute('aria-label', 'Notiz: ' + x.note); c1.appendChild(ni); } }
+      r.appendChild(c1);
+      r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung'));
+      if (cashMove) { r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', (x.type === 'einzahlung' ? '+' : '−') + eur(x.amount, 2))); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'small muted', 'Cash des Bausteins')); }
+      else if (x.type === 'kauf') {
+        var lot = rest[x.id], left = lot ? lot.units : 0, cpu = (x.units * x.price + (x.fee || 0)) / x.units;
+        var cs = el('td', 'n', units(a, x.units)); if (left > 1e-9 && left < x.units - 1e-9) cs.appendChild(el('span', 'sub', 'noch ' + units(a, left))); else if (!(left > 1e-9)) cs.appendChild(el('span', 'sub', 'verkauft')); r.appendChild(cs);
+        var cp = el('td', 'n', eur(x.price, a === 'btc' ? 0 : 2)); if ((x.fee || 0) > 0) cp.appendChild(el('span', 'sub', '+ ' + eur(x.fee, 2) + ' Gebühr')); r.appendChild(cp);
+        r.appendChild(el('td', 'n', eur(x.units * x.price + (x.fee || 0), 2)));
+        if (left > 1e-9 && P.px) { var val = left * P.px, g = val - left * cpu; r.appendChild(el('td', 'n', eur(val))); r.appendChild(el('td', 'n ' + (g >= 0 ? 'up' : 'down'), sgnEur(g) + ' (' + pct(g / (left * cpu), 1) + ')')); }
+        else { r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); }
+        var tax = !(left > 1e-9) ? 'im Bestand nicht mehr enthalten' : a === 'ftse' ? '§ 20: Abgeltungsteuer, 30 % Teilfreistellung' : (ENG.isLongTerm(x.d, today) ? '§ 23: Haltefrist vorbei, steuerfrei' : '§ 23: steuerfrei ' + (x.est ? 'spätestens ' : '') + 'ab ' + dDE(ENG.taxFreeFrom(x.d)));
+        r.appendChild(el('td', 'small', tax));
+      } else {
+        var rl = realBy[x.id];
+        r.appendChild(el('td', 'n', units(a, x.units))); var sp = el('td', 'n', eur(x.price, a === 'btc' ? 0 : 2)); if ((x.fee || 0) > 0) sp.appendChild(el('span', 'sub', '− ' + eur(x.fee, 2) + ' Gebühr')); r.appendChild(sp);
+        r.appendChild(el('td', 'n', eur(x.units * x.price - (x.fee || 0), 2))); r.appendChild(el('td', 'n', '–'));
+        if (rl) { r.appendChild(el('td', 'n ' + (rl.gain >= 0 ? 'up' : 'down'), sgnEur(rl.gain) + ' realisiert')); r.appendChild(el('td', 'small', a === 'ftse' ? '§ 20: ' + eur(Math.max(0, rl.gain) * (1 - Mo.cfg.tfs)) + ' steuerpflichtig nach Teilfreistellung' : (rl.shortGain !== 0 ? '§ 23: kurzfristig ' + sgnEur(rl.shortGain) + (rl.longGain !== 0 ? ', steuerfrei ' + sgnEur(rl.longGain) : '') : '§ 23: Haltefrist vorbei, steuerfrei'))); }
+        else { r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'small muted', 'kein passender Kauf davor')); }
+      }
+      var c = el('td', 'n'); var b = el('button', pendingDelete === x.id ? 'btn sm danger' : 'link del', pendingDelete === x.id ? 'Wirklich löschen' : 'Löschen'); b.type = 'button'; b.addEventListener('click', function () { if (pendingDelete !== x.id) { pendingDelete = x.id; renderTx(model()); return; } pendingDelete = null; deleteTx(x); }); c.appendChild(b); if (pendingDelete === x.id) { var cn = el('button', 'btn sm ghost', 'Abbrechen'); cn.type = 'button'; cn.style.marginLeft = '6px'; cn.addEventListener('click', function () { pendingDelete = null; renderTx(model()); }); c.appendChild(cn); } r.appendChild(c); tb.appendChild(r);
+    });
     t.appendChild(tb); h.appendChild(t);
   }
   function deleteTx(x) {
@@ -435,7 +439,7 @@
     if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }
     else if (r === 'wochen') from = ENG.addDays(today, -364);
     else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
-    var capText = note + 'Jeder Baustein = Position zu Euro-' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kursen plus sein Cash plus aufgelaufene Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt). Cash vor heute wird rückwärts aus den Buchungen abgeleitet; Ein- und Auszahlungen aufs Konto bitte unten erfassen. Letzter Punkt mit den aktuellen Kursen.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    var capText = note + 'Baustein = Position plus Cash plus Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt), ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash vor heute ist aus den Buchungen zurückgerechnet.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
     CH.portfolioChart(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
   }
 
@@ -497,11 +501,12 @@
   }
   function renderRunLog() {
     var host = $('runlog'); host.textContent = '';
-    var rows = (D.runs || []).slice(0, 7);
+    var rows = (D.runs || []).filter(function (r) { return !r.ok || (r.step !== 'live' && r.step !== 'test-sources' && r.step !== 'test-push'); }).slice(0, 6);
     if (!rows.length) { host.appendChild(el('div', 'empty', 'Noch kein automatischer Lauf.')); return; }
     rows.forEach(function (r) { var d = el('div'), left = el('span'); left.appendChild(el('b', null, (STEPS[r.step] || r.step) + ' ')); var bad = !r.ok; left.appendChild(el('span', bad ? 'bad' : 'muted', bad ? 'Fehler' : 'ok' + (r.notified ? ', ' + r.notified + ' Push' : ''))); d.appendChild(left);
       var t = el('time', null, dtDE(r.t)); t.setAttribute('datetime', r.t); d.appendChild(t);
-      var txt = (r.errors && r.errors.length ? r.errors.join(' · ') + (r.summary ? ' · ' : '') : '') + (r.summary || ''); if (txt) d.appendChild(el('p', null, txt.length > 260 ? txt.slice(0, 257) + '…' : txt)); host.appendChild(d); });
+      var detail = bad || /close|notify|init/.test(r.step), txt = bad ? ((r.errors && r.errors.length ? r.errors.join(' · ') : '') || r.summary || '') : (detail ? (r.summary || '') : '');
+      if (txt) d.appendChild(el('p', null, txt.length > 180 ? txt.slice(0, 177) + '…' : txt)); host.appendChild(d); });
   }
 
   /* ---------- Push ---------- */
@@ -563,7 +568,7 @@
     var cards = $('rebCards'), notes = $('rebNotes'), ban = $('rebBanner'); cards.textContent = ''; notes.textContent = ''; ban.textContent = '';
     var cfg = Mo.cfg, date = cfg.rebalDate || CFG.taxLaw.rebalDate, days = ENG.daysBetween(todayISO(), date);
     $('rebDate').textContent = dDE(date);
-    $('rebLede').textContent = (days >= 0 ? 'Noch ' + days + ' Tage. ' : 'Der Stichtag ist vorbei; trage unter Einstellungen den nächsten ein. ') + 'Zurück auf 50/30/20, gerechnet mit den aktuellen Euro-Kursen und Regelständen. Die Seite rechnet nach jedem Wochenschluss neu, die endgültigen Zahlen stehen also kurz vor dem Stichtag hier.';
+    $('rebLede').textContent = (days >= 0 ? 'Noch ' + days + ' Tage. ' : 'Der Stichtag ist vorbei; trage unter Einstellungen den nächsten ein. ') + 'Zurück auf 50/30/20 mit den aktuellen Kursen und Regelständen; die Zahlen aktualisieren sich bis zum Stichtag.';
     if (!Mo.ready) { cards.appendChild(el('div', 'card pad muted', 'Ohne Depotdaten keine Vorschau. Importiere dein Depot unter Einstellungen.')); return; }
     if (!cfg.pbKnown) { var b = el('div', 'banner'); b.appendChild(el('b', null, 'Pauschbetrag noch ohne Angabe von Trade Republic')); b.appendChild(el('span', null, 'Gerechnet wird, als wären die vollen 1.000 € frei, abzüglich der geschätzten Zinsen. Trag den genutzten Betrag unter Einstellungen ein.')); ban.appendChild(b); }
     var st = {}, px = {}, pos = {}, cash = {}, ty = { pbFree: Mo.ty.pbFree, s23Before: Mo.ty.s23Before }, open = [], noPx = [];
@@ -571,11 +576,14 @@
       if (st[a] === 0 && Mo.pos[a].u > 1e-9 && px[a] > 0) { var fi = flipInfo(a), fx = D.eur && D.eur.latest && D.eur.latest.eurusd && D.eur.latest.eurusd.p, ps = (fi.can && fx) ? Math.min(px[a], fi.thr / fx) : px[a];
         var sm = ENG.simSell(pos[a], Mo.pos[a].u * ps, ps, todayISO(), a, cfg); if (a === 'ftse') ty.pbFree -= sm.taxable20; else ty.s23Before += sm.sg; cash[a] += Mo.pos[a].u * ps; pos[a] = []; open.push(a); } });
     if (noPx.length) { var nb = el('div', 'banner'); nb.appendChild(el('b', null, 'Euro-Kurs fehlt für ' + noPx.join(', '))); nb.appendChild(el('span', null, 'Die Vorschau ist erst vollständig, wenn der nächste Lauf die Euro-Kurse geliefert hat.')); ban.appendChild(nb); }
-    if (open.length) { var ob = el('div', 'banner info'); ob.appendChild(el('b', null, 'Offene Regel-Aktion: ' + open.map(function (a) { return CFG.assets[a].name + ' verkaufen'; }).join(', '))); ob.appendChild(el('span', null, 'Das Rebalancing unten geht davon aus, dass du das vorher erledigst (siehe Status). Der Gewinn daraus ist in Pauschbetrag und Freigrenze schon eingerechnet, geschätzt zum Kurs knapp unter der Schwelle.')); ban.appendChild(ob); }
+    if (open.length) { var ob = el('div', 'banner info'); ob.appendChild(el('b', null, 'Offene Regel-Aktion: ' + open.map(function (a) { return CFG.assets[a].name + ' verkaufen'; }).join(', '))); ob.appendChild(el('span', null, 'Die Vorschau geht davon aus, dass du das vorher erledigst (siehe Status); der Gewinn daraus ist in Freigrenze und Pauschbetrag schon eingerechnet.')); ban.appendChild(ob); }
     var base = { date: date, w: { ftse: 0.5, btc: 0.3, gold: 0.2 }, st: st, px: px, cash: cash, cfg: cfg, ty: ty };
     function run(v) { var o = {}; for (var k in base) o[k] = base[k]; o.variant = v; o.pos = JSON.parse(JSON.stringify(pos)); return ENG.rebalance(o); }
     var R = { frei: run('frei'), voll: run('voll') };
-    [['frei', 'Ohne Steuer und ohne Steuererklärung', 'Nur Umschichtungen im Pauschbetrag, unter der Freigrenze oder nach der Haltefrist. Kein Abzug bei Trade Republic, nichts zu erklären.'], ['voll', 'Voll auf 50/30/20', 'Exakte Zielgewichte, mit dem, was das steuerlich bedeutet.']].forEach(function (v) {
+    var same = Math.abs(R.frei.tax - R.voll.tax) < 0.5 && A.every(function (a) { var x = R.frei.rows[a], y = R.voll.rows[a]; return Math.abs((x.sell || 0) - (y.sell || 0)) < 0.5 && Math.abs((x.buy || 0) - (y.buy || 0)) < 0.5 && Math.abs((x.after || 0) - (y.after || 0)) < 0.5; });
+    cards.classList.toggle('one', same);
+    var variants = same ? [['frei', 'Vorschlag zum Stichtag', 'Steuerfrei und ohne Steuererklärung; die exakte Rückkehr auf 50/30/20 ergibt hier dieselben Orders.']] : [['frei', 'Ohne Steuer und ohne Steuererklärung', 'Nur Umschichtungen im Pauschbetrag, unter der Freigrenze oder nach der Haltefrist. Kein Abzug bei Trade Republic, nichts zu erklären.'], ['voll', 'Voll auf 50/30/20', 'Exakte Zielgewichte, mit dem, was das steuerlich bedeutet.']];
+    variants.forEach(function (v) {
       var r = R[v[0]], card = el('div', 'card rv'), hd = el('div', 'hd'); hd.appendChild(el('h3', null, v[1])); hd.appendChild(el('p', 'small muted', v[2]));
       var tot = el('div', 'tot'); function tt(l, val) { var s = el('span'); s.appendChild(document.createTextNode(l + ' ')); s.appendChild(el('b', null, val)); tot.appendChild(s); }
       tt('Steuer', eur(r.tax)); if (r.withheld20 > 0.5) tt('Abzug bei TR', eur(r.withheld20)); tt('Orders', String(r.orders)); tt('Ergebnis', BAR_ORDER.map(function (a) { return pctPlain(r.rows[a].wAfter, 0); }).join(' / ') + ' (BTC/FTSE/Gold)');
@@ -601,8 +609,9 @@
     note('Handelstage: Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Bitcoin kannst du bei Trade Republic auch am 31.12. handeln.');
     note('Verkauft wird immer der älteste Kauf zuerst (FIFO). Einzelne Kauflose kannst du nicht auswählen.');
     note('Freigrenze: Liegen alle kurzfristigen Gewinne aus Bitcoin und Gold ' + cfg.year + ' zusammen bei 1.000 € oder mehr, ist der ganze Betrag steuerpflichtig, nicht nur der Teil darüber. Die Seite hält ' + eur(cfg.buffer) + ' Abstand.');
-    note('Steuersatz: Du hast ' + pctPlain(cfg.rate, 0) + ' angegeben' + (cfg.headroom != null ? ' mit ' + eur(cfg.headroom) + ' Spielraum bis zum Grundfreibetrag' : '') + '. Bei 0 % kostet ein Überschreiten der Freigrenze keine Steuer, aber eine Steuererklärung mit Anlage SO. Die 26,375 % auf ETF-Gewinne über dem Pauschbetrag behält Trade Republic trotzdem ein; zurück gibt es sie mit der Anlage KAP (Günstigerprüfung), oder du reichst eine NV-Bescheinigung vom Finanzamt ein, dann entfällt der Abzug.');
-    Mo.pos.btc.lots.forEach(function (l) { if (!ENG.isLongTerm(l.d, date)) note(l.est ? 'Bitcoin (Kaufdatum geschätzt, gerechnet mit ' + dDE(l.d) + '): Die Haltefrist läuft am ' + dDE(date) + ' noch, jeder Gewinn zählt zur Freigrenze. Steuerfrei spätestens ab ' + dDE(ENG.taxFreeFrom(l.d)) + '.' : 'Bitcoin vom ' + dDE(l.d) + ': steuerfrei ab ' + dDE(ENG.taxFreeFrom(l.d)) + '.'); });
+    note('Steuersatz ' + pctPlain(cfg.rate, 0) + (cfg.headroom != null ? ' (' + eur(cfg.headroom) + ' Spielraum bis zum Grundfreibetrag)' : '') + ': ' + (cfg.rate > 0 ? 'Über der Freigrenze wird der ganze kurzfristige Gewinn mit deinem Satz besteuert (Anlage SO). ' : 'Über der Freigrenze fällt keine Steuer an, aber eine Steuererklärung mit Anlage SO. ') + 'ETF-Gewinne über dem Pauschbetrag kürzt Trade Republic um 26,375 %' + (cfg.nv ? '; mit deiner NV-Bescheinigung entfällt der Abzug.' : '; zurück über die Anlage KAP (Günstigerprüfung) oder vermeidbar mit einer NV-Bescheinigung.'));
+    var shortLots = Mo.pos.btc.lots.filter(function (l) { return !ENG.isLongTerm(l.d, date); });
+    if (shortLots.length) { var d0 = shortLots[0].d, d1 = shortLots[shortLots.length - 1].d, anyEst = shortLots.some(function (l) { return l.est; }); note('Bitcoin: ' + (shortLots.length === 1 ? 'Der Kauf vom ' + dDE(d0) : shortLots.length + ' Käufe vom ' + dShort(d0) + ' bis ' + dDE(d1)) + ' ' + (shortLots.length === 1 ? 'ist' : 'sind') + ' am ' + dDE(date) + ' noch in der Haltefrist, Gewinne daraus zählen zur Freigrenze. Steuerfrei ' + (anyEst ? 'spätestens ' : '') + 'ab ' + dShort(ENG.taxFreeFrom(d0)) + (shortLots.length > 1 ? ' bis ' + dDE(ENG.taxFreeFrom(d1)) : '') + ' (je Kauf in der Buchungstabelle).'); }
     var vp = ENG.vorab(Mo.pos.ftse.lots, cfg.year, cfg.vwceStart, Mo.pos.ftse.px || 0, cfg.basiszins);
     if (vp > 0.5) note('Vorabpauschale für ' + cfg.year + ' auf VWCE: ca. ' + eur(vp) + ', davon nach Teilfreistellung ' + eur(vp * (1 - cfg.tfs)) + ' steuerpflichtig. Sie wird Anfang Januar ' + (cfg.year + 1) + ' abgerechnet und zählt zum Pauschbetrag ' + (cfg.year + 1) + ', nicht ' + cfg.year + '.');
     note('Krypto-Neuregelung (Referentenentwurf, noch kein Gesetz): Bitcoin-Käufe ab 01.01.2027 sollen unabhängig von der Haltedauer mit 26,375 % besteuert werden. Käufe bis zum 31.12.2026, auch beim Rebalancing, behalten die Haltefrist-Regel.');
@@ -668,10 +677,13 @@
       msg('accMsg', (type === 'einzahlung' ? 'Einzahlung verbucht ' + sp.why + ': ' : 'Auszahlung aus dem Cash entnommen' + (sp.fromInvested ? ' (teilweise aus Cash investierter Bausteine, weil das Cash der Regel-Cash-Bausteine nicht reichte)' : '') + ': ') + lines.join(', ') + (hist ? '. Nur für den Verlauf nachgetragen, das heutige Cash bleibt unverändert.' : '.'));
       $('accAmount').value = ''; $('accNote').value = ''; $('accHist').checked = false; schedule(); });
     $('accDate').value = todayISO();
+    if ($('btnNotes')) $('btnNotes').addEventListener('click', function () { SHOW_NOTES = !SHOW_NOTES; try { localStorage.setItem('regelDepot.notes', SHOW_NOTES ? '1' : '0'); } catch (e) { /* still */ } renderTx(model()); });
+    /* Rückmeldung nach dem Import: was jetzt im Browser liegt (Datei, Buchungen, geschätzte Einträge) */
+    function importText(n, name) { var est = n.tx.filter(function (t) { return t.est; }).length, cash = (n.cash.ftse || 0) + (n.cash.btc || 0) + (n.cash.gold || 0); return 'Importiert aus ' + name + ': ' + n.tx.length + ' Buchungen, Cash ' + eur(cash, 2) + ', ' + (est ? est + ' Eintrag' + (est > 1 ? 'e' : '') + ' als geschätzt markiert' : 'nichts als geschätzt markiert') + (n.meta && n.meta.source ? ' · Quelle laut Datei: ' + n.meta.source : '') + '. Die Daten ersetzen den vorherigen Stand in diesem Browser.'; }
     $('btnExport').addEventListener('click', function () { download('regel-depot-' + todayISO() + '.json', STORE.exportJson()); msg('dMsg', 'Datei gespeichert. Bewahre sie sicher auf; sie enthält deine Depotdaten.'); });
-    $('fileImport').addEventListener('change', function () { var f = this.files && this.files[0]; if (!f) return; var r = new FileReader(); r.onload = function () { try { STORE.importJson(String(r.result)); formDirty.tax = formDirty.cash = false; msg('dMsg', 'Importiert.'); schedule(); } catch (e) { msg('dMsg', 'Import fehlgeschlagen: ' + e.message, true); } }; r.readAsText(f); this.value = ''; });
+    $('fileImport').addEventListener('change', function () { var f = this.files && this.files[0]; if (!f) return; var r = new FileReader(); r.onload = function () { try { var n = STORE.importJson(String(r.result)); formDirty.tax = formDirty.cash = false; msg('dMsg', importText(n, f.name)); schedule(); } catch (e) { msg('dMsg', 'Import fehlgeschlagen: ' + e.message, true); } }; r.readAsText(f); this.value = ''; });
     $('btnPaste').addEventListener('click', function () { var b = $('pasteBox'); b.hidden = !b.hidden; if (!b.hidden) $('pasteArea').focus(); });
-    $('btnPasteImport').addEventListener('click', function () { try { STORE.importJson($('pasteArea').value); $('pasteArea').value = ''; $('pasteBox').hidden = true; formDirty.tax = formDirty.cash = false; msg('dMsg', 'Importiert.'); schedule(); } catch (e) { msg('dMsg', 'Import fehlgeschlagen: ' + e.message, true); } });
+    $('btnPasteImport').addEventListener('click', function () { try { var n = STORE.importJson($('pasteArea').value); $('pasteArea').value = ''; $('pasteBox').hidden = true; formDirty.tax = formDirty.cash = false; msg('dMsg', importText(n, 'eingefügter Text')); schedule(); } catch (e) { msg('dMsg', 'Import fehlgeschlagen: ' + e.message, true); } });
     var resetArmed = false;
     $('btnReset').addEventListener('click', function () { if (!resetArmed) { resetArmed = true; this.textContent = 'Wirklich alles löschen?'; setTimeout(function () { resetArmed = false; $('btnReset').textContent = 'Alles löschen'; }, 4000); return; } STORE.reset(); resetArmed = false; this.textContent = 'Alles löschen'; formDirty.tax = formDirty.cash = false; msg('dMsg', 'Depotdaten in diesem Browser gelöscht.'); schedule(); });
   }
