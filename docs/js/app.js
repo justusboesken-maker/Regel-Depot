@@ -219,7 +219,8 @@
     var k = $('kpis'); k.textContent = '';
     function kpi(label, val, sub, cls) { var c = el('div', 'card kpi'); c.appendChild(el('p', 'k', label)); c.appendChild(el('p', 'v ' + (cls || ''), val)); if (sub) c.appendChild(el('p', 'd', sub)); k.appendChild(c); }
     var pd = pxOf('ftse') || pxOf('btc');
-    kpi('Depotwert', eur(tot), pd ? 'Kurse vom ' + dDE(pd.d) : '');
+    var estAny = A.some(function (a) { var p = pxOf(a); return p && p.estimate && Mo.pos[a].u > 0; });
+    kpi('Depotwert', eur(tot), pd ? 'Kurse vom ' + dDE(pd.d) + (estAny ? ', teils geschätzt' : '') : '');
     kpi('Gewinn / Verlust', sgnEur(gain), cost > 0 ? pct(gain / cost, 1) + ' auf ' + eur(cost) + ' Einstand' : '', gain >= 0 ? 'up' : 'down');
     kpi('Investiert', eur(inv), tot > 0 ? pctPlain(inv / tot, 0) + ' des Depots' : '');
     kpi('Cash', eur(cashT), tot > 0 ? pctPlain(cashT / tot, 0) + ' des Depots, nicht investiert' : '');
@@ -229,7 +230,7 @@
     var tb = el('tbody');
     A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
       var st = C[a].E.last.st; var c1 = el('td'); c1.appendChild(el('span', 'tag ' + (st === 1 ? 'ok' : ''), st === 1 ? 'investiert' : 'Cash')); r.appendChild(c1);
-      r.appendChild(el('td', 'n', P.u > 0 ? units(a, P.u) : '–')); r.appendChild(el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) : '–')); r.appendChild(el('td', 'n', eur(P.val || 0))); r.appendChild(el('td', 'n', eur(P.cash)));
+      r.appendChild(el('td', 'n', P.u > 0 ? units(a, P.u) : '–')); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } r.appendChild(pxc); r.appendChild(el('td', 'n', eur(P.val || 0))); r.appendChild(el('td', 'n', eur(P.cash)));
       var sum = (P.val || 0) + P.cash; r.appendChild(el('td', 'n', eur(sum))); r.appendChild(el('td', 'n', tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', sgnEur(sum - tot * CFG.assets[a].w))); tb.appendChild(r); });
     t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td', 'n', eur(inv))); fr.appendChild(el('td', 'n', eur(cashT))); fr.appendChild(el('td', 'n', eur(tot))); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
     pt.appendChild(t);

@@ -85,8 +85,13 @@ export async function lbmaGold(fix = 'pm', since = '2005-01-01') {
 }
 
 /* ---------- Alpha Vantage (kostenloser Key, 25 Abrufe am Tag) ---------- */
+export const avStatus = { calls: 0, last: 0, budget: 8 };
 async function avJson(params, key) {
   if (!key) throw new Error('Alpha Vantage: kein Key (Secret ALPHAVANTAGE_KEY)');
+  if (avStatus.calls >= avStatus.budget) throw new Error('Alpha Vantage: Abrufbudget dieses Laufs aufgebraucht');
+  const wait = avStatus.last ? 15000 - (Date.now() - avStatus.last) : 0;
+  if (wait > 0) await sleep(wait);
+  avStatus.calls++; avStatus.last = Date.now();
   const q = new URLSearchParams({ ...params, apikey: key });
   const res = await get('https://www.alphavantage.co/query?' + q.toString());
   if (!res.ok) throw new Error('Alpha Vantage HTTP ' + res.status);
@@ -161,6 +166,22 @@ export async function stooqQuote(sym) {
   const r = rows[0];
   if (!r || !(+r.close > 0) || r.close === 'N/D') throw new Error('Stooq ' + sym + ': kein Kurs');
   return { price: +r.close, priceTime: (r.date && r.time) ? r.date + 'T' + r.time + 'Z' : null, date: r.date, src: 'stooq ' + sym + ' quote (Ersatzquelle)' };
+}
+
+/* ---------- Gold-Spot ohne Key (für die Vorwarnung; Preis je Feinunze in USD) ---------- */
+export async function goldSpotGoldpriceOrg() {
+  const res = await get('https://data-asg.goldprice.org/dbXRates/USD');
+  if (!res.ok) throw new Error('goldprice.org HTTP ' + res.status);
+  const j = await res.json(), it = j && j.items && j.items[0];
+  if (!it || !(+it.xauPrice > 0)) throw new Error('goldprice.org: kein Kurs');
+  return { price: +it.xauPrice, priceTime: j.ts ? new Date(j.ts).toISOString() : new Date().toISOString(), src: 'goldprice.org XAU/USD spot (Ersatzquelle)' };
+}
+export async function goldSpotGoldApi() {
+  const res = await get('https://api.gold-api.com/price/XAU');
+  if (!res.ok) throw new Error('gold-api.com HTTP ' + res.status);
+  const j = await res.json();
+  if (!(+j.price > 0)) throw new Error('gold-api.com: kein Kurs');
+  return { price: +j.price, priceTime: j.updatedAt || new Date().toISOString(), src: 'gold-api.com XAU/USD spot (Ersatzquelle)' };
 }
 
 /* ---------- EZB-Referenzkurs über frankfurter.app (nur Werktage) ---------- */
