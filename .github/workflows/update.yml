@@ -17,7 +17,7 @@ on:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-push]
+        options: [auto, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
 
 permissions:
   contents: write
@@ -28,14 +28,14 @@ concurrency:
 
 jobs:
   update:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v5
         with:
           node-version: '22'
 
@@ -47,10 +47,10 @@ jobs:
           case "${{ github.event.schedule }}" in
             "17 13 * * 5") STEP=fr-warn ;;
             "23 17 * * 5") STEP=fr-close ;;
-            "53 18 * * 5") STEP=fr-close ;;
+            "53 18 * * 5") STEP=fr-close; FINAL="--fallback" ;;
             "17 19 * * 0") STEP=so-warn ;;
             "23 0 * * 1")  STEP=mo-close ;;
-            "23 2 * * 1")  STEP=mo-close; FINAL="--final" ;;
+            "23 2 * * 1")  STEP=mo-close; FINAL="--final --fallback" ;;
             "53 5 * * 1")  STEP=mo-notify ;;
             "37 17 * * 1-4") STEP=eod ;;
             *) STEP="${{ inputs.step || 'auto' }}" ;;
