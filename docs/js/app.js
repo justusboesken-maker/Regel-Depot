@@ -417,14 +417,19 @@
     if (!stamps.length) return null;
     function priceAt(a, date) { var rows = P[a], v = null; for (var i = 0; i < rows.length && rows[i][0] <= date; i++) v = rows[i]; return v; }
     var rate = Mo.cfg.cashRate || 0, interest = { ftse: 0, btc: 0, gold: 0 }, pts = [], prevEnd = null;
+    /* Ein Baustein zählt erst ab seiner ersten Buchung (Kauf oder Einzahlung); davor gibt es weder Cash noch Zinsen für ihn.
+       Bausteine ohne Buchungen (nur Cash) zählen ab dem Beginn der Reihe. Frühere Einzahlungen lassen sich unter „Konto“ nachtragen. */
+    var firstTx = {}; tx.forEach(function (t) { var b = bucketOf(t.a); if (!firstTx[b] || t.d < firstTx[b]) firstTx[b] = t.d; });
+    function exists(a, date) { return !firstTx[a] || date >= firstTx[a]; }
     /* Zinsen vor dem Anzeigefenster aufholen */
-    if (from && from > (daily ? first : ENG.mondayOf(first))) { var t0 = daily ? first : ENG.mondayOf(first), cur = t0; while (cur < start) { A.forEach(function (a) { var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > cur) cash -= cashDelta(t); }); interest[a] += Math.max(0, cash) * rate / 365; }); cur = ENG.addDays(cur, 1); } }
+    if (from && from > (daily ? first : ENG.mondayOf(first))) { var t0 = daily ? first : ENG.mondayOf(first), cur = t0; while (cur < start) { A.forEach(function (a) { if (!exists(a, cur)) return; var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > cur) cash -= cashDelta(t); }); interest[a] += Math.max(0, cash) * rate / 365; }); cur = ENG.addDays(cur, 1); } }
     stamps.forEach(function (k) {
       var end = daily ? k : ENG.addDays(k, 6); if (end > today) end = today;
       var upTo = tx.filter(function (t) { return t.d <= end; }), B = ENG.book(upTo.filter(function (t) { return t.type === 'kauf' || t.type === 'verkauf'; }));
       var days = prevEnd ? Math.max(0, ENG.daysBetween(prevEnd, end)) : 0; prevEnd = end;
       var parts = {}, total = 0, gainTotal = 0, dmax = '';
       A.forEach(function (a) {
+        if (!exists(a, end)) return; /* Baustein gibt es zu diesem Zeitpunkt noch nicht */
         var u = ENG.units(B.pos[a] || []), val = 0, cost = ENG.cost(B.pos[a] || []), pr = priceAt(a, end), missing = u > 1e-12 && !pr;
         if (u > 1e-12 && pr) { val = u * pr[1]; if (pr[0] > dmax) dmax = pr[0]; }
         if (a === 'btc') ALTS.forEach(function (x) { var ua = ENG.units(B.pos[x.id] || []); cost += ENG.cost(B.pos[x.id] || []); if (ua > 1e-12) { var pa = priceAt(x.id, end); if (pa) { val += ua * pa[1]; if (pa[0] > dmax) dmax = pa[0]; } else missing = true; } });
@@ -448,7 +453,7 @@
     if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }
     else if (r === 'wochen') from = ENG.addDays(today, -364);
     else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
-    var capText = note + 'Baustein = Position plus Cash plus Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt), ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash vor heute ist aus den Buchungen zurückgerechnet.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    var capText = note + 'Baustein = Position plus Cash plus Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt), ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash vor heute ist aus den Buchungen zurückgerechnet; ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
     CH.portfolioChart(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
   }
 

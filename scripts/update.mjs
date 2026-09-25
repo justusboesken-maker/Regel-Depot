@@ -528,9 +528,15 @@ async function ftseEod() {
     const r = await F.av('VWRD.LON'); const i = r.dates.length - 1;
     const live = loadJson('live.json', { prices: {}, rule: {} }); live.prices = live.prices || {};
     live.prices.ftse = { usd: round(r.closes[i], 4), d: r.dates[i], src: r.src, eod: true, t: NOW.toISOString() };
-    const fx = live.prices.eurusd && live.prices.eurusd.rate; if (fx && calib('ftse')) live.prices.ftse.eur = round(r.closes[i] / fx * calib('ftse').ratio, 4);
+    const fx = (live.prices.eurusd && live.prices.eurusd.rate) || (EUR.latest.eurusd && EUR.latest.eurusd.p); if (fx && calib('ftse')) live.prices.ftse.eur = round(r.closes[i] / fx * calib('ftse').ratio, 4);
     const rr = ruleNow('ftse', r.closes[i]); if (rr) { live.rule = live.rule || {}; live.rule.ftse = rr; }
     saveJson('live.json', live); RUN.changed = true;
+    /* Der Xetra-Schluss kommt erst abends: bis dahin den Euro-Kurs des ETF aus dem Londoner Schluss schätzen, damit die Depotbewertung nicht einen Tag hinterherhinkt */
+    const cur = EUR.latest && EUR.latest.ftse;
+    if (live.prices.ftse.eur > 0 && (!cur || !cur.d || cur.d < r.dates[i])) {
+      setLatest('ftse', r.dates[i], live.prices.ftse.eur, CFG.assets.ftse.eur.sym, 'geschätzt: VWRD ' + de(r.closes[i], 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', { estimate: true });
+      upsertWeekly('ftse', r.dates[i], live.prices.ftse.eur, 4); EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
+    }
     note('FTSE Tagesschluss ' + ds(r.dates[i]) + ': ' + usd('ftse', r.closes[i]));
   } catch (e) { RUN.summary.push('FTSE-Tagesschluss nicht aktualisiert (' + e.message.slice(0, 80) + ')'); }
 }
