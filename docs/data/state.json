@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-25T23:26:10.813Z",
+ "updated": "2026-09-25T23:41:19.229Z",
  "assets": {
   "ftse": {
    "k": "2026-09-21",
@@ -97,15 +97,16 @@
     "type": "confirm",
     "n": 4
    },
-   "weeks": 872,
-   "updated": "2026-09-25T08:30:00.000Z",
+   "weeks": 1133,
+   "updated": "2026-09-25T23:41:19.229Z",
    "src": "lbma gold pm usd",
    "fallback": false,
-   "pending": {
-    "k": "2026-09-21",
-    "reason": "Freitagsschluss (25.09.) fehlt noch",
-    "at": "2026-09-25T22:18:43.857Z"
-   }
+   "primaryError": null,
+   "pending": null,
+   "holiday": false,
+   "partial": false,
+   "edge": false,
+   "preliminary": null
   }
  },
  "cross": {},
@@ -136,6 +137,6 @@
   }
  },
  "queue": [],
- "step": "test-sources",
+ "step": "eod",
  "pendingQueue": 0
 }
