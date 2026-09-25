@@ -380,7 +380,7 @@ async function dailyEur(keys) {
       else if (a === 'btc') { const r = await F.coinbaseDays('BTC-EUR', backfill ? 150 : 40); mergeDaily('btc', r.dates.slice(0, -1), r.closes.slice(0, -1), 2); if (backfill && r.dates[0] > since) { const r2 = await F.coinbaseDays('BTC-EUR', 300); mergeDaily('btc', r2.dates.slice(0, -1), r2.closes.slice(0, -1), 2); } }
       else if (a === 'ftse') {
         if (RUN.yahooDailyFtse) mergeDaily('ftse', RUN.yahooDailyFtse.dates, RUN.yahooDailyFtse.closes, 4);
-        else { const r = await F.avDaily('VWCE.DEX', backfill); mergeDaily('ftse', r.dates, r.closes, 4); }
+        else { const r = await F.avDaily('VWCE.DEX', false); mergeDaily('ftse', r.dates, r.closes, 4); } /* compact = letzte 100 Handelstage; full ist Bezahltarif. Ältere Tage überbrückt die Seite mit den Wochenschlüssen. */
       } else if (a === 'gold') {
         if (RUN.yahooDailyGold) mergeDaily('gold', RUN.yahooDailyGold.dates, RUN.yahooDailyGold.closes, 4);
         else { const cb = calib('gold'), fxm = {}; (EUR.daily.eurusd || []).forEach((r) => { fxm[r[0]] = r[1]; }); if (cb && Object.keys(fxm).length) { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); const dates = [], closes = []; let lastFx = null; for (let i = 0; i < pm.dates.length; i++) { const d = pm.dates[i]; if (d < since) continue; if (fxm[d]) lastFx = fxm[d]; if (!lastFx) continue; dates.push(d); closes.push(pm.closes[i] / lastFx * cb.ratio); } mergeDaily('gold', dates, closes, 4); } }

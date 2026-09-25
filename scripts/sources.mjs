@@ -117,8 +117,13 @@ export async function alphaVantageCryptoDaily(symbol, market, key) {
   return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: new Date().toISOString(), src: 'alphavantage ' + symbol + '-' + market + ' daily (Ersatzquelle)' };
 }
 /* Tagesschlüsse (compact = 100 Tage, full = komplette Historie) */
+/* outputsize=full ist seit 2025 nur noch im Bezahltarif; compact liefert die letzten 100 Handelstage (rund fünf Monate).
+   Wird full verlangt und abgelehnt, fällt die Funktion auf compact zurück. */
 export async function alphaVantageDaily(sym, key, full) {
-  const j = await avJson({ function: 'TIME_SERIES_DAILY', symbol: sym, outputsize: full ? 'full' : 'compact' }, key), ts = j['Time Series (Daily)'];
+  let j;
+  try { j = await avJson({ function: 'TIME_SERIES_DAILY', symbol: sym, outputsize: full ? 'full' : 'compact' }, key); }
+  catch (e) { if (full && /outputsize|premium/i.test(e.message)) j = await avJson({ function: 'TIME_SERIES_DAILY', symbol: sym, outputsize: 'compact' }, key); else throw e; }
+  const ts = j['Time Series (Daily)'];
   if (!ts) throw new Error('Alpha Vantage ' + sym + ': keine Tagesdaten');
   const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['4. close']);
   const out = { dates: [], closes: [] };

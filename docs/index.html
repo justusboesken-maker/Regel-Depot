@@ -68,9 +68,11 @@
   <div class="card">
     <div class="pad" style="padding-bottom:6px"><p class="subhd">Positionen</p></div>
     <div class="tablewrap" id="posTable"></div>
+    <div class="pad cardhead tight topline"><p class="subhd">Kauflose (FIFO)</p><button type="button" class="fold" data-fold="lots" aria-controls="lotsTable" aria-expanded="true">Einklappen</button></div>
+    <div class="tablewrap" id="lotsTable"></div>
   </div>
   <div class="card">
-    <div class="pad" style="padding-bottom:6px"><p class="subhd">Käufe und Verkäufe</p></div>
+    <div class="pad cardhead tight"><p class="subhd">Käufe und Verkäufe</p><button type="button" class="fold" data-fold="tx" aria-controls="txTable" aria-expanded="true">Einklappen</button></div>
     <div class="tablewrap" id="txTable"></div>
   </div>
   <details class="box" id="accBox">
@@ -80,11 +82,13 @@
         <label>Datum<input type="date" id="accDate" required></label>
         <label>Art<select id="accType"><option value="einzahlung">Einzahlung</option><option value="auszahlung">Auszahlung</option></select></label>
         <label>Betrag in €<input type="number" id="accAmount" step="any" min="0" inputmode="decimal" required></label>
+        <label>Baustein<select id="accAsset"><option value="auto">automatisch (Regel)</option><option value="ftse">FTSE All-World</option><option value="btc">Bitcoin</option><option value="gold">Gold</option></select></label>
         <label>Notiz<small>optional</small><input type="text" id="accNote" maxlength="120"></label>
+        <label class="check wide"><input type="checkbox" id="accHist"> Nur nachtragen<small>für eine frühere Bewegung, die im heutigen Cash schon enthalten ist – ändert nur den Verlauf</small></label>
         <button class="btn" type="submit">Eintragen</button>
       </form>
       <p class="formmsg" id="accMsg" role="status"></p>
-      <p class="small muted">Einzahlungen landen als Cash bei den Bausteinen, deren Regel gerade auf Cash steht (aufgeteilt nach Zielgewicht); stehen alle drei auf investiert, wird nach Zielgewicht auf alle verteilt und bis zum Rebalancing als Cash geführt. Auszahlungen kommen aus diesem Cash. Käufe und Verkäufe löst das nie aus – die gibt es nur bei Signalen und beim Rebalancing.</p>
+      <p class="small muted">„Automatisch“ verteilt eine Einzahlung als Cash auf die Bausteine, deren Regel gerade auf Cash steht (nach Zielgewicht); stehen alle drei auf investiert, nach Zielgewicht auf alle, geführt als Cash bis zum Rebalancing. Auszahlungen kommen aus diesem Cash. Käufe und Verkäufe löst das nie aus – die gibt es nur bei Signalen und beim Rebalancing. Frühere Ein- und Auszahlungen trägst du mit Datum, Baustein und „Nur nachtragen“ ein; dann rechnet der Depotverlauf das Cash vor dem Kauf richtig und verzinst es erst ab der Einzahlung.</p>
     </div>
   </details>
   <details class="box" id="txBox">
@@ -120,9 +124,11 @@
     <div class="card">
       <div class="pad" style="padding-bottom:8px"><p class="subhd">Nächste Aktualisierungen</p></div>
       <div class="sched" id="sched"></div>
-      <div class="pad" style="padding-bottom:8px;border-top:1px solid var(--rule)"><p class="subhd">Letzte Läufe</p></div>
-      <div class="runlog" id="runlog"></div>
-      <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Kurse holt ein automatischer Lauf bei GitHub (Yahoo Finance und LBMA). LBMA veröffentlicht den Goldpreis erst um Mitternacht (London), deshalb kommt das Gold-Signal in der Nacht auf Montag; die Push-Nachrichten vom Wochenende werden Montag früh verschickt. GitHub startet geplante Läufe oft einige Minuten später.</div>
+      <div class="pad cardhead tight topline"><p class="subhd">Letzte Läufe</p><button type="button" class="fold" data-fold="runs" aria-controls="runBody" aria-expanded="true">Einklappen</button></div>
+      <div id="runBody">
+        <div class="runlog" id="runlog"></div>
+        <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Kurse holt ein automatischer Lauf bei GitHub (Yahoo Finance und LBMA, bei Störungen Ersatzquellen). LBMA veröffentlicht den Goldpreis erst um Mitternacht (London), deshalb kommt das Gold-Signal in der Nacht auf Montag; die Push-Nachrichten vom Wochenende werden Montag früh verschickt. GitHub startet geplante Läufe oft einige Minuten später.</div>
+      </div>
     </div>
   </div>
 </section>
