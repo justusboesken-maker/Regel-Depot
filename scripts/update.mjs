@@ -45,6 +45,10 @@ const iso = ENG.iso, addDays = ENG.addDays, mondayOf = ENG.mondayOf;
 const TODAY = iso(NOW.getTime()), THIS_MON = mondayOf(TODAY), DOW = (NOW.getUTCDay() + 6) % 7, HOUR = NOW.getUTCHours() + NOW.getUTCMinutes() / 60;
 const NEXT_MON = addDays(THIS_MON, 7);
 const isHolidayFriday = (d) => (CFG.holidays && CFG.holidays.fridays || []).includes(d);
+/* Londoner Ortszeit (Sommer-/Winterzeit): die Börse schließt 16:30, die Schlussauktion endet 16:35 */
+function localHour(tz) { const parts = {}; new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(NOW).forEach((x) => { parts[x.type] = x.value; }); return ((+parts.hour) % 24) + (+parts.minute) / 60; }
+const LONDON_HOUR = localHour('Europe/London');
+const FRI_CLOSED = DOW === 4 && LONDON_HOUR >= 16.67;              /* Freitag nach dem Londoner Schluss: die laufende Woche ist fällig */
 
 /* ---------- Formatierung (Meldungstexte) ---------- */
 const de = (x, d) => (+x).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -100,12 +104,13 @@ async function fetchMock(key) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 const AVKEY = process.env.ALPHAVANTAGE_KEY || '';
+const AVMEMO = {};
 const F = {
   yahoo: (sym, opts) => OPT.mock ? fetchMock('yahoo_' + sym) : SRC.yahooDaily(sym, opts),
   lbma: (fix) => OPT.mock ? fetchMock('lbma_' + fix) : SRC.lbmaGold(fix),
   coinbase: (p) => OPT.mock ? fetchMock('coinbase_' + p) : SRC.coinbaseDaily(p, 60),
   coinbaseSpot: (p) => OPT.mock ? fetchMock('coinbasespot_' + p) : SRC.coinbaseSpot(p),
-  av: (sym) => OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY),
+  av: (sym) => AVMEMO[sym] || (AVMEMO[sym] = OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY)), /* je Lauf nur einmal laden */
   avCrypto: (sym, mkt) => OPT.mock ? fetchMock('avcrypto_' + sym) : SRC.alphaVantageCryptoDaily(sym, mkt, AVKEY),
   avQuote: (sym) => OPT.mock ? fetchMock('avquote_' + sym) : SRC.alphaVantageQuote(sym, AVKEY),
   avDaily: (sym, full) => OPT.mock ? fetchMock('avdaily_' + sym) : SRC.alphaVantageDaily(sym, AVKEY, full),
@@ -114,9 +119,13 @@ const F = {
   coinbaseFx: (b, q) => OPT.mock ? fetchMock('coinbasefx_' + b + q) : SRC.coinbaseFx(b, q),
   goldSpot1: () => OPT.mock ? fetchMock('goldprice') : SRC.goldSpotGoldpriceOrg(),
   goldSpot2: () => OPT.mock ? fetchMock('goldapi') : SRC.goldSpotGoldApi(),
-  ecb: () => OPT.mock ? fetchMock('ecb') : SRC.ecbEurUsd()
+  ecb: () => OPT.mock ? fetchMock('ecb') : SRC.ecbEurUsd(),
+  kraken: (pair, days) => OPT.mock ? fetchMock('kraken_' + pair) : SRC.krakenDaily(pair, days || 60),
+  krakenTicker: (pair) => OPT.mock ? fetchMock('krakenticker_' + pair) : SRC.krakenTicker(pair)
 };
-/* Ersatzquellen für Wochenschlüsse erst im zweiten Anlauf: Yahoo ist die maßgebliche Quelle, Ersatzdaten weichen um Hundertstel Prozent ab */
+const KRAKEN_PAIR = { 'BTC-USD': 'XBTUSD', 'BTC-EUR': 'XBTEUR', 'ETH-EUR': 'ETHEUR', 'SOL-EUR': 'SOLEUR' };
+/* Hauptquellen laut config (Alpha Vantage für den FTSE, Coinbase für Bitcoin, LBMA für Gold). Weitere Quellen (Kraken, Yahoo, Alpha-Vantage-Krypto)
+   erst im zweiten Anlauf; geprüft: Alpha Vantage weicht von Yahoo seit 2014 unter 0,01 % ab, Coinbase von Yahoo im Mittel 0,05 %. */
 const STEP0 = OPT.step;
 const ALLOW_FB = OPT.final || OPT.fallback || ['mo-notify', 'eod', 'all'].includes(STEP0);
 async function firstOk(label, tries) {
@@ -127,45 +136,63 @@ async function firstOk(label, tries) {
 
 /* Signalreihe einer Anlage laden: {S (Wochenserie ohne laufende/unvollständige Wochen), price, priceTime, src, fallback, lastD, raw} */
 const START = { ftse: '2012-05-01', btc: '2014-09-15' };
+/* Wochenschluss von Alpha Vantage: bereinigte Wochenreihe; den frischen Freitagsschluss trägt Alpha Vantage oft erst Stunden nach
+   Börsenschluss ein, deshalb wird er, wenn er noch fehlt, aus dem Quote ergänzt (nur nach Londoner Schluss und nur mit Datum des Freitags). */
+async function avSignalFtse() {
+  const r = await F.av('VWRD.LON'); RUN.avWeeklyFtse = r;
+  try {
+    const dueK = addDays(dueCutoff('ftse'), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || FRI_CLOSED;
+    if (i >= 0 && r.dates[i] < fri && afterClose) {
+      const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
+      if (qd && qd >= fri && q.price > 0) {
+        if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = qd; r.closes[i] = q.price; } else { r.dates.push(qd); r.closes.push(q.price); }
+        r.src += ' + Schlusskurs ' + qd + ' aus dem Quote'; r.preliminary = qd;
+        vlog('FTSE: Wochenschluss ' + qd + ' aus dem Alpha-Vantage-Quote ergänzt: ' + q.price);
+      } else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt');
+    }
+  } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); }
+  return { daily: r, src: r.src, weeklyAlready: true, preliminary: r.preliminary || null };
+}
+/* Quellenkette je Anlage: erste = Hauptquelle laut config, die weiteren erst im zweiten Anlauf (ALLOW_FB) */
+function signalChain(a) {
+  const c = CFG.assets[a];
+  if (a === 'ftse') {
+    const chain = { alphavantage: avSignalFtse, yahoo: async function yahoo() { const r = await F.yahoo('VWRD.L', { adj: true, start: START.ftse }); return { daily: r, src: r.src }; } };
+    return [c.signal.src === 'yahoo' ? chain.yahoo : chain.alphavantage, c.signal.src === 'yahoo' ? chain.alphavantage : chain.yahoo];
+  }
+  if (a === 'btc') {
+    const chain = {
+      coinbase: async function coinbase() { const r = await F.coinbase('BTC-USD'); return { daily: r, src: r.src }; },
+      kraken: async function kraken() { const r = await F.kraken('XBTUSD', 60); return { daily: r, src: r.src }; },
+      yahoo: async function yahoo() { const r = await F.yahoo('BTC-USD', { adj: false, start: START.btc }); return { daily: r, src: r.src }; },
+      alphavantage: async function alphaVantage() { const r = await F.avCrypto('BTC', 'USD'); return { daily: r, src: r.src }; }
+    };
+    const first = chain[c.signal.src] || chain.coinbase;
+    return [first].concat(Object.keys(chain).map((k) => chain[k]).filter((f) => f !== first));
+  }
+  return [];
+}
 async function loadSignalSeries(a) {
   const c = CFG.assets[a];
   if (c.signal.src === 'lbma') {
     const r = await F.lbma(c.signal.fix || 'pm');
     return { daily: r, src: r.src, fallback: false };
   }
+  const chain = signalChain(a);
   let primaryError = null;
-  try { const r = await F.yahoo(c.signal.sym, { adj: !!c.signal.adj, start: START[a] || '2016-01-01' }); return { daily: r, src: r.src, fallback: false }; }
-  catch (e) { primaryError = e.message; vlog('Yahoo ' + c.signal.sym + ' fehlgeschlagen: ' + e.message); }
-  if (!ALLOW_FB) throw new Error(primaryError + ' (Ersatzquelle erst im nächsten Anlauf)');
-  if (a === 'ftse') {
-    const r = await F.av('VWRD.LON'); /* wöchentlich bereinigt, signalgleich geprüft (Abweichung zu Yahoo seit 2014 unter 0,01 %) */
-    /* Alpha Vantage trägt den Freitagsschluss in die Wochenreihe oft erst Stunden nach Börsenschluss ein; der Quote hat ihn früher.
-       Nur nach Londoner Schluss (ab 16 Uhr UTC) und nur, wenn der Quote wirklich vom Freitag stammt. */
-    try {
-      const dueK = addDays(dueCutoff(a), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || (TODAY === fri && HOUR >= 16);
-      if (i >= 0 && r.dates[i] < fri && afterClose) {
-        const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
-        if (qd && qd >= fri && q.price > 0) {
-          if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = qd; r.closes[i] = q.price; } else { r.dates.push(qd); r.closes.push(q.price); }
-          r.src = r.src.replace(' (Ersatzquelle)', '') + ' + Schlusskurs ' + qd + ' aus dem Quote (Ersatzquelle)';
-          vlog('FTSE: Wochenschluss ' + qd + ' aus dem Alpha-Vantage-Quote ergänzt: ' + q.price);
-        }
-      }
-    } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); }
-    return { daily: r, src: r.src, fallback: true, primaryError, weeklyAlready: true };
-  }
-  if (a === 'btc') {
-    const r = await firstOk('BTC', [async function coinbase() { return F.coinbase('BTC-USD'); }, async function alphaVantage() { return F.avCrypto('BTC', 'USD'); }]);
-    return { daily: r, src: r.src, fallback: true, primaryError };
-  }
-  throw new Error(primaryError);
+  try { const r = await chain[0](); return Object.assign({ fallback: false }, r); }
+  catch (e) { primaryError = e.message; vlog('Hauptquelle ' + c.signal.src + ' für ' + a + ' fehlgeschlagen: ' + e.message); }
+  if (!ALLOW_FB) throw new Error(primaryError + ' (weitere Quellen erst im nächsten Anlauf)');
+  const errs = [primaryError];
+  for (const f of chain.slice(1)) { try { const r = await f(); return Object.assign({ fallback: true, primaryError }, r); } catch (e) { errs.push((f.name || '?') + ': ' + e.message); vlog(a + ' · ' + errs[errs.length - 1]); } }
+  throw new Error(errs.join(' | '));
 }
 
 /* Welche Wochen sind zum Zeitpunkt NOW abgeschlossen? Liefert den Montag der ersten NICHT fälligen Woche. */
 function dueCutoff(a) {
   const c = CFG.assets[a];
   if (c.week === 'sun') return THIS_MON;                               /* Bitcoin: Woche endet Sonntag 24 Uhr UTC */
-  if (DOW >= 5 || (DOW === 4 && HOUR >= 17)) return NEXT_MON;           /* Freitag ab 17 Uhr UTC gilt die laufende Woche als fällig */
+  if (DOW >= 5 || FRI_CLOSED) return NEXT_MON;                          /* Freitag nach dem Londoner Schluss gilt die laufende Woche als fällig */
   return THIS_MON;
 }
 /* Ist die fällige Woche (Montag k) in den Tagesdaten vollständig? */
@@ -205,7 +232,9 @@ const round = (x, d) => (x == null || !isFinite(x) ? null : Math.round(x * Math.
 async function closeAsset(a) {
   const c = CFG.assets[a], cutoff = dueCutoff(a), stored = storedSeries(a), prev = lastState(a);
   const dueK = addDays(cutoff, -7);                                   /* jüngste fällige Woche */
-  if (stored.k.length && stored.k[stored.k.length - 1] >= dueK && prev && prev.k >= dueK && !prev.pending) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
+  const already = !!(stored.k.length && stored.k[stored.k.length - 1] >= dueK && prev && prev.k >= dueK && !prev.pending);
+  if (already && !prev.preliminary) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
+  if (already && prev.preliminary) vlog(a + ': Woche ' + dueK + ' vorläufig gebucht (Quote ' + prev.preliminary + '), prüfe auf endgültigen Schluss');
   let src;
   try { src = await loadSignalSeries(a); }
   catch (e) { fail(name(a), 'Kursabruf fehlgeschlagen: ' + e.message); markPending(a, dueK, 'Kursabruf fehlgeschlagen: ' + e.message); return { done: false, error: e.message }; }
@@ -238,11 +267,19 @@ async function closeAsset(a) {
     }
   });
   const L = E.last, thr = ENG.flipThreshold(E, c.rule);
+  /* Vorläufiger Schluss (aus dem Quote) wurde durch den endgültigen ersetzt: nur melden, wenn sich die Regel dadurch ändert */
+  if (already && prev.preliminary) {
+    if (src.preliminary) { vlog(a + ': Schluss weiterhin vorläufig (' + src.preliminary + ')'); }
+    else if (prev.st !== L.st) {
+      const id = 'korr-' + a + '-' + L.d, body = 'Endgültiger Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' statt vorläufig ' + usd(a, prev.c) + '. Laut Regel jetzt ' + (L.st === 1 ? 'investiert' : 'Cash') + '.';
+      if (addEvent({ id, kind: L.st === 1 ? 'kauf' : 'verkauf', a, k: L.k, d: L.d, title: name(a) + ': Korrektur des Wochenschlusses', text: body, c: round(L.c, 4), m: round(L.m, 4) })) queuePush({ id, title: name(a) + ': Korrektur', body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
+    } else note(name(a) + ': endgültiger Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' bestätigt den vorläufigen Stand');
+  }
   const edge = Math.abs(L.c / (c.rule.type === 'band' ? L.m * (L.st === 1 ? 1 - c.rule.p : 1 + c.rule.p) : L.m) - 1) < (CFG.edge ? CFG.edge.pct : 0.005);
   if (edge && !newSw.length) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle (SMA50 ' + usd(a, L.m) + '). Quelle: ' + src.src + '.' });
-  STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge });
+  STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: src.preliminary || null });
   RUN.changed = true;
-  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + (L.st ? 'investiert' : 'Cash') + (newSw.length ? ', SIGNALWECHSEL' : '') + (src.fallback ? ' (' + src.src + ')' : ''));
+  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + (L.st ? 'investiert' : 'Cash') + (newSw.length ? ', SIGNALWECHSEL' : '') + (src.preliminary ? ' (vorläufig aus dem Quote)' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : ''));
   return { done: true, E, newSw };
 }
 function markPending(a, k, reason) {
@@ -300,21 +337,22 @@ async function currentPrice(a) {
     /* LBMA hat keinen Live-Kurs: COMEX-Future (Yahoo) oder Spot (Stooq) mit dem Verhältnis zur LBMA skalieren */
     const pm = await F.lbma(c.signal.fix || 'pm');
     return firstOk('Gold', [
-      async function yahooComex() { const g = await F.yahoo(c.cross.sym, { range: '1mo' }); const ratio = lbmaRatio(pm, g); if (!ratio || !(g.price > 0)) throw new Error('kein Verhältnis oder Kurs'); return { price: g.price * ratio, priceTime: g.priceTime, note: 'geschätzt aus dem COMEX-Future ' + usd(a, g.price) + ' × ' + de(ratio, 4), src: g.src + ' × lbma ratio' }; },
+      async function spot2() { const q = await F.goldSpot2(); return { price: q.price, priceTime: q.priceTime, note: 'Spotpreis (gold-api.com)', src: q.src }; },
       async function lbmaAm() { const am = await F.lbma('am'); const i = am.dates.length - 1; if (am.dates[i] !== TODAY) throw new Error('Vormittagsfixing von heute noch nicht da (' + am.dates[i] + ')'); return { price: am.closes[i], priceTime: TODAY + 'T09:30:00Z', note: 'LBMA-Vormittagsfixing von heute', src: am.src }; },
       async function spot1() { const q = await F.goldSpot1(); return { price: q.price, priceTime: q.priceTime, note: 'Spotpreis (goldprice.org)', src: q.src }; },
-      async function spot2() { const q = await F.goldSpot2(); return { price: q.price, priceTime: q.priceTime, note: 'Spotpreis (gold-api.com)', src: q.src }; }
+      async function yahooComex() { const g = await F.yahoo(c.cross.sym, { range: '1mo' }); const ratio = lbmaRatio(pm, g); if (!ratio || !(g.price > 0)) throw new Error('kein Verhältnis oder Kurs'); return { price: g.price * ratio, priceTime: g.priceTime, note: 'geschätzt aus dem COMEX-Future ' + usd(a, g.price) + ' × ' + de(ratio, 4), src: g.src + ' × lbma ratio' }; }
     ]);
   }
   if (a === 'btc') {
     return firstOk('Bitcoin', [
-      async function yahoo() { const r = await F.yahoo(c.signal.sym, { range: '5d', adj: false }); if (!(r.price > 0)) throw new Error('kein Kurs'); return { price: r.price, priceTime: r.priceTime, src: r.src }; },
-      async function coinbase() { const r = await F.coinbaseSpot('BTC-USD'); return { price: r.price, priceTime: r.priceTime, note: 'Ersatzquelle Coinbase', src: r.src }; }
+      async function coinbase() { const r = await F.coinbaseSpot('BTC-USD'); return { price: r.price, priceTime: r.priceTime, src: r.src }; },
+      async function kraken() { const r = await F.krakenTicker('XBTUSD'); return { price: r.price, priceTime: r.priceTime, src: r.src }; },
+      async function yahoo() { const r = await F.yahoo('BTC-USD', { range: '5d', adj: false }); if (!(r.price > 0)) throw new Error('kein Kurs'); return { price: r.price, priceTime: r.priceTime, src: r.src }; }
     ]);
   }
   return firstOk('FTSE', [
-    async function yahoo() { const r = await F.yahoo(c.signal.sym, { range: '5d', adj: false }); if (!(r.price > 0)) throw new Error('kein Kurs'); return { price: r.price, priceTime: r.priceTime, src: r.src }; },
-    async function alphaVantage() { const r = await F.avQuote('VWRD.LON'); const old = r.priceTime && r.priceTime.slice(0, 10) < TODAY; return { price: r.price, priceTime: r.priceTime, note: old ? 'Ersatzquelle Alpha Vantage: Schlusskurs vom ' + ds(r.priceTime.slice(0, 10)) + ', kein Tageskurs' : 'Ersatzquelle Alpha Vantage, verzögert', src: r.src }; }
+    async function alphaVantage() { const r = await F.avQuote('VWRD.LON'); const old = r.priceTime && r.priceTime.slice(0, 10) < TODAY; return { price: r.price, priceTime: r.priceTime, note: old ? 'Schlusskurs vom ' + ds(r.priceTime.slice(0, 10)) + ' (Alpha Vantage, kein Tageskurs)' : 'Alpha Vantage, verzögert', src: r.src }; },
+    async function yahoo() { const r = await F.yahoo('VWRD.L', { range: '5d', adj: false }); if (!(r.price > 0)) throw new Error('kein Kurs'); return { price: r.price, priceTime: r.priceTime, src: r.src }; }
   ]);
 }
 
@@ -327,93 +365,102 @@ function upsertWeekly(a, d, p, dec) {
 }
 function setLatest(a, d, p, sym, src, extra) { EUR.latest[a] = Object.assign({ d, p: round(p, a === 'eurusd' ? 6 : 4), sym, src, t: NOW.toISOString() }, extra || {}); }
 function calib(a) { return EUR.calib && EUR.calib[a] && EUR.calib[a].ratio > 0 ? EUR.calib[a] : null; }
+/* Euro-Kurse und Tagesreihen für die Depotbewertung.
+   Hauptquellen laut config: EUR/USD EZB (untertägig Coinbase), Bitcoin Coinbase BTC-EUR (dann Kraken), VWCE und Gold-ETC (GZUR) Alpha Vantage
+   Tagesschluss an der Xetra (liegt meist bis zum Abend einen Tag zurück). Yahoo nur noch als letzte Möglichkeit.
+   Für den laufenden Tag schätzt der Ticker ETF und Gold-ETC aus USD-Referenz / EURUSD × Kalibrierfaktor; der Faktor wird hier aus den
+   echten Xetra-Schlüssen nachkalibriert (eur.json: calib). */
+function cryptoDaily(product, days) {
+  return firstOk(product, [async function coinbase() { return F.coinbaseDays(product, days); }, async function kraken() { return F.kraken(KRAKEN_PAIR[product] || product.replace('-', ''), days); }]);
+}
+function weeklyFromDailyRows(a, r, dec, dropLast) {
+  const dates = dropLast ? r.dates.slice(0, -1) : r.dates, closes = dropLast ? r.closes.slice(0, -1) : r.closes;
+  const cutoff = (a === 'btc' || ALTS.some((x) => x.id === a)) ? THIS_MON : ((DOW >= 5 || FRI_CLOSED) ? NEXT_MON : THIS_MON);
+  const W = ENG.weeklyFromDaily(dates, closes, cutoff);
+  EUR.weekly[a] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[a] || []), W, false), dec);
+}
+/* Kalibrierfaktor Euro-Kurs / (USD-Referenz / EURUSD) aus dem jüngsten gemeinsamen Tag */
+function recalibrate(a, eurDates, eurCloses, refDates, refCloses) {
+  const fx = {}; (EUR.daily.eurusd || []).forEach((r) => { fx[r[0]] = r[1]; });
+  const ref = {}; refDates.forEach((d, i) => { ref[d] = refCloses[i]; });
+  for (let i = eurDates.length - 1; i >= 0 && i >= eurDates.length - 10; i--) {
+    const d = eurDates[i]; if (ref[d] > 0 && fx[d] > 0 && eurCloses[i] > 0) { const ratio = eurCloses[i] / (ref[d] / fx[d]); EUR.calib = EUR.calib || {}; EUR.calib[a] = { ratio: round(ratio, 6), d, ref: a === 'gold' ? 'LBMA PM USD' : 'VWRD.LON USD' }; return; }
+  }
+}
 async function eurQuotes(keys) {
-  EUR.weekly = EUR.weekly || {}; EUR.latest = EUR.latest || {};
+  EUR.weekly = EUR.weekly || {}; EUR.latest = EUR.latest || {}; EUR.daily = EUR.daily || {};
   const order = ['eurusd', 'btc', 'ftse', 'gold'].filter((a) => keys.includes(a));
+  const backfill = !(EUR.daily.btc && EUR.daily.btc.length > 30), since = backfill ? '2026-05-01' : addDays(TODAY, -40);
   for (const a of order) {
     const sym = a === 'eurusd' ? CFG.fx.sym : CFG.assets[a].eur.sym, dec = a === 'eurusd' ? 6 : 4;
-    let r = null;
-    try { r = await F.yahoo(sym, { range: '3mo' }); } catch (e) { vlog('Euro-Kurs ' + sym + ': ' + e.message); }
-    if (r) {
-      if (a === 'ftse') RUN.yahooDailyFtse = r; if (a === 'gold') RUN.yahooDailyGold = r;
-      const cutoff = a === 'btc' ? THIS_MON : ((DOW >= 5 || (DOW === 4 && HOUR >= 17)) ? NEXT_MON : THIS_MON);
-      const W = ENG.weeklyFromDaily(r.dates, r.closes, cutoff);
-      EUR.weekly[a] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[a] || []), W, false), dec);
-      const lastD = r.dates[r.dates.length - 1], lastC = r.closes[r.closes.length - 1];
-      const usePrice = r.price > 0 && r.priceTime && r.priceTime.slice(0, 10) >= lastD;
-      setLatest(a, usePrice ? r.priceTime.slice(0, 10) : lastD, usePrice ? r.price : lastC, sym, r.src);
-      continue;
-    }
     try {
-      if (a === 'btc') {
-        const d = await F.coinbase('BTC-EUR');
-        const W = ENG.weeklyFromDaily(d.dates.slice(0, -1), d.closes.slice(0, -1), THIS_MON); /* letzte Kerze = laufender Tag */
-        EUR.weekly[a] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[a] || []), W, false), dec);
-        setLatest(a, TODAY, d.price, sym, d.src, { fallback: true });
-      } else if (a === 'eurusd') {
-        const q = await F.ecb(); setLatest(a, q.dates[0], q.price, sym, q.src, { fallback: true }); upsertWeekly(a, q.dates[0], q.price, dec);
-      } else if (a === 'ftse') {
-        let done = false;
-        try { const q = await F.avQuote('VWCE.DEX'); const d = q.priceTime ? q.priceTime.slice(0, 10) : TODAY; setLatest(a, d, q.price, sym, q.src, { fallback: true }); upsertWeekly(a, d, q.price, dec); done = true; } catch (e) { vlog('VWCE.DEX: ' + e.message); }
-        if (!done) {
-          const cb = calib('ftse'), fx = EUR.latest.eurusd && EUR.latest.eurusd.p;
-          if (!cb || !(fx > 0)) throw new Error('keine Kalibrierung oder kein EUR/USD');
-          const q = await F.avQuote('VWRD.LON'); const d = q.priceTime ? q.priceTime.slice(0, 10) : TODAY, p = q.price / fx * cb.ratio;
-          setLatest(a, d, p, sym, 'geschätzt: VWRD ' + de(q.price, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × ' + de(cb.ratio, 4) + ' (kalibriert ' + cb.d + ')', { fallback: true, estimate: true }); upsertWeekly(a, d, p, dec);
-        }
-      } else if (a === 'gold') {
-        const cb = calib('gold'), fx = EUR.latest.eurusd && EUR.latest.eurusd.p;
-        if (!cb || !(fx > 0)) throw new Error('keine Kalibrierung oder kein EUR/USD');
-        const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); const i = pm.dates.length - 1, p = pm.closes[i] / fx * cb.ratio;
-        setLatest(a, pm.dates[i], p, sym, 'geschätzt: LBMA ' + de(pm.closes[i], 2) + ' $ / EURUSD ' + de(fx, 4) + ' × ' + de(cb.ratio, 5) + ' (kalibriert ' + cb.d + ')', { fallback: true, estimate: true }); upsertWeekly(a, pm.dates[i], p, dec);
+      if (a === 'eurusd') {
+        const r = await F.ecbRange(since, TODAY); mergeDaily('eurusd', r.dates, r.closes, 6);
+        const i = r.dates.length - 1; setLatest(a, r.dates[i], r.closes[i], sym, 'ezb eurusd'); upsertWeekly(a, r.dates[i], r.closes[i], dec);
+      } else if (a === 'btc') {
+        const d = await cryptoDaily('BTC-EUR', backfill ? 150 : 40);
+        weeklyFromDailyRows(a, d, dec, true); mergeDaily('btc', d.dates.slice(0, -1), d.closes.slice(0, -1), 2);
+        if (backfill && d.dates[0] > since) { try { const d2 = await cryptoDaily('BTC-EUR', 300); mergeDaily('btc', d2.dates.slice(0, -1), d2.closes.slice(0, -1), 2); } catch (e) { vlog('BTC-EUR Rückfüllung: ' + e.message); } }
+        setLatest(a, TODAY, d.price, sym, d.src);
+      } else {
+        /* ETF (VWCE.DEX) und Gold-ETC (GZUR.DEX): Xetra-Tagesschlüsse von Alpha Vantage, 100 Handelstage */
+        const r = await F.avDaily(sym, false), i = r.dates.length - 1;
+        mergeDaily(a, r.dates, r.closes, 4); weeklyFromDailyRows(a, r, dec, false);
+        const prev = EUR.latest[a];
+        /* Der Xetra-Schluss ersetzt einen Ticker-Schätzwert nur, wenn er nicht älter ist */
+        if (!prev || !prev.estimate || !prev.d || prev.d <= r.dates[i]) setLatest(a, r.dates[i], r.closes[i], sym, r.src);
+        if (a === 'gold') { try { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); recalibrate('gold', r.dates, r.closes, pm.dates, pm.closes); } catch (e) { vlog('Kalibrierung Gold: ' + e.message); } }
+        if (a === 'ftse') { const w = WEEKLY.ftse && WEEKLY.ftse.w; if (RUN.avWeeklyFtse) recalibrate('ftse', r.dates, r.closes, RUN.avWeeklyFtse.dates, RUN.avWeeklyFtse.closes); else if (w && w.length) recalibrate('ftse', r.dates, r.closes, w.map((x) => x[1]), w.map((x) => x[2])); }
       }
-    } catch (e2) { RUN.summary.push('Euro-Kurs ' + sym + ' nicht aktualisiert (' + e2.message.slice(0, 90) + ')'); vlog('Ersatz ' + a + ': ' + e2.message); }
+    } catch (e) {
+      vlog('Euro-Kurs ' + sym + ': ' + e.message);
+      /* Notlösungen: Schätzung aus USD-Referenz, zuletzt Yahoo */
+      try {
+        if (a === 'eurusd') { const q = await F.coinbaseFx('EUR', 'USD'); setLatest(a, TODAY, q.rate, sym, q.src, { fallback: true }); }
+        else if (a === 'btc') { const r = await F.yahoo(sym, { range: '3mo' }); weeklyFromDailyRows(a, r, dec, false); setLatest(a, r.dates[r.dates.length - 1], r.closes[r.closes.length - 1], sym, r.src, { fallback: true }); }
+        else {
+          const cb = calib(a), fx = EUR.latest.eurusd && EUR.latest.eurusd.p;
+          if (!cb || !(fx > 0)) throw new Error('keine Kalibrierung oder kein EUR/USD');
+          if (a === 'ftse') { const q = await F.avQuote('VWRD.LON'); const d = q.priceTime ? q.priceTime.slice(0, 10) : TODAY, p = q.price / fx * cb.ratio; setLatest(a, d, p, sym, 'geschätzt: VWRD ' + de(q.price, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × ' + de(cb.ratio, 4) + ' (kalibriert ' + cb.d + ')', { fallback: true, estimate: true }); upsertWeekly(a, d, p, dec); }
+          else { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); const i = pm.dates.length - 1, p = pm.closes[i] / fx * cb.ratio; setLatest(a, pm.dates[i], p, sym, 'geschätzt: LBMA ' + de(pm.closes[i], 2) + ' $ / EURUSD ' + de(fx, 4) + ' × ' + de(cb.ratio, 5) + ' (kalibriert ' + cb.d + ')', { fallback: true, estimate: true }); upsertWeekly(a, pm.dates[i], p, dec); }
+        }
+      } catch (e2) { RUN.summary.push('Euro-Kurs ' + sym + ' nicht aktualisiert (' + e2.message.slice(0, 90) + ')'); vlog('Notlösung ' + a + ': ' + e2.message); }
+    }
   }
-  if (order.includes('btc')) await altQuotes();
-  await dailyEur(order);
+  if (order.includes('btc')) await altQuotes(backfill);
+  if (order.includes('gold')) await goldDailyFallback();
   EUR.updated = NOW.toISOString();
   saveJson('eur.json', EUR);
   RUN.changed = true;
   note('Euro-Kurse: ' + order.map((a) => a + ' ' + (EUR.latest[a] ? de(EUR.latest[a].p, a === 'eurusd' ? 4 : 2) + ' (' + ds(EUR.latest[a].d) + (EUR.latest[a].estimate ? ', geschätzt' : EUR.latest[a].fallback ? ', Ersatz' : '') + ')' : '–')).join(', '));
 }
-
-/* Tagesschlüsse in Euro für den Depotverlauf (eur.json: daily). Bitcoin über Coinbase, VWCE über Alpha Vantage (oder Yahoo-Tagesdaten),
-   EUR/USD über die EZB, Gold-ETC als Schätzung aus LBMA / EURUSD × Kalibrierfaktor. Beim ersten Mal wird bis 2026-05-01 zurückgefüllt. */
 function mergeDaily(a, dates, closes, dec) {
   EUR.daily = EUR.daily || {}; const map = {}; (EUR.daily[a] || []).forEach((r) => { map[r[0]] = r[1]; });
   for (let i = 0; i < dates.length; i++) if (closes[i] > 0) map[dates[i]] = round(closes[i], dec == null ? 4 : dec);
   const ks = Object.keys(map).sort().filter((d) => d >= '2026-05-01');
   EUR.daily[a] = ks.map((d) => [d, map[d]]);
 }
-/* Beimischungen: Coinbase ist hier die reguläre Quelle (kein Signal, deshalb keine Yahoo-Pflicht) */
-async function altQuotes() {
+/* Beimischungen (ETH, SOL): Coinbase, dann Kraken; Wochen- und Tagesreihe plus letzter Kurs */
+async function altQuotes(backfill) {
   for (const alt of ALTS) {
     try {
-      const d = await F.coinbase(alt.eur.sym);
-      const W = ENG.weeklyFromDaily(d.dates.slice(0, -1), d.closes.slice(0, -1), THIS_MON);
-      EUR.weekly[alt.id] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[alt.id] || []), W, false), 4);
-      setLatest(alt.id, TODAY, d.price, alt.eur.sym, 'coinbase ' + alt.eur.sym);
+      const have = EUR.daily[alt.id] && EUR.daily[alt.id].length > 30;
+      const d = await cryptoDaily(alt.eur.sym, have && !backfill ? 40 : 150);
+      weeklyFromDailyRows(alt.id, d, 4, true); mergeDaily(alt.id, d.dates.slice(0, -1), d.closes.slice(0, -1), 4);
+      setLatest(alt.id, TODAY, d.price, alt.eur.sym, d.src);
     } catch (e) { vlog('Beimischung ' + alt.id + ': ' + e.message); RUN.summary.push('Kurs ' + alt.short + ' nicht aktualisiert (' + e.message.slice(0, 60) + ')'); }
   }
 }
-async function dailyEur(keys) {
-  EUR.daily = EUR.daily || {};
-  const backfill = !(EUR.daily.btc && EUR.daily.btc.length > 30);
-  const since = backfill ? '2026-05-01' : addDays(TODAY, -40);
-  for (const a of keys) {
-    try {
-      if (a === 'eurusd') { const r = await F.ecbRange(since, TODAY); mergeDaily('eurusd', r.dates, r.closes, 6); }
-      else if (a === 'btc') { const r = await F.coinbaseDays('BTC-EUR', backfill ? 150 : 40); mergeDaily('btc', r.dates.slice(0, -1), r.closes.slice(0, -1), 2); if (backfill && r.dates[0] > since) { const r2 = await F.coinbaseDays('BTC-EUR', 300); mergeDaily('btc', r2.dates.slice(0, -1), r2.closes.slice(0, -1), 2); }
-        for (const alt of ALTS) { try { const ra = await F.coinbaseDays(alt.eur.sym, (EUR.daily[alt.id] && EUR.daily[alt.id].length > 30) ? 40 : 150); mergeDaily(alt.id, ra.dates.slice(0, -1), ra.closes.slice(0, -1), 4); } catch (e) { vlog('Tagesreihe ' + alt.id + ': ' + e.message); } } }
-      else if (a === 'ftse') {
-        if (RUN.yahooDailyFtse) mergeDaily('ftse', RUN.yahooDailyFtse.dates, RUN.yahooDailyFtse.closes, 4);
-        else { const r = await F.avDaily('VWCE.DEX', false); mergeDaily('ftse', r.dates, r.closes, 4); } /* compact = letzte 100 Handelstage; full ist Bezahltarif. Ältere Tage überbrückt die Seite mit den Wochenschlüssen. */
-      } else if (a === 'gold') {
-        if (RUN.yahooDailyGold) mergeDaily('gold', RUN.yahooDailyGold.dates, RUN.yahooDailyGold.closes, 4);
-        else { const cb = calib('gold'), fxm = {}; (EUR.daily.eurusd || []).forEach((r) => { fxm[r[0]] = r[1]; }); if (cb && Object.keys(fxm).length) { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); const dates = [], closes = []; let lastFx = null; for (let i = 0; i < pm.dates.length; i++) { const d = pm.dates[i]; if (d < since) continue; if (fxm[d]) lastFx = fxm[d]; if (!lastFx) continue; dates.push(d); closes.push(pm.closes[i] / lastFx * cb.ratio); } mergeDaily('gold', dates, closes, 4); } }
-      }
-    } catch (e) { vlog('Tagesreihe ' + a + ': ' + e.message); RUN.summary.push('Tagesreihe ' + a + ' nicht aktualisiert (' + e.message.slice(0, 80) + ')'); }
-  }
+/* Gold-Tagesreihe: Lücken (Tage ohne Xetra-Schluss in den Daten) mit LBMA / EURUSD × Kalibrierfaktor füllen */
+async function goldDailyFallback() {
+  try {
+    const cb = calib('gold'); if (!cb) return;
+    const have = {}; (EUR.daily.gold || []).forEach((r) => { have[r[0]] = 1; });
+    const fxm = {}; (EUR.daily.eurusd || []).forEach((r) => { fxm[r[0]] = r[1]; });
+    const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'), dates = [], closes = []; let lastFx = null;
+    for (let i = 0; i < pm.dates.length; i++) { const d = pm.dates[i]; if (d < '2026-05-01') continue; if (fxm[d]) lastFx = fxm[d]; if (!lastFx || have[d]) continue; dates.push(d); closes.push(pm.closes[i] / lastFx * cb.ratio); }
+    if (dates.length) mergeDaily('gold', dates, closes, 4);
+  } catch (e) { vlog('Gold-Tagesreihe (Schätzung): ' + e.message); }
 }
 
 /* ---------- Live-Ticker (stündlich): aktuelle Kurse und Abstand zur Wochenschluss-Schwelle ----------
@@ -432,8 +479,13 @@ async function liveTick() {
   try { const r = await F.coinbaseFx('EUR', 'USD'); fx = { rate: round(r.rate, 6), src: r.src, t: NOW.toISOString() }; }
   catch (e) { try { const r = await F.ecb(); fx = { rate: round(r.price, 6), src: r.src, t: r.priceTime }; } catch (e2) { fx = EUR.latest && EUR.latest.eurusd ? { rate: EUR.latest.eurusd.p, src: EUR.latest.eurusd.src, t: EUR.latest.eurusd.t } : null; } }
   out.prices.eurusd = fx;
-  try { const u = await F.coinbaseSpot('BTC-USD'), e = await F.coinbaseSpot('BTC-EUR'); out.prices.btc = { usd: round(u.price, 2), eur: round(e.price, 2), src: u.src, t: NOW.toISOString() }; }
-  catch (e) { fail('Live Bitcoin', e.message); if (prev.prices && prev.prices.btc) out.prices.btc = prev.prices.btc; }
+  try {
+    const q = await firstOk('Live Bitcoin', [
+      async function coinbase() { const u = await F.coinbaseSpot('BTC-USD'), e = await F.coinbaseSpot('BTC-EUR'); return { usd: u.price, eur: e.price, src: u.src }; },
+      async function kraken() { const u = await F.krakenTicker('XBTUSD'), e = await F.krakenTicker('XBTEUR'); return { usd: u.price, eur: e.price, src: u.src }; }
+    ]);
+    out.prices.btc = { usd: round(q.usd, 2), eur: round(q.eur, 2), src: q.src, t: NOW.toISOString() };
+  } catch (e) { fail('Live Bitcoin', e.message); if (prev.prices && prev.prices.btc) out.prices.btc = prev.prices.btc; }
   try {
     let g = null; try { g = await F.goldSpot2(); } catch (e) { g = await F.goldSpot1(); }
     const cb = calib('gold');
@@ -443,7 +495,7 @@ async function liveTick() {
     if (prev.prices && prev.prices.gold) out.prices.gold = prev.prices.gold;
   }
   for (const alt of ALTS) {
-    try { const e = await F.coinbaseSpot(alt.eur.sym); out.prices[alt.id] = { eur: round(e.price, 4), src: 'coinbase ' + alt.eur.sym, t: NOW.toISOString() }; }
+    try { const e = await firstOk('Live ' + alt.short, [async function coinbase() { return F.coinbaseSpot(alt.eur.sym); }, async function kraken() { return F.krakenTicker(KRAKEN_PAIR[alt.eur.sym] || alt.eur.sym.replace('-', '')); }]); out.prices[alt.id] = { eur: round(e.price, 4), src: e.src, t: NOW.toISOString() }; }
     catch (e) { if (prev.prices && prev.prices[alt.id]) out.prices[alt.id] = prev.prices[alt.id]; }
   }
   /* FTSE: letzter Tagesschluss aus dem eod-Lauf (Alpha Vantage), sonst aus der Wochenreihe */
@@ -454,9 +506,9 @@ async function liveTick() {
   saveJson('live.json', out);
   /* Depotbewertung mit den aktuellen Kursen (Wochenreihen bleiben unberührt) */
   EUR.latest = EUR.latest || {};
-  if (out.prices.btc && out.prices.btc.eur > 0) EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.src, t: NOW.toISOString(), fallback: true, live: true };
-  if (out.prices.gold && out.prices.gold.eur > 0) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor', t: NOW.toISOString(), fallback: true, estimate: true, live: true };
-  if (fx) EUR.latest.eurusd = { d: TODAY, p: fx.rate, sym: CFG.fx.sym, src: fx.src, t: NOW.toISOString(), fallback: true, live: true };
+  if (out.prices.btc && out.prices.btc.eur > 0) EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.src, t: NOW.toISOString(), live: true };
+  if (out.prices.gold && out.prices.gold.eur > 0) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', t: NOW.toISOString(), estimate: true, live: true };
+  if (fx) EUR.latest.eurusd = { d: TODAY, p: fx.rate, sym: CFG.fx.sym, src: fx.src, t: NOW.toISOString(), live: true };
   ALTS.forEach((alt) => { const p = out.prices[alt.id]; if (p && p.eur > 0) EUR.latest[alt.id] = { d: TODAY, p: p.eur, sym: alt.eur.sym, src: p.src, t: NOW.toISOString(), live: true }; });
   EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
   RUN.changed = true;
@@ -480,7 +532,7 @@ async function goldCross() {
   const c = CFG.assets.gold;
   try {
     const g = await F.yahoo(c.cross.sym, { start: '2023-06-01' });
-    const cutoff = (DOW >= 5 || (DOW === 4 && HOUR >= 17)) ? NEXT_MON : THIS_MON;
+    const cutoff = (DOW >= 5 || FRI_CLOSED) ? NEXT_MON : THIS_MON;
     const W = ENG.weeklyFromDaily(g.dates, g.closes, cutoff);
     const merged = ENG.mergeWeekly(storedSeries('goldf'), W, false);
     if (merged.k.length < 55) throw new Error('zu wenige Wochen');
@@ -511,9 +563,9 @@ function weeklySummary() {
 
 /* ---------- Schritt bestimmen ---------- */
 function autoStep() {
-  if (DOW === 4 && HOUR < 16) return 'fr-warn';
+  if (DOW === 4 && !FRI_CLOSED) return 'fr-warn';
   if (DOW === 4) return 'fr-close';
-  if (DOW === 5) return 'fr-close';
+  if (DOW === 5) return 'sa-close';
   if (DOW === 6) return 'so-warn';
   if (DOW === 0 && HOUR < 4) return 'mo-close';
   if (DOW === 0 && HOUR < 9) return 'mo-notify';
@@ -535,7 +587,13 @@ async function main() {
     } else if (step === 'fr-warn') {
       for (const a of ['ftse', 'gold']) { try { await warnAsset(a, await currentPrice(a)); } catch (e) { fail(name(a), 'Vorwarnung: ' + e.message); } }
     } else if (step === 'fr-close') {
-      await closeAsset('ftse');
+      /* Freitag nach dem Londoner Schluss: FTSE und Gold (LBMA-PM-Fixing, falls schon veröffentlicht). Wiederholungen (--fallback) sparen die Euro-Kurse aus. */
+      await closeAsset('ftse'); await closeAsset('gold');
+      if (!OPT.fallback) { await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']); await ftseEod(); }
+      await liveTick();
+    } else if (step === 'sa-close') {
+      /* Samstagmorgen: was am Freitag noch fehlte (Alpha Vantage und LBMA liefern spät), dazu die Euro-Schlüsse vom Freitag */
+      for (const a of ['ftse', 'gold']) { if (STATE.assets[a] && (STATE.assets[a].pending || STATE.assets[a].preliminary)) await closeAsset(a); }
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
       await ftseEod();
       await liveTick();
@@ -543,7 +601,7 @@ async function main() {
       try { await warnAsset('btc', await currentPrice('btc')); } catch (e) { fail(name('btc'), 'Vorwarnung: ' + e.message); }
     } else if (step === 'mo-close') {
       await closeAsset('btc'); await closeAsset('gold');
-      if (STATE.assets.ftse && STATE.assets.ftse.pending) await closeAsset('ftse');
+      if (STATE.assets.ftse && (STATE.assets.ftse.pending || STATE.assets.ftse.preliminary)) await closeAsset('ftse');
       await goldCross();
       await eurQuotes(['btc', 'eurusd']);
       if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Regel-Depot: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
@@ -554,7 +612,7 @@ async function main() {
     } else if (step === 'live') {
       await liveTick(); flush = false;
     } else if (step === 'eod') {
-      for (const a of A) { if (STATE.assets[a] && STATE.assets[a].pending) await closeAsset(a); }
+      for (const a of A) { if (STATE.assets[a] && (STATE.assets[a].pending || STATE.assets[a].preliminary)) await closeAsset(a); }
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
       await ftseEod();
       await liveTick();
@@ -576,6 +634,13 @@ async function main() {
         ['Alpha Vantage VWRD.LON weekly adj', async () => { const r = await F.av('VWRD.LON'); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 4) + ' (' + r.dates.length + ' Wochen)'; }],
         ['Alpha Vantage VWRD.LON quote', async () => { const r = await F.avQuote('VWRD.LON'); return de(r.price, 2) + ' ' + (r.priceTime || ''); }],
         ['Alpha Vantage VWCE.DEX quote', async () => { const r = await F.avQuote('VWCE.DEX'); return de(r.price, 2) + ' ' + (r.priceTime || ''); }],
+        ['Alpha Vantage GZUR.DEX daily (Gold-ETC Xetra)', async () => { const r = await F.avDaily('GZUR.DEX', false); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
+        ['Alpha Vantage VWCE.DEX daily', async () => { const r = await F.avDaily('VWCE.DEX', false); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
+        ['Kraken XBTUSD daily', async () => { const r = await F.kraken('XBTUSD', 10); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
+        ['Kraken XBTEUR ticker', async () => { const r = await F.krakenTicker('XBTEUR'); return de(r.price, 2); }],
+        ['Kraken ETHEUR ticker', async () => { const r = await F.krakenTicker('ETHEUR'); return de(r.price, 2); }],
+        ['Coinbase ETH-EUR spot', async () => { const r = await F.coinbaseSpot('ETH-EUR'); return de(r.price, 2); }],
+        ['Coinbase SOL-EUR spot', async () => { const r = await F.coinbaseSpot('SOL-EUR'); return de(r.price, 2); }],
         ['Alpha Vantage BTC-USD daily', async () => { const r = await F.avCrypto('BTC', 'USD'); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }]
       ];
       for (const [label, fn] of probes) { try { note('OK ' + label + ': ' + await fn()); } catch (e) { RUN.summary.push('FEHLT ' + label + ': ' + e.message.slice(0, 120)); log('! ' + label + ': ' + e.message); } }

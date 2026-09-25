@@ -4,7 +4,7 @@ Persönliche Website für ein regelbasiertes Depot bei Trade Republic: 50 % FTSE
 Jeder Baustein folgt einer Trendregel auf dem 50-Wochen-Durchschnitt (FTSE 2-Wochen-Regel, Bitcoin 3-%-Band, Gold 4-Wochen-Regel).
 
 - **Website:** `docs/` (GitHub Pages, Quelle: Branch `main`, Ordner `/docs`). Statisch, ohne Framework; Depotdaten liegen nur im Browser (`localStorage`).
-- **Updates:** `.github/workflows/update.yml` startet `scripts/update.mjs` zu den Wochenschlüssen (Yahoo Finance, LBMA), rechnet die Regeln,
+- **Updates:** `.github/workflows/update.yml` startet `scripts/update.mjs` zu den Wochenschlüssen (Alpha Vantage für den FTSE, Coinbase für Bitcoin, LBMA für Gold; Kraken und Yahoo Finance als weitere Quellen), rechnet die Regeln,
   schreibt `docs/data/*.json` und verschickt Web-Push-Nachrichten (VAPID, ohne Fremdpakete).
 - **Rechenkern:** `docs/js/engine.js` (Browser und Node), Tests in `test/` gegen die Rechenbeispiele des Übergabedokuments: `npm test`.
 

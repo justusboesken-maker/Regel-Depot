@@ -198,7 +198,7 @@
       if (w && w.level !== 'none') items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Vorwarnung ' + dtDE(w.t), text: w.text, href: '#card-' + a });
       else if (liveTxt && !act.todo) items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Kurs auf der Signalseite', text: liveTxt, href: '#card-' + a });
       if (st && st.pending) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Wochenschluss fehlt noch', text: st.pending.reason + ' (Stand ' + dtDE(st.pending.at) + '). Die Seite zeigt bis dahin die Vorwoche.', href: '#signale' });
-      if (st && st.fallback) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Ersatzquelle', text: 'Der letzte Wochenschluss stammt aus einer Ersatzquelle (' + st.src + '), weil Yahoo nicht erreichbar war. Nah an der Schwelle mit Yahoo gegenprüfen.', href: '#card-' + a });
+      if (st && st.fallback) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Ersatzquelle', text: 'Der letzte Wochenschluss stammt aus einer Ersatzquelle (' + st.src + '), weil die Hauptquelle nicht erreichbar war.', href: '#card-' + a });
     });
     var r = lastRun(); if (r && !r.ok) items.push({ cls: 'info', ic: 'i', title: 'Letzter Lauf mit Fehlern', text: (r.errors || []).join(' · ') || r.summary, href: '#signale' });
     if (!items.length) { host.appendChild(el('p', 'small muted', Mo.ready ? 'Keine offenen Aktionen: Depot und Regeln passen zusammen.' : 'Ohne Depotdaten kann die Seite nicht sagen, was für dich zu tun ist. Importiere dein Depot unter Einstellungen.')); return; }
@@ -252,7 +252,8 @@
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
-      if (st && st.fallback && st.src) bot.appendChild(el('p', 'small muted', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt').replace(/ \(Ersatzquelle\)/, '') + ' (Yahoo war nicht erreichbar)'));
+      if (st && st.fallback && st.src) bot.appendChild(el('p', 'small muted', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt') + ' (Hauptquelle nicht erreichbar)'));
+      if (st && st.preliminary) bot.appendChild(el('p', 'small muted', 'Vorläufiger Wochenschluss aus dem Kurs-Quote vom ' + dDE(st.preliminary) + '; der endgültige Schluss folgt mit dem nächsten Lauf und wird nur gemeldet, wenn sich die Regel ändert.'));
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
@@ -487,7 +488,7 @@
     (CFG.schedule || []).filter(function (s) { return !s.retry && !s.quiet; }).map(function (s) { return { d: nextCron(s.cron, now), label: s.label, id: s.id }; }).filter(function (o) { return o.d && !seen[o.id + o.label] && (seen[o.id + o.label] = 1); })
       .sort(function (x, y) { return x.d - y.d; }).slice(0, 6).forEach(function (o) { var r = el('div'); r.appendChild(el('span', null, o.label)); r.appendChild(el('b', null, o.d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr')); host.appendChild(r); });
   }
-  var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE', 'so-warn': 'Vorwarnung Bitcoin', 'mo-close': 'Wochenschluss Bitcoin und Gold', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'live': 'Kurs-Ticker', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push', 'test-sources': 'Quellen-Test' };
+  var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE und Gold', 'sa-close': 'Samstag: fehlende Schlüsse', 'so-warn': 'Vorwarnung Bitcoin', 'mo-close': 'Wochenschluss Bitcoin', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'live': 'Kurs-Ticker', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push', 'test-sources': 'Quellen-Test' };
   /* Ein- und ausklappbare Karten (Käufe/Verkäufe, Push, Letzte Läufe); der Zustand wird je Browser gemerkt */
   var FOLD_KEY = 'regelDepot.fold';
   function foldState() { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { return {}; } }
@@ -705,8 +706,8 @@
     var sn = $('srcNotes'); sn.textContent = '';
     function note(t) { sn.appendChild(el('p', null, t)); }
     note('SMA50 = einfacher Durchschnitt der letzten 50 Wochenschlüsse einschließlich der aktuellen Woche. Nur abgeschlossene Wochen zählen. Feiertage: Der letzte Handelstag der Woche ist der Wochenschluss.');
-    note('Kurse: Yahoo Finance (VWRD.L bereinigt, BTC-USD, GC=F sowie VWCE.DE, BTC-EUR, SGBS.MI, EURUSD=X) und LBMA (Gold PM in USD). Yahoo ist die maßgebliche Quelle; fällt sie aus, springen Coinbase (Bitcoin) und Alpha Vantage (FTSE) ein und die Seite kennzeichnet das.');
-    note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold, 19:23 Uhr Wochenschluss FTSE und Euro-Kurse; Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag 02:23 Uhr Wochenschluss Bitcoin und Gold (LBMA veröffentlicht erst um Mitternacht London), Push-Nachrichten dazu um 07:53 Uhr; Montag bis Donnerstag 19:37 Uhr Euro-Kurse. Zeiten in Berliner Sommerzeit; im Winter jeweils eine Stunde früher.');
+    note('Kurse: FTSE von Alpha Vantage (VWRD.LON, Ausschüttungen wieder angelegt; seit 2014 unter 0,01 % Abweichung zu Yahoo), Bitcoin von Coinbase (BTC-USD; im Mittel 0,05 % Abweichung zu Yahoo), Gold vom LBMA-Nachmittagsfixing. Euro-Kurse: Xetra-Tagesschlüsse von Alpha Vantage (VWCE, Gold-ETC GZUR), Coinbase (Bitcoin, ETH, SOL), EZB (EUR/USD). Fällt eine Quelle aus, springen Kraken, Yahoo Finance oder eine Schätzung ein, und die Seite kennzeichnet das.');
+    note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold, ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und Gold, mit Wiederholungen bis 0:07 Uhr und Samstag 9:07 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen; ein vorläufiger Schluss aus dem Kurs-Quote wird nachträglich bestätigt oder korrigiert. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag 2:07 Uhr Wochenschluss Bitcoin, Push-Nachrichten dazu um 7:53 Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Zeiten in Berliner Sommerzeit, im Winter eine Stunde früher (der Londoner Schluss verschiebt sich mit).');
     note('Die Läufe laufen als GitHub Actions in diesem Repo. Sie führen keine Käufe oder Verkäufe aus und kennen deine Depotdaten nicht; die liegen nur in deinem Browser.');
     $('footSrc').textContent = 'Wochenhistorie ab ' + dDE(C.ftse.S.d[0]) + ' (FTSE), ' + dDE(C.btc.S.d[0]) + ' (Bitcoin), ' + dDE(C.gold.S.d[0]) + ' (Gold). Letzte Aktualisierung der Kursdaten: ' + (D.state && D.state.updated ? dtDE(D.state.updated) : '–') + '.';
   }

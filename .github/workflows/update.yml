@@ -4,21 +4,25 @@ on:
   schedule:
     # Alle Zeiten UTC (Berlin = UTC+2 im Sommer, UTC+1 im Winter). GitHub startet geplante Läufe oft einige Minuten später.
     - cron: '17 13 * * 5'    # Freitag: Vorwarnung FTSE All-World und Gold
-    - cron: '23 17 * * 5'    # Freitag: Wochenschluss FTSE All-World, Euro-Kurse
-    - cron: '53 18 * * 5'    # Freitag: Wiederholung, falls der Schluss fehlte
+    - cron: '47 16 * * 5'    # Freitag: Wochenschluss FTSE (nach Londoner Schluss, Sommer wie Winter), Gold falls veröffentlicht, Euro-Kurse
+    - cron: '23 18 * * 5'    # Freitag: Wiederholung, falls ein Schluss fehlte (Alpha Vantage / LBMA liefern oft erst abends)
+    - cron: '23 20 * * 5'    # Freitag: Wiederholung
+    - cron: '7 22 * * 5'     # Freitag: letzte Wiederholung
+    - cron: '7 7 * * 6'      # Samstag: fehlende Schlüsse nachholen, Euro-Schlüsse vom Freitag
     - cron: '17 19 * * 0'    # Sonntag: Vorwarnung Bitcoin
-    - cron: '23 0 * * 1'     # Montag: Wochenschluss Bitcoin und Gold (Push erst am Morgen)
+    - cron: '7 0 * * 1'      # Montag: Wochenschluss Bitcoin (Push erst am Morgen)
     - cron: '23 2 * * 1'     # Montag: Wiederholung, letzter Versuch der Nacht
     - cron: '53 5 * * 1'     # Montag: Benachrichtigungen vom Wochenende verschicken
     - cron: '37 17 * * 1-4'  # Mo–Do: Euro-Kurse für die Depotbewertung, FTSE-Tagesschluss
-    - cron: '7 5-21 * * *'   # täglich stündlich 05–21 UTC: Kurs-Ticker (Bitcoin, Gold, EUR/USD)
+    - cron: '37 21 * * 1-4'  # Mo–Do: Euro-Schlüsse des Tages (Xetra-Schlüsse kommen abends)
+    - cron: '7 5-21 * * *'   # täglich stündlich 05–21 UTC: Kurs-Ticker (Bitcoin, Gold, EUR/USD, ETH, SOL)
   workflow_dispatch:
     inputs:
       step:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, live, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
+        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
 
 permissions:
   contents: write
@@ -47,13 +51,17 @@ jobs:
           FINAL=""
           case "${{ github.event.schedule }}" in
             "17 13 * * 5") STEP=fr-warn ;;
-            "23 17 * * 5") STEP=fr-close ;;
-            "53 18 * * 5") STEP=fr-close; FINAL="--fallback" ;;
+            "47 16 * * 5") STEP=fr-close ;;
+            "23 18 * * 5") STEP=fr-close; FINAL="--fallback" ;;
+            "23 20 * * 5") STEP=fr-close; FINAL="--fallback" ;;
+            "7 22 * * 5")  STEP=fr-close; FINAL="--fallback" ;;
+            "7 7 * * 6")   STEP=sa-close; FINAL="--fallback" ;;
             "17 19 * * 0") STEP=so-warn ;;
-            "23 0 * * 1")  STEP=mo-close ;;
+            "7 0 * * 1")   STEP=mo-close ;;
             "23 2 * * 1")  STEP=mo-close; FINAL="--final --fallback" ;;
             "53 5 * * 1")  STEP=mo-notify ;;
             "37 17 * * 1-4") STEP=eod ;;
+            "37 21 * * 1-4") STEP=eod ;;
             "7 5-21 * * *") STEP=live ;;
             *) STEP="${{ inputs.step || 'auto' }}" ;;
           esac

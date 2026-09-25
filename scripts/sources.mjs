@@ -1,5 +1,6 @@
-/* Kursquellen für das Update-Skript. Primär Yahoo Finance (Chart-API) und LBMA, dazu Ersatzquellen
-   (Alpha Vantage, Coinbase, Stooq, EZB). Alle Funktionen liefern {dates:[ISO], closes:[Zahl], price?, priceTime?, src}
+/* Kursquellen für das Update-Skript. Hauptquellen: Alpha Vantage (VWRD.LON bereinigt, VWCE.DEX, GZUR.DEX), Coinbase (Krypto),
+   LBMA (Gold), EZB (EUR/USD). Weitere Quellen: Kraken (Krypto), Yahoo Finance (Gegenprobe; von GitHub-Runnern meist mit HTTP 429 abgewiesen), gold-api.
+   Welche Quelle als „Ersatzquelle“ gilt, entscheidet das Update-Skript anhand der Konfiguration, nicht diese Datei. Alle Funktionen liefern {dates:[ISO], closes:[Zahl], price?, priceTime?, src}
    in chronologischer Reihenfolge. */
 
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
@@ -104,7 +105,7 @@ export async function alphaVantageWeeklyAdjusted(sym, key) {
   const j = await avJson({ function: 'TIME_SERIES_WEEKLY_ADJUSTED', symbol: sym }, key), ts = j['Weekly Adjusted Time Series'];
   if (!ts) throw new Error('Alpha Vantage ' + sym + ': keine Wochendaten');
   const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['5. adjusted close']);
-  return { dates, closes, src: 'alphavantage ' + sym + ' weekly adjusted (Ersatzquelle)' };
+  return { dates, closes, src: 'alphavantage ' + sym + ' weekly adjusted' };
 }
 /* Kryptowährung täglich in USD (volle Historie) */
 export async function alphaVantageCryptoDaily(symbol, market, key) {
@@ -114,7 +115,7 @@ export async function alphaVantageCryptoDaily(symbol, market, key) {
   const out = { dates: [], closes: [] };
   for (let i = 0; i < dates.length; i++) if (closes[i] > 0) { out.dates.push(dates[i]); out.closes.push(closes[i]); }
   /* Der jüngste Tag ist meist der laufende (unvollständige) Tag */
-  return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: new Date().toISOString(), src: 'alphavantage ' + symbol + '-' + market + ' daily (Ersatzquelle)' };
+  return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: new Date().toISOString(), src: 'alphavantage ' + symbol + '-' + market + ' daily' };
 }
 /* Tagesschlüsse (compact = 100 Tage, full = komplette Historie) */
 /* outputsize=full ist seit 2025 nur noch im Bezahltarif; compact liefert die letzten 100 Handelstage (rund fünf Monate).
@@ -128,13 +129,13 @@ export async function alphaVantageDaily(sym, key, full) {
   const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['4. close']);
   const out = { dates: [], closes: [] };
   for (let i = 0; i < dates.length; i++) if (closes[i] > 0) { out.dates.push(dates[i]); out.closes.push(closes[i]); }
-  return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: out.dates[out.dates.length - 1] + 'T16:30:00Z', src: 'alphavantage ' + sym + ' daily (Ersatzquelle)' };
+  return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: out.dates[out.dates.length - 1] + 'T16:30:00Z', src: 'alphavantage ' + sym + ' daily' };
 }
 /* Aktueller Kurs (verzögert) */
 export async function alphaVantageQuote(sym, key) {
   const j = await avJson({ function: 'GLOBAL_QUOTE', symbol: sym }, key), g = j['Global Quote'];
   if (!g || !(+g['05. price'] > 0)) throw new Error('Alpha Vantage ' + sym + ': kein Kurs');
-  return { price: +g['05. price'], priceTime: g['07. latest trading day'] ? g['07. latest trading day'] + 'T16:30:00Z' : null, src: 'alphavantage ' + sym + ' quote (Ersatzquelle)' };
+  return { price: +g['05. price'], priceTime: g['07. latest trading day'] ? g['07. latest trading day'] + 'T16:30:00Z' : null, src: 'alphavantage ' + sym + ' quote' };
 }
 
 /* ---------- Coinbase (ohne Key) ---------- */
@@ -146,7 +147,7 @@ export async function coinbaseDaily(product = 'BTC-USD', days = 60) {
   if (!res.ok) throw new Error('Coinbase HTTP ' + res.status);
   const j = (await res.json()).sort((a, b) => a[0] - b[0]);
   const dates = j.map((c) => iso(c[0] * 1000)), closes = j.map((c) => c[4]);
-  return { dates, closes, price: closes[closes.length - 1], priceTime: new Date().toISOString(), src: 'coinbase ' + product + ' (Ersatzquelle)' };
+  return { dates, closes, price: closes[closes.length - 1], priceTime: new Date().toISOString(), src: 'coinbase ' + product + '' };
 }
 /* Wechselkurs (Basis -> Gegenwährung), aktualisiert sich laufend */
 export async function coinbaseFx(base = 'EUR', quote = 'USD') {
@@ -154,13 +155,38 @@ export async function coinbaseFx(base = 'EUR', quote = 'USD') {
   if (!res.ok) throw new Error('Coinbase HTTP ' + res.status);
   const j = await res.json(), r = j && j.data && j.data.rates && +j.data.rates[quote];
   if (!(r > 0)) throw new Error('Coinbase: kein Kurs ' + base + '/' + quote);
-  return { rate: r, priceTime: new Date().toISOString(), src: 'coinbase ' + base + '-' + quote + ' (Ersatzquelle)' };
+  return { rate: r, priceTime: new Date().toISOString(), src: 'coinbase ' + base + '-' + quote + '' };
 }
 export async function coinbaseSpot(product = 'BTC-EUR') {
   const res = await get('https://api.coinbase.com/v2/prices/' + product + '/spot');
   if (!res.ok) throw new Error('Coinbase HTTP ' + res.status);
   const j = await res.json();
-  return { price: +j.data.amount, priceTime: new Date().toISOString(), src: 'coinbase ' + product + ' spot (Ersatzquelle)' };
+  return { price: +j.data.amount, priceTime: new Date().toISOString(), src: 'coinbase ' + product + ' spot' };
+}
+
+/* ---------- Kraken (öffentliche API, ohne Key) ---------- */
+function krakenResult(j) {
+  if (!j || (j.error && j.error.length)) throw new Error('Kraken: ' + (j && j.error ? j.error.join(', ') : 'keine Antwort'));
+  const keys = Object.keys(j.result || {}).filter((k) => k !== 'last');
+  if (!keys.length) throw new Error('Kraken: leeres Ergebnis');
+  return j.result[keys[0]];
+}
+/* Tageskerzen (UTC-Tage), letzte Kerze = laufender Tag. pair z. B. XBTUSD, XBTEUR, ETHEUR, SOLEUR */
+export async function krakenDaily(pair = 'XBTUSD', days = 60) {
+  const since = Math.floor(Date.now() / 1000) - (days + 1) * 86400;
+  const res = await get('https://api.kraken.com/0/public/OHLC?pair=' + pair + '&interval=1440&since=' + since);
+  if (!res.ok) throw new Error('Kraken HTTP ' + res.status);
+  const rows = krakenResult(await res.json()).slice().sort((a, b) => a[0] - b[0]);
+  const dates = rows.map((c) => iso(c[0] * 1000)), closes = rows.map((c) => +c[4]);
+  if (!dates.length) throw new Error('Kraken ' + pair + ': keine Kerzen');
+  return { dates, closes, price: closes[closes.length - 1], priceTime: new Date().toISOString(), src: 'kraken ' + pair };
+}
+export async function krakenTicker(pair = 'XBTEUR') {
+  const res = await get('https://api.kraken.com/0/public/Ticker?pair=' + pair);
+  if (!res.ok) throw new Error('Kraken HTTP ' + res.status);
+  const t = krakenResult(await res.json()), p = +(t.c && t.c[0]);
+  if (!(p > 0)) throw new Error('Kraken ' + pair + ': kein Kurs');
+  return { price: p, priceTime: new Date().toISOString(), src: 'kraken ' + pair + ' ticker' };
 }
 
 /* ---------- Stooq (ohne Key; CSV) ---------- */
@@ -178,7 +204,7 @@ export async function stooqDaily(sym) {
   if (/exceeded|limit/i.test(text) && text.length < 200) throw new Error('Stooq: Tageslimit erreicht');
   const rows = parseCsv(text).filter((r) => r.date && +r.close > 0);
   if (!rows.length) throw new Error('Stooq ' + sym + ': keine Daten');
-  return { dates: rows.map((r) => r.date), closes: rows.map((r) => +r.close), price: +rows[rows.length - 1].close, priceTime: rows[rows.length - 1].date + 'T00:00:00Z', src: 'stooq ' + sym + ' daily (Ersatzquelle)' };
+  return { dates: rows.map((r) => r.date), closes: rows.map((r) => +r.close), price: +rows[rows.length - 1].close, priceTime: rows[rows.length - 1].date + 'T00:00:00Z', src: 'stooq ' + sym + ' daily' };
 }
 /* Aktueller Kurs (verzögert): Symbol,Date,Time,Open,High,Low,Close,Volume */
 export async function stooqQuote(sym) {
@@ -187,7 +213,7 @@ export async function stooqQuote(sym) {
   const rows = parseCsv(await res.text());
   const r = rows[0];
   if (!r || !(+r.close > 0) || r.close === 'N/D') throw new Error('Stooq ' + sym + ': kein Kurs');
-  return { price: +r.close, priceTime: (r.date && r.time) ? r.date + 'T' + r.time + 'Z' : null, date: r.date, src: 'stooq ' + sym + ' quote (Ersatzquelle)' };
+  return { price: +r.close, priceTime: (r.date && r.time) ? r.date + 'T' + r.time + 'Z' : null, date: r.date, src: 'stooq ' + sym + ' quote' };
 }
 
 /* ---------- Gold-Spot ohne Key (für die Vorwarnung; Preis je Feinunze in USD) ---------- */
@@ -196,14 +222,14 @@ export async function goldSpotGoldpriceOrg() {
   if (!res.ok) throw new Error('goldprice.org HTTP ' + res.status);
   const j = await res.json(), it = j && j.items && j.items[0];
   if (!it || !(+it.xauPrice > 0)) throw new Error('goldprice.org: kein Kurs');
-  return { price: +it.xauPrice, priceTime: j.ts ? new Date(j.ts).toISOString() : new Date().toISOString(), src: 'goldprice.org XAU/USD spot (Ersatzquelle)' };
+  return { price: +it.xauPrice, priceTime: j.ts ? new Date(j.ts).toISOString() : new Date().toISOString(), src: 'goldprice.org XAU/USD spot' };
 }
 export async function goldSpotGoldApi() {
   const res = await get('https://api.gold-api.com/price/XAU');
   if (!res.ok) throw new Error('gold-api.com HTTP ' + res.status);
   const j = await res.json();
   if (!(+j.price > 0)) throw new Error('gold-api.com: kein Kurs');
-  return { price: +j.price, priceTime: j.updatedAt || new Date().toISOString(), src: 'gold-api.com XAU/USD spot (Ersatzquelle)' };
+  return { price: +j.price, priceTime: j.updatedAt || new Date().toISOString(), src: 'gold-api.com XAU/USD spot' };
 }
 
 /* ---------- EZB-Referenzkurs über frankfurter.app (nur Werktage) ---------- */
@@ -213,11 +239,11 @@ export async function ecbEurUsdRange(from, to) {
   if (!res.ok) throw new Error('Frankfurter HTTP ' + res.status);
   const j = await res.json(), dates = Object.keys(j.rates || {}).sort();
   if (!dates.length) throw new Error('Frankfurter: keine Daten');
-  return { dates, closes: dates.map((d) => j.rates[d].USD), src: 'ezb eurusd (Ersatzquelle)' };
+  return { dates, closes: dates.map((d) => j.rates[d].USD), src: 'ezb eurusd' };
 }
 export async function ecbEurUsd() {
   const res = await get('https://api.frankfurter.app/latest?from=EUR&to=USD');
   if (!res.ok) throw new Error('Frankfurter HTTP ' + res.status);
   const j = await res.json();
-  return { dates: [j.date], closes: [j.rates.USD], price: j.rates.USD, priceTime: j.date + 'T14:15:00Z', src: 'ezb eurusd (Ersatzquelle)' };
+  return { dates: [j.date], closes: [j.rates.USD], price: j.rates.USD, priceTime: j.date + 'T14:15:00Z', src: 'ezb eurusd' };
 }

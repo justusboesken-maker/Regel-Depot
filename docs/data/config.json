@@ -18,15 +18,15 @@
       },
       "ruleName": "2-Wochen-Regel",
       "signal": {
-        "src": "yahoo",
-        "sym": "VWRD.L",
+        "src": "alphavantage",
+        "sym": "VWRD.LON",
         "adj": true,
-        "label": "VWRD (London, USD, Ausschüttungen wieder angelegt)"
+        "label": "VWRD (London, USD, Ausschüttungen wieder angelegt) von Alpha Vantage; Gegenprobe Yahoo VWRD.L, wenn erreichbar"
       },
       "eur": {
-        "src": "yahoo",
-        "sym": "VWCE.DE",
-        "label": "VWCE an der Xetra"
+        "src": "alphavantage",
+        "sym": "VWCE.DEX",
+        "label": "VWCE an der Xetra (Alpha Vantage, Tagesschluss)"
       },
       "week": "fri",
       "dec": 2,
@@ -43,15 +43,15 @@
       },
       "ruleName": "3-%-Band",
       "signal": {
-        "src": "yahoo",
+        "src": "coinbase",
         "sym": "BTC-USD",
         "adj": false,
-        "label": "BTC-USD, Woche Montag bis Sonntag (UTC)"
+        "label": "Coinbase BTC-USD, Woche Montag bis Sonntag (UTC); weitere Quellen Kraken, Yahoo, Alpha Vantage"
       },
       "eur": {
-        "src": "yahoo",
+        "src": "coinbase",
         "sym": "BTC-EUR",
-        "label": "Bitcoin in Euro"
+        "label": "Bitcoin in Euro (Coinbase, dann Kraken)"
       },
       "week": "sun",
       "dec": 0,
@@ -79,9 +79,9 @@
         "label": "COMEX-Future (Gegenprobe)"
       },
       "eur": {
-        "src": "yahoo",
-        "sym": "SGBS.MI",
-        "label": "WisdomTree Physical Swiss Gold in Mailand"
+        "src": "alphavantage",
+        "sym": "GZUR.DEX",
+        "label": "WisdomTree Physical Swiss Gold an der Xetra (Alpha Vantage, Tagesschluss); untertägig geschätzt aus dem Spotpreis"
       },
       "week": "fri",
       "dec": 2,
@@ -119,8 +119,9 @@
     ]
   },
   "fx": {
-    "src": "yahoo",
-    "sym": "EURUSD=X"
+    "src": "ecb",
+    "sym": "EURUSD",
+    "label": "EZB-Referenzkurs (frankfurter.app); untertägig Coinbase"
   },
   "warn": {
     "pct": 0.015,
@@ -144,14 +145,31 @@
     },
     {
       "id": "fr-close",
-      "cron": "23 17 * * 5",
-      "label": "Wochenschluss FTSE All-World, Euro-Kurse"
+      "cron": "47 16 * * 5",
+      "label": "Wochenschluss FTSE All-World (nach Londoner Schluss), Gold falls schon veröffentlicht, Euro-Kurse"
     },
     {
       "id": "fr-close",
-      "cron": "53 18 * * 5",
-      "label": "Wiederholung, falls der Schluss noch fehlte",
+      "cron": "23 18 * * 5",
+      "label": "Wiederholung, falls ein Schluss noch fehlte",
       "retry": true
+    },
+    {
+      "id": "fr-close",
+      "cron": "23 20 * * 5",
+      "label": "Wiederholung",
+      "retry": true
+    },
+    {
+      "id": "fr-close",
+      "cron": "7 22 * * 5",
+      "label": "Letzte Wiederholung am Freitag",
+      "retry": true
+    },
+    {
+      "id": "sa-close",
+      "cron": "7 7 * * 6",
+      "label": "Samstag: fehlende Schlüsse (FTSE, Gold) und Euro-Schlüsse vom Freitag"
     },
     {
       "id": "so-warn",
@@ -160,13 +178,13 @@
     },
     {
       "id": "mo-close",
-      "cron": "23 0 * * 1",
-      "label": "Wochenschluss Bitcoin und Gold"
+      "cron": "7 0 * * 1",
+      "label": "Wochenschluss Bitcoin (und was noch fehlte)"
     },
     {
       "id": "mo-close",
       "cron": "23 2 * * 1",
-      "label": "Wiederholung, falls ein Schluss noch fehlte",
+      "label": "Wiederholung, letzter Versuch der Nacht",
       "retry": true
     },
     {
@@ -180,9 +198,15 @@
       "label": "Euro-Kurse für die Depotbewertung"
     },
     {
+      "id": "eod",
+      "cron": "37 21 * * 1-4",
+      "label": "Euro-Schlüsse des Tages (Xetra liefert abends)",
+      "quiet": true
+    },
+    {
       "id": "live",
       "cron": "7 5-21 * * *",
-      "label": "Kurs-Ticker (stündlich, Bitcoin, Gold, EUR/USD)",
+      "label": "Kurs-Ticker (stündlich, Bitcoin, Gold, EUR/USD, ETH, SOL)",
       "quiet": true
     }
   ],
