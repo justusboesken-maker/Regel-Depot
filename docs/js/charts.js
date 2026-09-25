@@ -32,7 +32,7 @@
     var i0 = o.range ? Math.max(49, n - o.range) : 49, N = n - i0, i;
     if (N < 2) { host.appendChild(el('p', 'small muted', 'Zu wenige Wochen.')); return; }
     var col = { line: css(o.color), sma: css('--ink-2'), grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface'), band: css('--band'), buy: css('--sig-buy'), sell: css('--sig-sell'), neg: css('--neg') };
-    var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = narrow ? 170 : 200, sh = 54, gap = 8;
+    var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = o.tall ? Math.max(300, Math.min(420, Math.round(W * 0.38))) : (narrow ? 170 : 200), sh = o.tall ? 72 : 54, gap = 8;
     var m = { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
@@ -187,6 +187,68 @@
     cap.textContent = 'Wochenschlüsse in Euro (VWCE an der Xetra, Bitcoin in Euro, Gold-ETC in Mailand), der letzte Punkt mit dem aktuellen Kurs. Ohne Cash.' + (estText ? ' ' + estText : '');
   }
 
-  root.CH = { ruleChart: ruleChart, donut: donut, perfChart: perfChart, mk: mk, el: el, css: css };
+  /* ---------- Portfolio-Chart: Gesamtdepot und Bausteine je Woche ----------
+     pts: [{k, d, total, gainTotal, parts:{a:{val, cash, interest, gain, cost}}}], mode 'wert'|'gewinn',
+     series: [{key:'total'|a, label, colorVar}] */
+  function portfolioChart(host, leg, cap, pts, mode, series, capText) {
+    host.textContent = ''; leg.textContent = ''; cap.textContent = '';
+    if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
+    var n = pts.length;
+    var col = { grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface') };
+    function val(s, q) { if (s.key === 'total') return mode === 'wert' ? q.total : q.gainTotal; var pt = q.parts[s.key]; if (!pt) return null; return mode === 'wert' ? pt.val + pt.cash + pt.interest : pt.gain; }
+    series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : col.ink; if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
+    var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = narrow ? 240 : 300;
+    var m = { t: 14, r: narrow ? 74 : 92, b: 30, l: narrow ? 66 : 80 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
+    var lo = Infinity, hi = -Infinity;
+    pts.forEach(function (q) { series.forEach(function (s) { var v = val(s, q); if (v == null) return; if (v < lo) lo = v; if (v > hi) hi = v; }); });
+    if (mode === 'gewinn') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); } else lo = Math.min(lo, 0);
+    var pad = (hi - lo) * 0.08 || Math.max(10, Math.abs(hi) * 0.05); lo -= (mode === 'gewinn' ? pad : 0); hi += pad;
+    function X(i) { return m.l + (n <= 1 ? 0 : i / (n - 1)) * iw; }
+    function Y(v) { return m.t + (1 - (v - lo) / (hi - lo)) * ih; }
+    function money(v) { return (v < -0.5 ? '−' : (mode === 'gewinn' && v > 0.5 ? '+' : '')) + de(Math.abs(v), 0) + ' €'; }
+    var g = mk('g', {}, svg);
+    linTicks(lo, hi, 5).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: col.muted }, g); tx.textContent = money(t); });
+    mk('line', { x1: m.l, x2: m.l + iw, y1: Y(mode === 'gewinn' ? 0 : lo), y2: Y(mode === 'gewinn' ? 0 : lo), stroke: col.axis, 'stroke-width': 1 }, g);
+    var daily = n > 1 && ENG.daysBetween(pts[0].k, pts[1].k) === 1, prevM = null, tks = [];
+    if (daily) { var step = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(iw / 70)))); pts.forEach(function (q, i) { if ((n - 1 - i) % step === 0) tks.push({ i: i, l: dShort(q.d) }); }); }
+    else { pts.forEach(function (q, i) { var ymd = ENG.addDays(q.k, 4).slice(0, 7); if (prevM !== null && ymd !== prevM) tks.push({ i: i, l: MON[+ymd.slice(5) - 1] + (ymd.slice(5) === '01' ? ' ' + ymd.slice(2, 4) : '') }); prevM = ymd; }); if (tks.length > 8) { var st = Math.ceil(tks.length / 7); tks = tks.filter(function (t, k) { return k % st === 0; }); } }
+    tks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: m.t + ih, y2: m.t + ih + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: m.t + ih + 18, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
+    var ends = [];
+    series.slice().reverse().forEach(function (s) {
+      var d = '', started = false, last = null, color = s.colorVar ? css(s.colorVar) : col.ink;
+      pts.forEach(function (q, i) { var v = val(s, q); if (v == null) { started = false; return; } d += (started ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1); started = true; last = { i: i, v: v }; });
+      if (!d) return;
+      mk('path', { d: d, fill: 'none', stroke: color, 'stroke-width': s.key === 'total' ? 2.5 : 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: s.key === 'total' ? 1 : 0.95 }, svg);
+      if (last) { mk('circle', { cx: X(last.i), cy: Y(last.v), r: s.key === 'total' ? 4.5 : 3.5, fill: color, stroke: col.surface, 'stroke-width': 2 }, svg); ends.push({ y: Y(last.v), v: last.v, s: s, color: color }); }
+    });
+    /* Endwerte beschriften, ohne Überlappung (mindestens 14 px Abstand, Gesamt zuerst) */
+    ends.sort(function (a, b) { return (a.s.key === 'total' ? -1 : 1) - (b.s.key === 'total' ? -1 : 1); });
+    var used = [];
+    ends.forEach(function (e) { var y = e.y; if (used.some(function (u) { return Math.abs(u - y) < 14; })) return; used.push(y); var t = mk('text', { x: m.l + iw + 8, y: y + 4, 'font-size': e.s.key === 'total' ? 11.5 : 10.5, fill: e.s.key === 'total' ? col.ink : css('--ink-2'), 'font-weight': e.s.key === 'total' ? 600 : 400 }, svg); t.textContent = money(e.v); });
+    /* Hover */
+    var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
+    var dots = series.map(function (s) { return mk('circle', { r: 3.5, fill: s.colorVar ? css(s.colorVar) : col.ink, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg); });
+    var tip = el('div', 'tip'); tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
+    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1;
+    function show(i) {
+      if (i < 0 || i >= n) return; cur = i; var q = pts[i], x = X(i); cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');
+      tip.textContent = ''; tip.appendChild(el('div', 'd', (i === n - 1 ? 'Stand ' : daily ? 'Tag ' : 'Wochenschluss ') + dDE(q.d)));
+      series.forEach(function (s, si) { var v = val(s, q); if (v == null) { dots[si].setAttribute('visibility', 'hidden'); return; } dots[si].setAttribute('cx', x); dots[si].setAttribute('cy', Y(v)); dots[si].setAttribute('visibility', 'visible'); tipRow(tip, s.colorVar ? css(s.colorVar) : col.ink, mode === 'gewinn' ? sgnEur(v) : eur(v), s.label); });
+      var sub = el('div', 's');
+      var cashT = 0, intT = 0, valT = 0; Object.keys(q.parts).forEach(function (a) { cashT += q.parts[a].cash; intT += q.parts[a].interest; valT += q.parts[a].val; });
+      sub.textContent = 'Positionen ' + eur(valT) + ' · Cash ' + eur(cashT) + ' · Zinsen ' + eur(intT) + (mode === 'wert' ? ' · Gewinn ' + sgnEur(q.gainTotal) : ' · Wert ' + eur(q.total)); tip.appendChild(sub);
+      placeTip(tip, host, W, x, m.t);
+    }
+    function hide() { cross.setAttribute('visibility', 'hidden'); dots.forEach(function (d) { d.setAttribute('visibility', 'hidden'); }); tip.style.opacity = '0'; }
+    function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / Math.max(1, n - 1))))); }
+    hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
+    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); }; host.onfocus = function () { show(cur); }; host.onblur = hide;
+    var last = pts[n - 1];
+    host.setAttribute('aria-label', mode === 'wert' ? 'Depotwert je Woche, zuletzt ' + eur(last.total) : 'Gewinn je Woche, zuletzt ' + sgnEur(last.gainTotal));
+    cap.textContent = capText || '';
+  }
+
+  root.CH = { ruleChart: ruleChart, donut: donut, perfChart: perfChart, portfolioChart: portfolioChart, mk: mk, el: el, css: css };
   root.FMT = { de: de, eur: eur, sgnEur: sgnEur, pct: pct, pctPlain: pctPlain, dDE: dDE, dShort: dShort, dtDE: dtDE, MON: MON };
 })(window);

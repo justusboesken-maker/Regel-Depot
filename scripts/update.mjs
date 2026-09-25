@@ -107,6 +107,9 @@ const F = {
   av: (sym) => OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY),
   avCrypto: (sym, mkt) => OPT.mock ? fetchMock('avcrypto_' + sym) : SRC.alphaVantageCryptoDaily(sym, mkt, AVKEY),
   avQuote: (sym) => OPT.mock ? fetchMock('avquote_' + sym) : SRC.alphaVantageQuote(sym, AVKEY),
+  avDaily: (sym, full) => OPT.mock ? fetchMock('avdaily_' + sym) : SRC.alphaVantageDaily(sym, AVKEY, full),
+  ecbRange: (from, to) => OPT.mock ? fetchMock('ecbrange') : SRC.ecbEurUsdRange(from, to),
+  coinbaseDays: (p, days) => OPT.mock ? fetchMock('coinbase_' + p) : SRC.coinbaseDaily(p, days),
   coinbaseFx: (b, q) => OPT.mock ? fetchMock('coinbasefx_' + b + q) : SRC.coinbaseFx(b, q),
   goldSpot1: () => OPT.mock ? fetchMock('goldprice') : SRC.goldSpotGoldpriceOrg(),
   goldSpot2: () => OPT.mock ? fetchMock('goldapi') : SRC.goldSpotGoldApi(),
@@ -318,6 +321,7 @@ async function eurQuotes(keys) {
     let r = null;
     try { r = await F.yahoo(sym, { range: '3mo' }); } catch (e) { vlog('Euro-Kurs ' + sym + ': ' + e.message); }
     if (r) {
+      if (a === 'ftse') RUN.yahooDailyFtse = r; if (a === 'gold') RUN.yahooDailyGold = r;
       const cutoff = a === 'btc' ? THIS_MON : ((DOW >= 5 || (DOW === 4 && HOUR >= 17)) ? NEXT_MON : THIS_MON);
       const W = ENG.weeklyFromDaily(r.dates, r.closes, cutoff);
       EUR.weekly[a] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[a] || []), W, false), dec);
@@ -351,10 +355,38 @@ async function eurQuotes(keys) {
       }
     } catch (e2) { RUN.summary.push('Euro-Kurs ' + sym + ' nicht aktualisiert (' + e2.message.slice(0, 90) + ')'); vlog('Ersatz ' + a + ': ' + e2.message); }
   }
+  await dailyEur(order);
   EUR.updated = NOW.toISOString();
   saveJson('eur.json', EUR);
   RUN.changed = true;
   note('Euro-Kurse: ' + order.map((a) => a + ' ' + (EUR.latest[a] ? de(EUR.latest[a].p, a === 'eurusd' ? 4 : 2) + ' (' + ds(EUR.latest[a].d) + (EUR.latest[a].estimate ? ', geschätzt' : EUR.latest[a].fallback ? ', Ersatz' : '') + ')' : '–')).join(', '));
+}
+
+/* Tagesschlüsse in Euro für den Depotverlauf (eur.json: daily). Bitcoin über Coinbase, VWCE über Alpha Vantage (oder Yahoo-Tagesdaten),
+   EUR/USD über die EZB, Gold-ETC als Schätzung aus LBMA / EURUSD × Kalibrierfaktor. Beim ersten Mal wird bis 2026-05-01 zurückgefüllt. */
+function mergeDaily(a, dates, closes, dec) {
+  EUR.daily = EUR.daily || {}; const map = {}; (EUR.daily[a] || []).forEach((r) => { map[r[0]] = r[1]; });
+  for (let i = 0; i < dates.length; i++) if (closes[i] > 0) map[dates[i]] = round(closes[i], dec == null ? 4 : dec);
+  const ks = Object.keys(map).sort().filter((d) => d >= '2026-05-01');
+  EUR.daily[a] = ks.map((d) => [d, map[d]]);
+}
+async function dailyEur(keys) {
+  EUR.daily = EUR.daily || {};
+  const backfill = !(EUR.daily.btc && EUR.daily.btc.length > 30);
+  const since = backfill ? '2026-05-01' : addDays(TODAY, -40);
+  for (const a of keys) {
+    try {
+      if (a === 'eurusd') { const r = await F.ecbRange(since, TODAY); mergeDaily('eurusd', r.dates, r.closes, 6); }
+      else if (a === 'btc') { const r = await F.coinbaseDays('BTC-EUR', backfill ? 150 : 40); mergeDaily('btc', r.dates.slice(0, -1), r.closes.slice(0, -1), 2); if (backfill && r.dates[0] > since) { const r2 = await F.coinbaseDays('BTC-EUR', 300); mergeDaily('btc', r2.dates.slice(0, -1), r2.closes.slice(0, -1), 2); } }
+      else if (a === 'ftse') {
+        if (RUN.yahooDailyFtse) mergeDaily('ftse', RUN.yahooDailyFtse.dates, RUN.yahooDailyFtse.closes, 4);
+        else { const r = await F.avDaily('VWCE.DEX', backfill); mergeDaily('ftse', r.dates, r.closes, 4); }
+      } else if (a === 'gold') {
+        if (RUN.yahooDailyGold) mergeDaily('gold', RUN.yahooDailyGold.dates, RUN.yahooDailyGold.closes, 4);
+        else { const cb = calib('gold'), fxm = {}; (EUR.daily.eurusd || []).forEach((r) => { fxm[r[0]] = r[1]; }); if (cb && Object.keys(fxm).length) { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); const dates = [], closes = []; let lastFx = null; for (let i = 0; i < pm.dates.length; i++) { const d = pm.dates[i]; if (d < since) continue; if (fxm[d]) lastFx = fxm[d]; if (!lastFx) continue; dates.push(d); closes.push(pm.closes[i] / lastFx * cb.ratio); } mergeDaily('gold', dates, closes, 4); } }
+      }
+    } catch (e) { vlog('Tagesreihe ' + a + ': ' + e.message); RUN.summary.push('Tagesreihe ' + a + ' nicht aktualisiert (' + e.message.slice(0, 80) + ')'); }
+  }
 }
 
 /* ---------- Live-Ticker (stündlich): aktuelle Kurse und Abstand zur Wochenschluss-Schwelle ----------

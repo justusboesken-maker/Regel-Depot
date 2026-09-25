@@ -2,8 +2,8 @@
   "version": 1,
   "site": {
     "title": "Regel-Depot 50/30/20",
-    "url": "https://justusboesken-maker.github.io/regel-depot/",
-    "repo": "justusboesken-maker/regel-depot"
+    "url": "https://justusboesken-maker.github.io/Regel-Depot/",
+    "repo": "justusboesken-maker/Regel-Depot"
   },
   "assets": {
     "ftse": {
@@ -102,7 +102,7 @@
   },
   "push": {
     "vapidPublicKey": "BMtaohF2Hx8p0b7SkhYNZu5ZD2ivmQw2e1Gc8fM0qlJsQ0avsNMXH9ivBYI0ChInvZY4mFu-JUgfe2vV46nlX1I",
-    "subject": "https://justusboesken-maker.github.io/regel-depot/",
+    "subject": "https://justusboesken-maker.github.io/Regel-Depot/",
     "weeklySummary": true,
     "maxSubscriptions": 5
   },

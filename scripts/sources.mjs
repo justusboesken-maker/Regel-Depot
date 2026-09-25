@@ -116,6 +116,15 @@ export async function alphaVantageCryptoDaily(symbol, market, key) {
   /* Der jüngste Tag ist meist der laufende (unvollständige) Tag */
   return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: new Date().toISOString(), src: 'alphavantage ' + symbol + '-' + market + ' daily (Ersatzquelle)' };
 }
+/* Tagesschlüsse (compact = 100 Tage, full = komplette Historie) */
+export async function alphaVantageDaily(sym, key, full) {
+  const j = await avJson({ function: 'TIME_SERIES_DAILY', symbol: sym, outputsize: full ? 'full' : 'compact' }, key), ts = j['Time Series (Daily)'];
+  if (!ts) throw new Error('Alpha Vantage ' + sym + ': keine Tagesdaten');
+  const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['4. close']);
+  const out = { dates: [], closes: [] };
+  for (let i = 0; i < dates.length; i++) if (closes[i] > 0) { out.dates.push(dates[i]); out.closes.push(closes[i]); }
+  return { dates: out.dates, closes: out.closes, price: out.closes[out.closes.length - 1], priceTime: out.dates[out.dates.length - 1] + 'T16:30:00Z', src: 'alphavantage ' + sym + ' daily (Ersatzquelle)' };
+}
 /* Aktueller Kurs (verzögert) */
 export async function alphaVantageQuote(sym, key) {
   const j = await avJson({ function: 'GLOBAL_QUOTE', symbol: sym }, key), g = j['Global Quote'];
@@ -193,6 +202,14 @@ export async function goldSpotGoldApi() {
 }
 
 /* ---------- EZB-Referenzkurs über frankfurter.app (nur Werktage) ---------- */
+/* EZB-Referenzkurse als Zeitreihe (Werktage) */
+export async function ecbEurUsdRange(from, to) {
+  const res = await get('https://api.frankfurter.app/' + from + '..' + (to || '') + '?from=EUR&to=USD');
+  if (!res.ok) throw new Error('Frankfurter HTTP ' + res.status);
+  const j = await res.json(), dates = Object.keys(j.rates || {}).sort();
+  if (!dates.length) throw new Error('Frankfurter: keine Daten');
+  return { dates, closes: dates.map((d) => j.rates[d].USD), src: 'ezb eurusd (Ersatzquelle)' };
+}
 export async function ecbEurUsd() {
   const res = await get('https://api.frankfurter.app/latest?from=EUR&to=USD');
   if (!res.ok) throw new Error('Frankfurter HTTP ' + res.status);

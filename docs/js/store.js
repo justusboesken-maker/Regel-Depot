@@ -13,8 +13,9 @@
   function normalize(o) {
     var d = clone(EMPTY);
     if (!o || typeof o !== 'object') return d;
-    if (Array.isArray(o.tx)) d.tx = o.tx.filter(function (t) { return t && t.d && t.a && t.type && +t.units > 0 && +t.price > 0; }).map(function (t, i) {
-      return { id: String(t.id || ('tx' + Date.now() + '-' + i)), d: String(t.d).slice(0, 10), a: t.a, type: t.type === 'verkauf' ? 'verkauf' : 'kauf', units: +t.units, price: +t.price, fee: +t.fee || 0, est: !!t.est, note: t.note ? String(t.note).slice(0, 300) : '', ts: +t.ts || 0 };
+    if (Array.isArray(o.tx)) d.tx = o.tx.filter(function (t) { if (!t || !t.d || !t.a || !t.type) return false; if (t.type === 'einzahlung' || t.type === 'auszahlung') return +t.amount > 0; return +t.units > 0 && +t.price > 0; }).map(function (t, i) {
+      var cashMove = t.type === 'einzahlung' || t.type === 'auszahlung';
+      return { id: String(t.id || ('tx' + Date.now() + '-' + i)), d: String(t.d).slice(0, 10), a: t.a, type: cashMove ? t.type : (t.type === 'verkauf' ? 'verkauf' : 'kauf'), units: cashMove ? 0 : +t.units, price: cashMove ? 0 : +t.price, amount: cashMove ? +t.amount : 0, fee: +t.fee || 0, est: !!t.est, note: t.note ? String(t.note).slice(0, 300) : '', ts: +t.ts || 0 };
     });
     if (o.cash && typeof o.cash === 'object') ['ftse', 'btc', 'gold'].forEach(function (a) { d.cash[a] = Math.max(0, +o.cash[a] || 0); });
     if (o.tax && typeof o.tax === 'object') d.tax = clone(o.tax);
@@ -28,7 +29,7 @@
     try { return normalize(JSON.parse(raw)); } catch (e) { return clone(EMPTY); }
   }
   function save(d) {
-    var n = normalize(d); n.meta = n.meta || {}; n.meta.saved = new Date().toISOString();
+    var n = normalize(d); ['ftse', 'btc', 'gold'].forEach(function (a) { n.cash[a] = Math.round(n.cash[a] * 100) / 100; }); n.meta = n.meta || {}; n.meta.saved = new Date().toISOString();
     if (!safeSet(JSON.stringify(n))) mem = n;
     listeners.forEach(function (fn) { try { fn(n); } catch (e) { /* still */ } });
     return n;

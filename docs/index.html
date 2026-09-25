@@ -59,8 +59,8 @@
   <div class="kpis" id="kpis"></div>
   <div class="card pad alloc" id="alloc"></div>
   <div class="card chartcard" id="perfCard">
-    <div class="perf-head"><p class="subhd">Performance deiner Positionen</p>
-      <div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button></div></div>
+    <div class="perf-head"><p class="subhd">Depotentwicklung</p>
+      <div class="controls"><div class="seg" id="perfRange" role="group" aria-label="Zeitraum"></div><div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button></div></div></div>
     <div class="chart-legend" id="perfLegend"></div>
     <div class="chart" id="chPerf" role="img" aria-label="Gewinn oder Verlust der Positionen je Woche"></div>
     <p class="cap" id="perfCap"></p>
@@ -73,21 +73,35 @@
     <div class="pad" style="padding-bottom:6px"><p class="subhd">Käufe und Verkäufe</p></div>
     <div class="tablewrap" id="txTable"></div>
   </div>
+  <details class="box" id="accBox">
+    <summary>Ein- oder Auszahlung aufs Trade-Republic-Konto</summary>
+    <div class="body">
+      <form class="form" id="accForm" novalidate>
+        <label>Datum<input type="date" id="accDate" required></label>
+        <label>Art<select id="accType"><option value="einzahlung">Einzahlung</option><option value="auszahlung">Auszahlung</option></select></label>
+        <label>Betrag in €<input type="number" id="accAmount" step="any" min="0" inputmode="decimal" required></label>
+        <label>Notiz<small>optional</small><input type="text" id="accNote" maxlength="120"></label>
+        <button class="btn" type="submit">Eintragen</button>
+      </form>
+      <p class="formmsg" id="accMsg" role="status"></p>
+      <p class="small muted">Einzahlungen landen als Cash bei den Bausteinen, deren Regel gerade auf Cash steht (aufgeteilt nach Zielgewicht); stehen alle drei auf investiert, wird nach Zielgewicht auf alle verteilt und bis zum Rebalancing als Cash geführt. Auszahlungen kommen aus diesem Cash. Käufe und Verkäufe löst das nie aus – die gibt es nur bei Signalen und beim Rebalancing.</p>
+    </div>
+  </details>
   <details class="box" id="txBox">
     <summary>Kauf oder Verkauf eintragen</summary>
     <div class="body">
       <form class="form" id="txForm" novalidate>
         <label>Datum<input type="date" id="fDate" required></label>
         <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option></select></label>
-        <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option></select></label>
-        <label>Stück<input type="number" id="fUnits" step="any" min="0" inputmode="decimal" required></label>
-        <label>Kurs je Stück in €<input type="number" id="fPrice" step="any" min="0" inputmode="decimal" required></label>
-        <label>Gebühr in €<input type="number" id="fFee" step="any" min="0" value="1" inputmode="decimal"></label>
+        <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option><option value="einzahlung">Einzahlung (Cash des Bausteins)</option><option value="auszahlung">Auszahlung (Cash des Bausteins)</option></select></label>
+        <label id="lUnits">Stück<input type="number" id="fUnits" step="any" min="0" inputmode="decimal" required></label>
+        <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="number" id="fPrice" step="any" min="0" inputmode="decimal" required></label>
+        <label id="lFee">Gebühr in €<input type="number" id="fFee" step="any" min="0" value="1" inputmode="decimal"></label>
         <label>Notiz<small>optional</small><input type="text" id="fNote" maxlength="120"></label>
         <button class="btn" type="submit" id="fSubmit">Eintragen</button>
       </form>
       <p class="formmsg" id="fMsg" role="status"></p>
-      <p class="small muted">Ein Verkauf schreibt den Erlös dem Cash dieser Position gut, ein Kauf zieht den Betrag davon ab. Steuern rechnet die Seite nach FIFO, also ältester Kauf zuerst.</p>
+      <p class="small muted">Ein Verkauf schreibt den Erlös dem Cash dieser Position gut, ein Kauf zieht den Betrag davon ab; Ein- und Auszahlungen ändern nur das Cash des Bausteins und machen den Depotverlauf genau. Steuern rechnet die Seite nach FIFO, also ältester Kauf zuerst.</p>
     </div>
   </details>
 </section>
@@ -163,6 +177,7 @@
         <label>Abstand zur Freigrenze (€)<small>Puffer für Kursschwankungen</small><input type="number" id="tBuf" step="any" min="0" inputmode="decimal"></label>
         <label>Mindestbetrag je Order (€)<small>kleinere Umschichtungen sind optional</small><input type="number" id="tMin" step="any" min="0" inputmode="decimal"></label>
         <label>Rebalancing-Stichtag<input type="date" id="tReb"></label>
+        <label>Zins auf Cash (% p. a.)<small>Trade Republic verzinst Guthaben, aktuell EZB-Satz</small><input type="number" id="tCashRate" step="any" min="0" max="10" inputmode="decimal"></label>
         <button class="btn" type="submit">Speichern</button>
       </form>
       <p class="formmsg" id="tMsg" role="status"></p>
@@ -202,6 +217,8 @@
   </footer>
 </section>
 </div>
+
+<div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
 <script src="js/engine.js"></script>
 <script src="js/store.js"></script>

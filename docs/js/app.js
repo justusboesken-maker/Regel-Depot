@@ -5,7 +5,7 @@
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
   var CAT = [{ k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }];
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
-  var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn' };
+  var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
   var F = window.FMT, de = F.de, eur = F.eur, sgnEur = F.sgnEur, pct = F.pct, pctPlain = F.pctPlain, dDE = F.dDE, dShort = F.dShort, dtDE = F.dtDE;
   var el = CH.el, css = CH.css;
   function $(id) { return document.getElementById(id); }
@@ -80,6 +80,7 @@
     cfg.pbKnown = t.pbUsed !== undefined && t.pbUsed !== null && t.pbUsed !== '';
     cfg.rateKnown = t.rate !== undefined && t.rate !== null && t.rate !== '';
     cfg.rate = +cfg.rate; cfg.headroom = cfg.headroom == null || cfg.headroom === '' ? null : +cfg.headroom;
+    cfg.cashRate = t.cashRate == null || t.cashRate === '' ? 0.025 : +t.cashRate;
     return cfg;
   }
   function pxOf(a) { var p = D.eur && D.eur.latest && D.eur.latest[a]; return p && p.p > 0 ? p : null; }
@@ -198,10 +199,10 @@
     var items = [{ t: 'Wochenschluss', c: 'var(--ink-2)' }, { t: 'SMA50', c: 'var(--ink-2)', dash: true }, { t: 'Regel investiert', box: 'color-mix(in srgb, var(--ink-2) 16%, transparent)' }, { t: 'Band ±3 % (Bitcoin)', box: 'var(--band)' }, { t: 'Kaufsignal', tri: 'up' }, { t: 'Verkaufssignal', tri: 'dn' }, { t: 'Abstand zum SMA50 (unten)', box: 'color-mix(in srgb, var(--ink-2) 35%, transparent)' }];
     items.forEach(function (it) { var s = el('span'), i = el('i'); if (it.box) { i.className = 'box'; i.style.background = it.box; } else if (it.tri) { i.className = 'tri' + (it.tri === 'dn' ? ' dn' : ''); if (it.tri === 'up') i.style.borderBottomColor = 'var(--sig-buy)'; else i.style.borderTopColor = 'var(--sig-sell)'; } else { if (it.dash) i.className = 'dash'; i.style.borderTopColor = it.c; } s.appendChild(i); s.appendChild(document.createTextNode(it.t)); h.appendChild(s); });
   }
-  function weeksTable(a) {
-    var S = C[a].S, E = C[a].E, n = S.c.length, t = el('table'), th = el('thead'), tr = el('tr');
+  function weeksTable(a, rows) {
+    var S = C[a].S, E = C[a].E, n = S.c.length, t = el('table'), th = el('thead'), tr = el('tr'), cnt = rows || 12;
     ['Wochenschluss', 'Schluss', 'SMA50', 'Abstand', 'Regel'].forEach(function (h, k) { var c = el('th', k > 0 && k < 4 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
-    var tb = el('tbody'); for (var i = n - 1; i >= Math.max(49, n - 12); i--) { var r = el('tr'); r.appendChild(el('td', null, dDE(S.d[i]))); r.appendChild(el('td', 'n', usd(a, S.c[i]))); r.appendChild(el('td', 'n', usd(a, E.sma[i]))); r.appendChild(el('td', 'n', pct(S.c[i] / E.sma[i] - 1, 1))); r.appendChild(el('td', null, (E.st[i] === 1 ? 'investiert' : 'Cash') + (CFG.assets[a].rule.type === 'confirm' ? ' · ' + (E.up[i] > 0 ? E.up[i] + '↑' : E.dn[i] > 0 ? E.dn[i] + '↓' : '=') : ''))); tb.appendChild(r); }
+    var tb = el('tbody'); for (var i = n - 1; i >= Math.max(49, n - cnt); i--) { var r = el('tr'); r.appendChild(el('td', null, dDE(S.d[i]))); r.appendChild(el('td', 'n', usd(a, S.c[i]))); r.appendChild(el('td', 'n', usd(a, E.sma[i]))); r.appendChild(el('td', 'n', pct(S.c[i] / E.sma[i] - 1, 1))); r.appendChild(el('td', null, (E.st[i] === 1 ? 'investiert' : 'Cash') + (CFG.assets[a].rule.type === 'confirm' ? ' · ' + (E.up[i] > 0 ? E.up[i] + '↑' : E.dn[i] > 0 ? E.dn[i] + '↓' : '=') : ''))); tb.appendChild(r); }
     t.appendChild(tb); return t;
   }
   function renderStatus(Mo) {
@@ -212,7 +213,8 @@
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); left.appendChild(el('p', 'sub', m.ruleName + ' · Signal ' + (m.signal.sym || 'LBMA') + ' (USD) · Depot ' + (a === 'btc' ? 'Bitcoin' : a === 'ftse' ? 'VWCE' : 'WisdomTree Gold'))); hd.appendChild(left);
-      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d))); hd.appendChild(right);
+      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
+      var bigBtn = el('button', 'btn sm ghost bigbtn', 'Groß anzeigen'); bigBtn.type = 'button'; bigBtn.setAttribute('aria-label', m.name + ' in Großansicht öffnen'); bigBtn.addEventListener('click', function () { openBig(a); }); right.appendChild(bigBtn); hd.appendChild(right);
       top.appendChild(hd);
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
@@ -251,6 +253,40 @@
     });
     drawCharts();
   }
+  /* ---------- Großansicht ---------- */
+  var BIG = { a: null, range: null };
+  function closeBig() { var mo = $('bigModal'); if (!mo) return; mo.hidden = true; document.body.style.overflow = ''; BIG.a = null; }
+  function openBig(a) {
+    var Mo = model(), mo = $('bigModal'), box = $('bigBox'); if (!mo) return;
+    BIG.a = a; if (BIG.range == null) BIG.range = VIEW.range;
+    box.textContent = '';
+    var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch;
+    var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); tl.appendChild(el('p', 'sub muted', m.ruleName + ' · ' + m.signal.label + ' · ' + pctPlain(m.w, 0) + ' des Depots')); hd.appendChild(tl);
+    var right = el('div', 'row'); var stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash' + (ls ? ' seit ' + dDE(ls.d) : ''))); right.appendChild(stp);
+    var cb = el('button', 'btn ghost', 'Schließen'); cb.type = 'button'; cb.addEventListener('click', closeBig); right.appendChild(cb); hd.appendChild(right); box.appendChild(hd);
+    var tools = el('div', 'toolbar');
+    var facts = el('div', 'bigfacts');
+    function fact(l, v, cls) { var f = el('div', 'bf ' + (cls || '')); f.appendChild(el('span', 'k', l)); f.appendChild(el('b', 'v', v)); facts.appendChild(f); }
+    fact('Wochenschluss ' + dShort(L.d), usd(a, L.c)); fact('SMA50', usd(a, L.m)); fact('Abstand', pct(L.dist, 1)); fact('Serie', streakText(L));
+    var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null; if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? 'hot' : '');
+    tools.appendChild(facts);
+    var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Zeitraum');
+    [[52, '1 J'], [156, '3 J'], [260, '5 J'], [520, '10 J'], [0, 'Max']].forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(BIG.range === r[0])); b.addEventListener('click', function () { BIG.range = r[0]; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBig(a); }); seg.appendChild(b); });
+    tools.appendChild(seg); box.appendChild(tools);
+    var ch = el('div', 'chart bigchart'); ch.id = 'bigChart'; ch.setAttribute('role', 'img'); box.appendChild(ch);
+    var act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); box.appendChild(ab);
+    var ti = thresholdInfo(a), nx = el('p', 'next'); nx.appendChild(document.createTextNode(ti.text[0])); nx.appendChild(el('b', null, ti.text[1])); nx.appendChild(document.createTextNode(ti.text[2])); box.appendChild(nx);
+    var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); box.appendChild(wb); }
+    var swl = el('div', 'bigsw'); swl.appendChild(el('p', 'subhd', 'Signale der letzten Jahre'));
+    var sws = E.sw.slice(-8).reverse(); if (!sws.length) swl.appendChild(el('p', 'small muted', 'Noch keine Signale.'));
+    sws.forEach(function (sw) { var r = el('div', 'swrow'); r.appendChild(chip(sw.to ? 'buy' : 'sell', sw.to ? 'Kauf' : 'Verkauf')); r.appendChild(el('span', null, dDE(sw.d) + ' · Schluss ' + usd(a, sw.c) + ' · SMA50 ' + usd(a, sw.m) + ' · Handel ' + dShort(nextMonday(sw.d)))); swl.appendChild(r); });
+    box.appendChild(swl);
+    var tw = el('div', 'tablewrap'); tw.appendChild(weeksTable(a, 26)); box.appendChild(el('p', 'subhd', 'Letzte 26 Wochen')); box.appendChild(tw);
+    mo.hidden = false; document.body.style.overflow = 'hidden';
+    drawBig(a); cb.focus();
+  }
+  function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
+  document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
   function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold' }); }); }
 
   /* ---------- Depot ---------- */
@@ -270,7 +306,7 @@
     kpi('Depotwert', eur(tot), pd ? 'Kurse vom ' + dDE(pd.d) + (estAny ? ', teils geschätzt' : '') : '');
     kpi('Gewinn / Verlust', sgnEur(gain), cost > 0 ? pct(gain / cost, 1) + ' auf ' + eur(cost) + ' Einstand' : '', gain >= 0 ? 'up' : 'down');
     kpi('Investiert', eur(inv), tot > 0 ? pctPlain(inv / tot, 0) + ' des Depots' : '');
-    kpi('Cash', eur(cashT), tot > 0 ? pctPlain(cashT / tot, 0) + ' des Depots, nicht investiert' : '');
+    kpi('Cash', eur(cashT), tot > 0 ? pctPlain(cashT / tot, 0) + ' des Depots · ' + pctPlain(Mo.cfg.cashRate || 0, 1) + ' Zins p. a., ca. ' + eur(cashT * (Mo.cfg.cashRate || 0) / 12) + ' im Monat' : '');
     renderAlloc(Mo, tot, cashT);
     var pt = $('posTable'); pt.textContent = ''; var t = el('table'), th = el('thead'), tr = el('tr');
     ['Position', 'Regel', 'Bestand', 'Kurs', 'Wert', 'Cash', 'Summe', 'Anteil mit Cash', 'Ziel', 'Abweichung'].forEach(function (h, i) { var c = el('th', i > 1 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
@@ -321,13 +357,14 @@
     var t = el('table'), th = el('thead'), tr = el('tr'); ['Datum', 'Position', 'Art', 'Stück', 'Kurs', 'Gebühr', 'Betrag', ''].forEach(function (x, i) { var c = el('th', i >= 3 && i <= 6 ? 'n' : null, x); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody'), list = Mo.dep.tx.slice().sort(function (a, b) { return a.d < b.d ? 1 : a.d > b.d ? -1 : 0; });
     if (!list.length) { var er = el('tr'), ec = el('td', null, 'Noch keine Buchungen.'); ec.colSpan = 8; er.appendChild(ec); tb.appendChild(er); }
-    list.forEach(function (x) { var r = el('tr'); r.appendChild(el('td', null, dDE(x.d))); var c1 = el('td', null, CFG.assets[x.a].inst + ' '); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt')); if (x.note) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } r.appendChild(c1); r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : 'Verkauf'));
-      r.appendChild(el('td', 'n', x.a === 'btc' ? de(x.units, 6) : de(x.units, 3))); r.appendChild(el('td', 'n', eur(x.price, x.a === 'btc' ? 0 : 2))); r.appendChild(el('td', 'n', eur(x.fee || 0, 2))); r.appendChild(el('td', 'n', eur(x.units * x.price + (x.type === 'kauf' ? 1 : -1) * (x.fee || 0), 2)));
+    list.forEach(function (x) { var r = el('tr'), cashMove = x.type === 'einzahlung' || x.type === 'auszahlung'; r.appendChild(el('td', null, dDE(x.d))); var c1 = el('td', null, CFG.assets[x.a].inst + ' '); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt')); if (x.note) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } r.appendChild(c1); r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung'));
+      if (cashMove) { r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', '–')); r.appendChild(el('td', 'n', (x.type === 'einzahlung' ? '+' : '−') + eur(x.amount, 2))); }
+      else { r.appendChild(el('td', 'n', x.a === 'btc' ? de(x.units, 6) : de(x.units, 3))); r.appendChild(el('td', 'n', eur(x.price, x.a === 'btc' ? 0 : 2))); r.appendChild(el('td', 'n', eur(x.fee || 0, 2))); r.appendChild(el('td', 'n', eur(x.units * x.price + (x.type === 'kauf' ? 1 : -1) * (x.fee || 0), 2))); }
       var c = el('td', 'n'); var b = el('button', 'btn sm ' + (pendingDelete === x.id ? 'danger' : 'ghost'), pendingDelete === x.id ? 'Wirklich löschen' : 'Löschen'); b.type = 'button'; b.addEventListener('click', function () { if (pendingDelete !== x.id) { pendingDelete = x.id; renderTx(model()); return; } pendingDelete = null; deleteTx(x); }); c.appendChild(b); if (pendingDelete === x.id) { var cn = el('button', 'btn sm ghost', 'Abbrechen'); cn.type = 'button'; cn.style.marginLeft = '6px'; cn.addEventListener('click', function () { pendingDelete = null; renderTx(model()); }); c.appendChild(cn); } r.appendChild(c); tb.appendChild(r); });
     t.appendChild(tb); h.appendChild(t);
   }
   function deleteTx(x) {
-    STORE.update(function (d) { d.tx = d.tx.filter(function (t) { return t.id !== x.id; }); if (x.type === 'verkauf') d.cash[x.a] = Math.max(0, d.cash[x.a] - (x.units * x.price - (x.fee || 0))); else d.cash[x.a] = d.cash[x.a] + (x.units * x.price + (x.fee || 0)); });
+    STORE.update(function (d) { d.tx = d.tx.filter(function (t) { return t.id !== x.id; }); d.cash[x.a] = Math.max(0, d.cash[x.a] - cashDelta(x)); });
     msg('fMsg', 'Buchung gelöscht, Cash angepasst.'); schedule();
   }
 
@@ -337,26 +374,66 @@
     A.forEach(function (a) { var map = {}; ((D.eur && D.eur.weekly && D.eur.weekly[a]) || []).forEach(function (x) { map[x[0]] = { d: x[1], c: x[2] }; }); var l = pxOf(a); if (l) { var k = ENG.mondayOf(l.d); if (!map[k] || l.d >= map[k].d) map[k] = { d: l.d, c: l.p }; } out[a] = map; });
     return out;
   }
-  function perfSeries(Mo) {
-    var tx = Mo.dep.tx.filter(function (t) { return t && t.d && CFG.assets[t.a] && t.units > 0; });
+  /* Depotverlauf je Woche: Positionen zu Euro-Wochenkursen, Cash je Baustein rückwärts aus den Buchungen abgeleitet,
+     Zinsen auf Cash (cashRate p. a.) wöchentlich aufgelaufen. Einzahlungen/Auszahlungen als Buchungen vom Typ einzahlung/auszahlung. */
+  function cashDelta(t) { if (t.type === 'kauf') return -(t.units * t.price + (t.fee || 0)); if (t.type === 'verkauf') return t.units * t.price - (t.fee || 0); if (t.type === 'einzahlung') return +t.amount || 0; if (t.type === 'auszahlung') return -(+t.amount || 0); return 0; }
+  /* Kursreihen in Euro je Anlage als sortierte [Datum, Kurs]-Listen: täglich (eur.json daily + aktueller Kurs) oder wöchentlich */
+  function eurPoints(a, daily) {
+    var rows = [];
+    if (daily) { ((D.eur && D.eur.daily && D.eur.daily[a]) || []).forEach(function (r) { rows.push([r[0], r[1]]); }); }
+    else { ((D.eur && D.eur.weekly && D.eur.weekly[a]) || []).forEach(function (r) { rows.push([r[1], r[2]]); }); }
+    var l = pxOf(a); if (l && l.d && (!rows.length || l.d >= rows[rows.length - 1][0])) { if (rows.length && rows[rows.length - 1][0] === l.d) rows[rows.length - 1][1] = l.p; else rows.push([l.d, l.p]); }
+    rows.sort(function (x, y) { return x[0] < y[0] ? -1 : x[0] > y[0] ? 1 : 0; });
+    return rows;
+  }
+  function hasDaily() { return !!(D.eur && D.eur.daily && D.eur.daily.btc && D.eur.daily.btc.length > 5); }
+  /* Depotverlauf: Positionen zu Euro-Kursen (letzter bekannter Kurs am Stichtag), Cash je Baustein rückwärts aus den Buchungen,
+     Zinsen auf Cash (cashRate p. a.) über die Zeit aufgelaufen. grid: 'tag' oder 'woche'; from: erster Stichtag (ISO) oder null */
+  function perfSeries(Mo, grid, from) {
+    var tx = Mo.dep.tx.filter(function (t) { return t && t.d && CFG.assets[t.a]; });
     if (!tx.length) return null;
-    var E = eurSeries(), first = tx.reduce(function (mn, t) { return t.d < mn ? t.d : mn; }, '9999-12-31'), k0 = ENG.mondayOf(first), kLast = '', last = {}, pts = [];
-    A.forEach(function (a) { Object.keys(E[a]).forEach(function (k) { if (k > kLast) kLast = k; if (k < k0 && (!last[a] || k > ENG.mondayOf(last[a].d))) last[a] = E[a][k]; }); });
-    if (!kLast || kLast < k0) return null;
-    for (var k = k0; k <= kLast; k = ENG.addDays(k, 7)) {
-      var end = ENG.addDays(k, 6), B = ENG.book(tx.filter(function (t) { return t.d <= end; })), val = 0, cost = 0, parts = {}, ok = true, dmax = '';
-      A.forEach(function (a) { if (E[a][k]) last[a] = E[a][k]; var u = ENG.units(B.pos[a]); if (u > 1e-12) { if (!last[a]) { ok = false; return; } var v = u * last[a].c; val += v; cost += ENG.cost(B.pos[a]); parts[a] = v; if (last[a].d > dmax) dmax = last[a].d; } });
-      if (!ok) continue;
-      var real = B.real.reduce(function (s, r) { return s + (r.gain || 0); }, 0);
-      pts.push({ k: k, d: dmax || end, val: val, cost: cost, real: real, gain: val - cost + real, parts: parts });
-    }
+    var daily = grid === 'tag', P = {}, idx = {}, first = tx.reduce(function (mn, t) { return t.d < mn ? t.d : mn; }, '9999-12-31');
+    A.forEach(function (a) { P[a] = eurPoints(a, daily); idx[a] = 0; });
+    var today = todayISO(), start = daily ? first : ENG.mondayOf(first), lastDate = today;
+    if (from && from > start) start = daily ? from : ENG.mondayOf(from);
+    var stamps = [], d = start;
+    if (daily) { while (d <= lastDate) { stamps.push(d); d = ENG.addDays(d, 1); } }
+    else { while (d <= lastDate) { stamps.push(d); d = ENG.addDays(d, 7); } }
+    if (!stamps.length) return null;
+    function priceAt(a, date) { var rows = P[a], v = null; for (var i = 0; i < rows.length && rows[i][0] <= date; i++) v = rows[i]; return v; }
+    var rate = Mo.cfg.cashRate || 0, interest = { ftse: 0, btc: 0, gold: 0 }, pts = [], prevEnd = null;
+    /* Zinsen vor dem Anzeigefenster aufholen */
+    if (from && from > (daily ? first : ENG.mondayOf(first))) { var t0 = daily ? first : ENG.mondayOf(first), cur = t0; while (cur < start) { A.forEach(function (a) { var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (t.a === a && t.d > cur) cash -= cashDelta(t); }); interest[a] += Math.max(0, cash) * rate / 365; }); cur = ENG.addDays(cur, 1); } }
+    stamps.forEach(function (k) {
+      var end = daily ? k : ENG.addDays(k, 6); if (end > today) end = today;
+      var upTo = tx.filter(function (t) { return t.d <= end; }), B = ENG.book(upTo.filter(function (t) { return t.type === 'kauf' || t.type === 'verkauf'; }));
+      var days = prevEnd ? Math.max(0, ENG.daysBetween(prevEnd, end)) : 0; prevEnd = end;
+      var parts = {}, total = 0, gainTotal = 0, dmax = '';
+      A.forEach(function (a) {
+        var u = ENG.units(B.pos[a]), val = 0, cost = ENG.cost(B.pos[a]), pr = priceAt(a, end);
+        if (u > 1e-12 && pr) { val = u * pr[1]; if (pr[0] > dmax) dmax = pr[0]; }
+        var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (t.a === a && t.d > end) cash -= cashDelta(t); }); cash = Math.max(0, cash);
+        if (days > 0) interest[a] += cash * rate * days / 365;
+        var real = B.real.filter(function (r) { return r.a === a; }).reduce(function (sx, r) { return sx + (r.gain || 0); }, 0);
+        var gain = val - cost + real + interest[a];
+        parts[a] = { val: val, cash: cash, interest: interest[a], gain: gain, cost: cost, units: u, missing: u > 1e-12 && !pr };
+        total += val + cash + interest[a]; gainTotal += gain;
+      });
+      pts.push({ k: k, d: end, total: total, gainTotal: gainTotal, parts: parts });
+    });
     return pts;
   }
+  var PERF_RANGES = [['tage', '1 M · Tage'], ['wochen', '1 J · Wochen'], ['jahr', 'Jahr ' + new Date().getFullYear()], ['alles', 'Alles']];
   function drawPerf(Mo) {
     var host = $('chPerf'), leg = $('perfLegend'), cap = $('perfCap');
-    var inst = {}; A.forEach(function (a) { inst[a] = a === 'btc' ? 'Bitcoin' : a === 'ftse' ? 'VWCE' : 'Gold-ETC'; });
-    var est = Mo.dep.tx.filter(function (t) { return t.est; }).map(function (t) { return inst[t.a] + ' ab ' + dDE(t.d); });
-    CH.perfChart(host, leg, cap, Mo.ready ? perfSeries(Mo) : null, PERF.mode, inst, est.length ? 'Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    var series = [{ key: 'total', label: 'Depot gesamt' }, { key: 'ftse', label: 'FTSE-Baustein', colorVar: '--ftse' }, { key: 'btc', label: 'Bitcoin-Baustein', colorVar: '--btc' }, { key: 'gold', label: 'Gold-Baustein', colorVar: '--gold' }];
+    var est = Mo.dep.tx.filter(function (t) { return t.est; }).map(function (t) { return (t.a === 'btc' ? 'Bitcoin' : t.a === 'ftse' ? 'VWCE' : 'Gold-ETC') + ' ' + dDE(t.d); });
+    var r = PERF.range, today = todayISO(), grid = 'woche', from = null, note = '';
+    if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }
+    else if (r === 'wochen') from = ENG.addDays(today, -364);
+    else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
+    var capText = note + 'Jeder Baustein = Position zu Euro-' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kursen plus sein Cash plus aufgelaufene Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt). Cash vor heute wird rückwärts aus den Buchungen abgeleitet; Ein- und Auszahlungen aufs Konto bitte unten erfassen. Letzter Punkt mit den aktuellen Kursen.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    CH.portfolioChart(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
   }
 
   /* ---------- Signale: Verlauf, Push, Zeitplan, Läufe ---------- */
@@ -514,7 +591,7 @@
   var formDirty = { tax: false, cash: false };
   function fillForms(Mo) {
     var t = Mo.cfg, c = Mo.cash;
-    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? t.pbUsed : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = t.interestRest || 0; $('tLoss').value = t.lossOther || 0; $('tS23').value = t.s23Other || 0; $('tRate').value = t.rateKnown ? String(Math.round(t.rate * 1000) / 10) : ''; $('tHead').value = t.headroom == null ? '' : t.headroom; $('tNv').checked = !!t.nv; $('tBuf').value = t.buffer; $('tMin').value = t.minOrder; $('tReb').value = t.rebalDate || ''; }
+    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? t.pbUsed : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = t.interestRest || 0; $('tLoss').value = t.lossOther || 0; $('tS23').value = t.s23Other || 0; $('tRate').value = t.rateKnown ? String(Math.round(t.rate * 1000) / 10) : ''; $('tHead').value = t.headroom == null ? '' : t.headroom; $('tNv').checked = !!t.nv; $('tBuf').value = t.buffer; $('tMin').value = t.minOrder; $('tReb').value = t.rebalDate || ''; $('tCashRate').value = String(Math.round((t.cashRate || 0) * 10000) / 100); }
     if (!formDirty.cash) { $('cFtse').value = (c.ftse || 0).toFixed(2); $('cBtc').value = (c.btc || 0).toFixed(2); $('cGold').value = (c.gold || 0).toFixed(2); }
     $('taxYearLbl').textContent = String(t.year);
     var tn = $('taxNote'); tn.textContent = (Mo.dep.tax && Mo.dep.tax.note) || '';
@@ -531,17 +608,39 @@
     ['taxForm', 'cashForm'].forEach(function (f) { $(f).addEventListener('input', function () { formDirty[f === 'taxForm' ? 'tax' : 'cash'] = true; }); });
     $('taxForm').addEventListener('submit', function (e) { e.preventDefault();
       var pb = num('tPbUsed'), rate = num('tRate'), head = num('tHead');
-      STORE.update(function (d) { d.tax = d.tax || {}; d.tax.pbUsed = pb == null ? null : pb; d.tax.pbUsedDate = $('tPbDate').value || ''; d.tax.interestRest = num('tInt') || 0; d.tax.lossOther = num('tLoss') || 0; d.tax.s23Other = num('tS23') || 0; if (rate != null && rate >= 0 && rate <= 50) d.tax.rate = rate / 100; else d.tax.rate = null; d.tax.headroom = head == null ? null : head; d.tax.nv = $('tNv').checked; d.tax.buffer = num('tBuf') == null ? CFG.taxLaw.buffer : num('tBuf'); d.tax.minOrder = num('tMin') == null ? CFG.taxLaw.minOrder : num('tMin'); d.tax.rebalDate = $('tReb').value || ''; });
+      STORE.update(function (d) { d.tax = d.tax || {}; d.tax.pbUsed = pb == null ? null : pb; d.tax.pbUsedDate = $('tPbDate').value || ''; d.tax.interestRest = num('tInt') || 0; d.tax.lossOther = num('tLoss') || 0; d.tax.s23Other = num('tS23') || 0; if (rate != null && rate >= 0 && rate <= 50) d.tax.rate = rate / 100; else d.tax.rate = null; d.tax.headroom = head == null ? null : head; d.tax.nv = $('tNv').checked; d.tax.buffer = num('tBuf') == null ? CFG.taxLaw.buffer : num('tBuf'); d.tax.minOrder = num('tMin') == null ? CFG.taxLaw.minOrder : num('tMin'); d.tax.rebalDate = $('tReb').value || ''; var cr = num('tCashRate'); d.tax.cashRate = cr == null ? 0.025 : cr / 100; });
       formDirty.tax = false; msg('tMsg', 'Gespeichert (in diesem Browser).'); schedule(); });
     $('cashForm').addEventListener('submit', function (e) { e.preventDefault();
       var c = { ftse: num('cFtse') || 0, btc: num('cBtc') || 0, gold: num('cGold') || 0 }; if (c.ftse < 0 || c.btc < 0 || c.gold < 0) { msg('cMsg', 'Cash kann nicht negativ sein.', true); return; }
       STORE.update(function (d) { d.cash = c; }); formDirty.cash = false; msg('cMsg', 'Gespeichert (in diesem Browser).'); schedule(); });
+    function syncTxForm() { var cashMove = $('fType').value === 'einzahlung' || $('fType').value === 'auszahlung'; $('lUnits').hidden = cashMove; $('lFee').hidden = cashMove; $('lPriceText').textContent = cashMove ? 'Betrag in €' : 'Kurs je Stück in €'; }
+    $('fType').addEventListener('change', syncTxForm); syncTxForm();
     $('txForm').addEventListener('submit', function (e) { e.preventDefault();
       var d = $('fDate').value, a = $('fAsset').value, type = $('fType').value, u = num('fUnits'), p = num('fPrice'), fee = num('fFee') || 0, note = $('fNote').value.trim();
-      if (!d) { msg('fMsg', 'Bitte ein Datum angeben.', true); return; } if (!(u > 0)) { msg('fMsg', 'Bitte die Stückzahl angeben.', true); return; } if (!(p > 0)) { msg('fMsg', 'Bitte den Kurs je Stück in Euro angeben.', true); return; }
+      if (!d) { msg('fMsg', 'Bitte ein Datum angeben.', true); return; }
+      if (type === 'einzahlung' || type === 'auszahlung') {
+        if (!(p > 0)) { msg('fMsg', 'Bitte den Betrag in Euro angeben.', true); return; }
+        STORE.update(function (dep) { dep.tx.push({ id: 'tx' + Date.now(), d: d, a: a, type: type, amount: p, fee: 0, note: note, ts: Date.now() }); dep.cash[a] = Math.max(0, dep.cash[a] + (type === 'einzahlung' ? p : -p)); });
+        msg('fMsg', (type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung') + ' eingetragen, Cash angepasst.'); $('fPrice').value = ''; $('fNote').value = ''; schedule(); return;
+      }
+      if (!(u > 0)) { msg('fMsg', 'Bitte die Stückzahl angeben.', true); return; } if (!(p > 0)) { msg('fMsg', 'Bitte den Kurs je Stück in Euro angeben.', true); return; }
       if (type === 'verkauf') { var have = ENG.units(ENG.book(STORE.load().tx).pos[a]); if (u > have + 1e-9) { msg('fMsg', 'Du hast nur ' + units(a, have) + ' im Depot.', true); return; } }
       STORE.update(function (dep) { dep.tx.push({ id: 'tx' + Date.now(), d: d, a: a, type: type, units: u, price: p, fee: fee, note: note, ts: Date.now() }); if (type === 'verkauf') dep.cash[a] = dep.cash[a] + u * p - fee; else dep.cash[a] = Math.max(0, dep.cash[a] - (u * p + fee)); });
       msg('fMsg', (type === 'kauf' ? 'Kauf' : 'Verkauf') + ' eingetragen, Cash angepasst.'); $('fUnits').value = ''; $('fPrice').value = ''; $('fNote').value = ''; schedule(); });
+    /* Ein-/Auszahlung aufs Konto: Einzahlungen gehen an die Bausteine, deren Regel auf Cash steht (nach Zielgewicht), sonst an alle nach Zielgewicht;
+       Auszahlungen kommen aus dem Cash der nicht investierten Bausteine (anteilig), notfalls aus anderem Cash. Nie ein Verkauf. */
+    function splitDeposit(amount) { var outs = A.filter(function (a) { return C[a].E.last.st === 0; }); if (!outs.length) outs = A.slice(); var wsum = outs.reduce(function (sx, a) { return sx + CFG.assets[a].w; }, 0), parts = {}, acc = 0; outs.forEach(function (a, i) { var v = i === outs.length - 1 ? Math.round((amount - acc) * 100) / 100 : Math.round(amount * CFG.assets[a].w / wsum * 100) / 100; acc += v; parts[a] = v; }); return { parts: parts, why: outs.length === A.length ? 'alle drei Regeln investiert, deshalb nach Zielgewicht auf alle Bausteine als Cash bis zum Rebalancing' : 'auf die Bausteine mit Regel auf Cash (' + outs.map(function (a) { return CFG.assets[a].short; }).join(', ') + ') nach Zielgewicht' }; }
+    function splitWithdrawal(amount, cash) { var outs = A.filter(function (a) { return C[a].E.last.st === 0 && cash[a] > 0.005; }), parts = {}, rest = amount, pool = outs.reduce(function (sx, a) { return sx + cash[a]; }, 0); outs.forEach(function (a) { var v = Math.min(cash[a], Math.round(amount * cash[a] / (pool || 1) * 100) / 100); parts[a] = v; rest -= v; }); if (rest > 0.005) { A.forEach(function (a) { if (rest <= 0.005) return; var free = cash[a] - (parts[a] || 0); if (free > 0.005) { var v = Math.min(free, rest); parts[a] = Math.round(((parts[a] || 0) + v) * 100) / 100; rest -= v; } }); } return { parts: parts, rest: Math.max(0, Math.round(rest * 100) / 100), fromInvested: A.some(function (a) { return parts[a] > 0.005 && C[a].E.last.st === 1; }) }; }
+    $('accForm').addEventListener('submit', function (e) { e.preventDefault();
+      var d = $('accDate').value, type = $('accType').value, amt = num('accAmount'), note = $('accNote').value.trim(), cash = STORE.load().cash;
+      if (!d) { msg('accMsg', 'Bitte ein Datum angeben.', true); return; } if (!(amt > 0)) { msg('accMsg', 'Bitte den Betrag angeben.', true); return; }
+      var sp = type === 'einzahlung' ? splitDeposit(amt) : splitWithdrawal(amt, cash);
+      if (type === 'auszahlung' && sp.rest > 0.005) { msg('accMsg', 'So viel Cash ist nicht da: ' + eur(sp.rest, 2) + ' fehlen. Verkäufe macht die Seite nur bei Signal oder Rebalancing.', true); return; }
+      var ts = Date.now(), lines = [];
+      STORE.update(function (dep) { Object.keys(sp.parts).forEach(function (a, i) { var v = sp.parts[a]; if (!(v > 0.005)) return; dep.tx.push({ id: 'acc' + ts + '-' + i, d: d, a: a, type: type, amount: v, fee: 0, note: (type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung') + ' aufs Konto ' + eur(amt, 2) + (note ? ' · ' + note : ''), ts: ts + i }); dep.cash[a] = Math.max(0, dep.cash[a] + (type === 'einzahlung' ? v : -v)); lines.push(CFG.assets[a].short + ' ' + eur(v, 2)); }); });
+      msg('accMsg', (type === 'einzahlung' ? 'Einzahlung verteilt ' + sp.why + ': ' : 'Auszahlung aus dem Cash entnommen' + (sp.fromInvested ? ' (teilweise aus Cash investierter Bausteine, weil das Cash der Regel-Cash-Bausteine nicht reichte)' : '') + ': ') + lines.join(', ') + '.');
+      $('accAmount').value = ''; $('accNote').value = ''; schedule(); });
+    $('accDate').value = todayISO();
     $('btnExport').addEventListener('click', function () { download('regel-depot-' + todayISO() + '.json', STORE.exportJson()); msg('dMsg', 'Datei gespeichert. Bewahre sie sicher auf; sie enthält deine Depotdaten.'); });
     $('fileImport').addEventListener('change', function () { var f = this.files && this.files[0]; if (!f) return; var r = new FileReader(); r.onload = function () { try { STORE.importJson(String(r.result)); formDirty.tax = formDirty.cash = false; msg('dMsg', 'Importiert.'); schedule(); } catch (e) { msg('dMsg', 'Import fehlgeschlagen: ' + e.message, true); } }; r.readAsText(f); this.value = ''; });
     $('btnPaste').addEventListener('click', function () { var b = $('pasteBox'); b.hidden = !b.hidden; if (!b.hidden) $('pasteArea').focus(); });
@@ -574,8 +673,10 @@
   function schedule() { if (!raf) raf = requestAnimationFrame(renderAll); }
   function cardW() { var c = $('ch-ftse'); return c ? c.clientWidth : 0; }
   $('perfSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.mode = b.getAttribute('data-m'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); });
+  (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
-  window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } });
+  window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
+  if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBig(); });
   if (window.matchMedia) { var mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', schedule); }
   STORE.onChange(function () { schedule(); });
   try { var r0s = localStorage.getItem('regelDepot.range'), r0 = r0s == null ? NaN : +r0s; if (!isNaN(r0)) { VIEW.range = r0; Array.prototype.forEach.call($('rangeSeg').querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-r') === r0)); }); } } catch (e) { /* still */ }

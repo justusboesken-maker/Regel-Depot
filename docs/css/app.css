@@ -293,6 +293,30 @@ button.link{font:inherit;background:none;border:0;color:var(--accent);text-decor
 ol.steps{margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-2);display:grid;gap:5px}
 ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
 
+/* Großansicht */
+.bigbtn{margin-top:2px}
+.modal{position:fixed;inset:0;z-index:50;background:rgba(15,23,36,.55);backdrop-filter:blur(3px);overflow:auto;padding:24px 12px;display:grid;align-items:start;justify-items:center}
+.modalbox{background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;gap:14px}
+.bighd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px}
+.bighd h2{display:flex;align-items:center;gap:10px}
+.bighd h2 .sw{width:12px;height:12px;border-radius:3px;background:var(--acol)}
+.bighd .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.bigfacts{display:flex;flex-wrap:wrap;gap:8px 18px}
+.bigfacts .bf{display:grid;gap:1px}
+.bigfacts .k{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
+.bigfacts .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
+.bigfacts .bf.hot .v{color:var(--warn)}
+.bigchart{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px 12px 8px}
+.modalbox .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
+.modalbox .act b{font-size:15.5px}
+.modalbox .act.buy{background:var(--good-bg)} .modalbox .act.buy b{color:var(--good)}
+.modalbox .act.sell{background:var(--bad-bg)} .modalbox .act.sell b{color:var(--bad)}
+.modalbox .act span{font-size:13px;color:var(--ink-2)}
+.modalbox .next{font-size:13.5px;color:var(--ink-2)} .modalbox .next b{color:var(--ink)}
+.bigsw{display:grid;gap:6px}
+.bigsw .swrow{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;font-size:13.5px;color:var(--ink-2)}
+@media (max-width:640px){.modal{padding:8px} .modalbox{padding:14px}}
+
 /* Regeln */
 .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
 .rule{padding:15px 17px;display:grid;gap:8px;align-content:start;border-top:3px solid var(--acol)}
