@@ -138,7 +138,20 @@ async function loadSignalSeries(a) {
   catch (e) { primaryError = e.message; vlog('Yahoo ' + c.signal.sym + ' fehlgeschlagen: ' + e.message); }
   if (!ALLOW_FB) throw new Error(primaryError + ' (Ersatzquelle erst im nächsten Anlauf)');
   if (a === 'ftse') {
-    const r = await F.av('VWRD.LON'); /* wöchentlich bereinigt, signalgleich geprüft */
+    const r = await F.av('VWRD.LON'); /* wöchentlich bereinigt, signalgleich geprüft (Abweichung zu Yahoo seit 2014 unter 0,01 %) */
+    /* Alpha Vantage trägt den Freitagsschluss in die Wochenreihe oft erst Stunden nach Börsenschluss ein; der Quote hat ihn früher.
+       Nur nach Londoner Schluss (ab 16 Uhr UTC) und nur, wenn der Quote wirklich vom Freitag stammt. */
+    try {
+      const dueK = addDays(dueCutoff(a), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || (TODAY === fri && HOUR >= 16);
+      if (i >= 0 && r.dates[i] < fri && afterClose) {
+        const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
+        if (qd && qd >= fri && q.price > 0) {
+          if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = qd; r.closes[i] = q.price; } else { r.dates.push(qd); r.closes.push(q.price); }
+          r.src = r.src.replace(' (Ersatzquelle)', '') + ' + Schlusskurs ' + qd + ' aus dem Quote (Ersatzquelle)';
+          vlog('FTSE: Wochenschluss ' + qd + ' aus dem Alpha-Vantage-Quote ergänzt: ' + q.price);
+        }
+      }
+    } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); }
     return { daily: r, src: r.src, fallback: true, primaryError, weeklyAlready: true };
   }
   if (a === 'btc') {

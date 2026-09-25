@@ -240,7 +240,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .alloc{display:grid;gap:12px}
 .donuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;align-items:start}
 .donut{position:relative;display:grid;justify-items:center;gap:4px;margin:0;min-width:0}
-.donut svg{width:100%;max-width:230px;height:auto;display:block;overflow:visible}
+.donut svg{width:100%;max-width:300px;height:auto;display:block;overflow:visible}
 .dlegend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin-top:4px}
 .dlegend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
 .dlegend .sw{display:inline-block;width:9px;height:9px;border-radius:2px}
