@@ -418,29 +418,34 @@
     else { while (d <= lastDate) { stamps.push(d); d = ENG.addDays(d, 7); } }
     if (!stamps.length) return null;
     function priceAt(a, date) { var rows = P[a], v = null; for (var i = 0; i < rows.length && rows[i][0] <= date; i++) v = rows[i]; return v; }
-    var rate = Mo.cfg.cashRate || 0, interest = { ftse: 0, btc: 0, gold: 0 }, pts = [], prevEnd = null;
-    /* Ein Baustein zählt erst ab seiner ersten Buchung (Kauf oder Einzahlung); davor gibt es weder Cash noch Zinsen für ihn.
-       Bausteine ohne Buchungen (nur Cash) zählen ab dem Beginn der Reihe. Frühere Einzahlungen lassen sich unter „Konto“ nachtragen. */
+    /* Cash-Modell: Das heutige Cash je Baustein ist der Anker (es enthält alle bisher gutgeschriebenen Zinsen).
+       Ab dem Regelstart (config trading.start) bewegen Käufe, Verkäufe, Ein- und Auszahlungen das Cash, und es wird täglich mit cashRate verzinst (geschätzt).
+       Käufe vor dem Regelstart gelten als von außen bezahlt (Kraken, Überweisungen); davor ist das Cash so hoch wie heute, ohne Zinsen.
+       Ein Baustein zählt erst ab seiner ersten Buchung; Bausteine ohne Buchungen (nur Cash) zählen ab dem Beginn der Reihe. */
+    var START = (CFG.trading && CFG.trading.start) || '2026-09-28', rate = Mo.cfg.cashRate || 0;
+    var cashTx = tx.filter(function (t) { return t.d >= START; });
+    function principalAt(a, date) { var c = Mo.cash[a] || 0; cashTx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > date) c -= cashDelta(t); }); return c; }
+    var cum = {}, totalI = {};
+    A.forEach(function (a) { cum[a] = {}; var acc = 0, dd = START; while (dd <= today) { acc += Math.max(0, principalAt(a, dd)) * rate / 365; cum[a][dd] = acc; dd = ENG.addDays(dd, 1); } totalI[a] = acc; });
+    function interestAt(a, date) { return date < START ? 0 : (cum[a][date] || 0); }
+    function cashAt(a, date) { var Pr = principalAt(a, date); return Math.max(0, Pr - (totalI[a] - interestAt(a, date))); }
     var firstTx = {}; tx.forEach(function (t) { var b = bucketOf(t.a); if (!firstTx[b] || t.d < firstTx[b]) firstTx[b] = t.d; });
     function exists(a, date) { return !firstTx[a] || date >= firstTx[a]; }
-    /* Zinsen vor dem Anzeigefenster aufholen */
-    if (from && from > (daily ? first : ENG.mondayOf(first))) { var t0 = daily ? first : ENG.mondayOf(first), cur = t0; while (cur < start) { A.forEach(function (a) { if (!exists(a, cur)) return; var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > cur) cash -= cashDelta(t); }); interest[a] += Math.max(0, cash) * rate / 365; }); cur = ENG.addDays(cur, 1); } }
+    var pts = [];
     stamps.forEach(function (k) {
       var end = daily ? k : ENG.addDays(k, 6); if (end > today) end = today;
       var upTo = tx.filter(function (t) { return t.d <= end; }), B = ENG.book(upTo.filter(function (t) { return t.type === 'kauf' || t.type === 'verkauf'; }));
-      var days = prevEnd ? Math.max(0, ENG.daysBetween(prevEnd, end)) : 0; prevEnd = end;
       var parts = {}, total = 0, gainTotal = 0, dmax = '';
       A.forEach(function (a) {
         if (!exists(a, end)) return; /* Baustein gibt es zu diesem Zeitpunkt noch nicht */
         var u = ENG.units(B.pos[a] || []), val = 0, cost = ENG.cost(B.pos[a] || []), pr = priceAt(a, end), missing = u > 1e-12 && !pr;
         if (u > 1e-12 && pr) { val = u * pr[1]; if (pr[0] > dmax) dmax = pr[0]; }
         if (a === 'btc') ALTS.forEach(function (x) { var ua = ENG.units(B.pos[x.id] || []); cost += ENG.cost(B.pos[x.id] || []); if (ua > 1e-12) { var pa = priceAt(x.id, end); if (pa) { val += ua * pa[1]; if (pa[0] > dmax) dmax = pa[0]; } else missing = true; } });
-        var cash = Mo.cash[a] || 0; tx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > end) cash -= cashDelta(t); }); cash = Math.max(0, cash);
-        if (days > 0) interest[a] += cash * rate * days / 365;
+        var cash = cashAt(a, end), interest = interestAt(a, end);
         var real = B.real.filter(function (r) { return bucketOf(r.a) === a; }).reduce(function (sx, r) { return sx + (r.gain || 0); }, 0);
-        var gain = val - cost + real + interest[a];
-        parts[a] = { val: val, cash: cash, interest: interest[a], gain: gain, cost: cost, units: u, missing: missing };
-        total += val + cash + interest[a]; gainTotal += gain;
+        var gain = val - cost + real + interest;
+        parts[a] = { val: val, cash: cash, interest: interest, gain: gain, cost: cost, units: u, missing: missing };
+        total += val + cash; gainTotal += gain;
       });
       pts.push({ k: k, d: end, total: total, gainTotal: gainTotal, parts: parts });
     });
@@ -455,7 +460,8 @@
     if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }
     else if (r === 'wochen') from = ENG.addDays(today, -364);
     else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
-    var capText = note + 'Baustein = Position plus Cash plus Zinsen (' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. auf Cash, geschätzt), ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash vor heute ist aus den Buchungen zurückgerechnet; ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    var startD = (CFG.trading && CFG.trading.start) || '2026-09-28';
+    var capText = note + 'Baustein = Position plus Cash, ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash ab dem Regelstart ' + dDE(startD) + ' aus den Buchungen zurückgerechnet und mit ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. verzinst (geschätzt); Käufe davor gelten als von außen bezahlt, das Cash davor entspricht dem heutigen. Ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
     CH.portfolioChart(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
   }
 
@@ -732,7 +738,13 @@
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
   window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
   if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBig(); });
-  if (window.matchMedia) { var mq = window.matchMedia('(prefers-color-scheme: dark)'); if (mq.addEventListener) mq.addEventListener('change', schedule); }
+  /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
+  var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
+  function themeChoice() { try { var t = localStorage.getItem('regelDepot.theme'); return t === 'dark' || t === 'light' ? t : null; } catch (e) { return null; } }
+  function applyTheme() { var t = themeChoice(); if (t) document.documentElement.setAttribute('data-theme', t); else document.documentElement.removeAttribute('data-theme'); var dark = t ? t === 'dark' : !!(mqDark && mqDark.matches); var tg = $('themeToggle'); if (tg) { tg.checked = dark; tg.setAttribute('aria-checked', String(dark)); } var mt = document.querySelector('meta[name="theme-color"]:not([media])'); if (!mt) { mt = document.createElement('meta'); mt.name = 'theme-color'; document.head.appendChild(mt); } mt.content = dark ? '#0E1217' : '#1B3A6B'; }
+  applyTheme();
+  if ($('themeToggle')) $('themeToggle').addEventListener('change', function () { var sys = !!(mqDark && mqDark.matches), want = this.checked ? 'dark' : 'light'; try { if ((want === 'dark') === sys) localStorage.removeItem('regelDepot.theme'); else localStorage.setItem('regelDepot.theme', want); } catch (e) { /* still */ } applyTheme(); schedule(); if (BIG.a) drawBig(BIG.a); });
+  if (mqDark && mqDark.addEventListener) mqDark.addEventListener('change', function () { applyTheme(); schedule(); });
   STORE.onChange(function () { schedule(); });
   try { var r0s = localStorage.getItem('regelDepot.range'), r0 = r0s == null ? NaN : +r0s; if (!isNaN(r0)) { VIEW.range = r0; Array.prototype.forEach.call($('rangeSeg').querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-r') === r0)); }); } } catch (e) { /* still */ }
 

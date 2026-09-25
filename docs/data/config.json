@@ -232,6 +232,8 @@
     }
   ],
   "trading": {
+    "start": "2026-09-28",
+    "startNote": "Umsetzung der Regeln ab der Woche vom 28.09.2026 (beschlossen, Übergabe 2.1). Ab hier bewegen Buchungen das Baustein-Cash im Depotverlauf; Käufe davor gelten als von außen bezahlt.",
     "rebalanceDate": "2026-12-30",
     "note": "Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Handel zur Eröffnung der Folgewoche, Montag ab 7:30 Uhr; Bitcoin jederzeit."
   },

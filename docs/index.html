@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>Regel-Depot 50/30/20</title>
 <meta name="description" content="Kauf- und Verkaufssignale, Depotstand und Rebalancing-Vorschau für das Regel-Depot 50/30/20 (FTSE All-World, Bitcoin, Gold).">
-<meta name="theme-color" content="#1B3A6B" media="(prefers-color-scheme: light)">
-<meta name="theme-color" content="#0E1217" media="(prefers-color-scheme: dark)">
+<meta name="theme-color" content="#1B3A6B">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="default">
@@ -14,13 +13,17 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260925-2320">
+<script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
+<link rel="stylesheet" href="css/app.css?v=20260925-2337">
 </head>
 <body>
 
 <div class="wrap hdr">
   <header class="top">
-    <p class="eyebrow">Enjoyer OS · 50/30/20 bei Trade Republic</p>
+    <div class="toprow">
+      <p class="eyebrow">Enjoyer OS · 50/30/20 bei Trade Republic</p>
+      <label class="switch" id="themeSwitch" title="Dunkelmodus ein- oder ausschalten"><input type="checkbox" id="themeToggle" role="switch" aria-label="Dunkelmodus"><span class="track" aria-hidden="true"></span><span class="lbl">Dunkel</span></label>
+    </div>
     <h1>Regel-Depot</h1>
     <div class="meta" id="topMeta"><span>Lade Daten …</span></div>
   </header>
@@ -197,9 +200,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260925-2320"></script>
-<script src="js/store.js?v=20260925-2320"></script>
-<script src="js/charts.js?v=20260925-2320"></script>
-<script src="js/app.js?v=20260925-2320"></script>
+<script src="js/engine.js?v=20260925-2337"></script>
+<script src="js/store.js?v=20260925-2337"></script>
+<script src="js/charts.js?v=20260925-2337"></script>
+<script src="js/app.js?v=20260925-2337"></script>
 </body>
 </html>
