@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260925-1419">
+<link rel="stylesheet" href="css/app.css?v=20260925-1651">
 </head>
 <body>
 
@@ -83,7 +83,7 @@
     <div class="body">
       <form class="form" id="txForm" novalidate>
         <label>Datum<input type="date" id="fDate" required></label>
-        <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option></select></label>
+        <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option><option value="eth">Ethereum (Beimischung, Krypto-Baustein)</option><option value="sol">Solana (Beimischung, Krypto-Baustein)</option></select></label>
         <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option><option value="einzahlung">Einzahlung (Cash des Bausteins)</option><option value="auszahlung">Auszahlung (Cash des Bausteins)</option></select></label>
         <label id="lUnits">Stück<input type="number" id="fUnits" step="any" min="0" inputmode="decimal" required></label>
         <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="number" id="fPrice" step="any" min="0" inputmode="decimal" required></label>
@@ -197,9 +197,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260925-1419"></script>
-<script src="js/store.js?v=20260925-1419"></script>
-<script src="js/charts.js?v=20260925-1419"></script>
-<script src="js/app.js?v=20260925-1419"></script>
+<script src="js/engine.js?v=20260925-1651"></script>
+<script src="js/store.js?v=20260925-1651"></script>
+<script src="js/charts.js?v=20260925-1651"></script>
+<script src="js/app.js?v=20260925-1651"></script>
 </body>
 </html>

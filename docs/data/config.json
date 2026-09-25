@@ -88,6 +88,36 @@
       "unit": "Stück"
     }
   },
+  "alts": {
+    "note": "Krypto-Beimischung ohne eigenes Signal: folgt der Bitcoin-Regel, zählt zum 30-%-Krypto-Baustein (Bitcoin ist der Signalgeber). Kurse von Coinbase, nur für Depotbewertung und Verlauf.",
+    "bucket": "btc",
+    "list": [
+      {
+        "id": "eth",
+        "name": "Ethereum",
+        "short": "ETH",
+        "inst": "Ethereum (Beimischung, direkt bei Trade Republic)",
+        "unit": "ETH",
+        "dec": 4,
+        "eur": {
+          "src": "coinbase",
+          "sym": "ETH-EUR"
+        }
+      },
+      {
+        "id": "sol",
+        "name": "Solana",
+        "short": "SOL",
+        "inst": "Solana (Beimischung, direkt bei Trade Republic)",
+        "unit": "SOL",
+        "dec": 4,
+        "eur": {
+          "src": "coinbase",
+          "sym": "SOL-EUR"
+        }
+      }
+    ]
+  },
   "fx": {
     "src": "yahoo",
     "sym": "EURUSD=X"

@@ -33,6 +33,7 @@ function saveJson(rel, obj, pretty) { const p = path.join(DATA, rel); fs.mkdirSy
 
 const CFG = loadJson('config.json');
 const A = Object.keys(CFG.assets);
+const ALTS = (CFG.alts && CFG.alts.list) || []; /* Krypto-Beimischung (ETH, SOL): nur Euro-Kurse für die Depotbewertung, kein Signal */
 const STATE = loadJson('state.json', { version: 1, updated: null, assets: {}, cross: {}, warn: {}, queue: [] });
 const EVENTS = loadJson('events.json', []);
 const RUNS = loadJson('runs.json', []);
@@ -355,6 +356,7 @@ async function eurQuotes(keys) {
       }
     } catch (e2) { RUN.summary.push('Euro-Kurs ' + sym + ' nicht aktualisiert (' + e2.message.slice(0, 90) + ')'); vlog('Ersatz ' + a + ': ' + e2.message); }
   }
+  if (order.includes('btc')) await altQuotes();
   await dailyEur(order);
   EUR.updated = NOW.toISOString();
   saveJson('eur.json', EUR);
@@ -370,6 +372,17 @@ function mergeDaily(a, dates, closes, dec) {
   const ks = Object.keys(map).sort().filter((d) => d >= '2026-05-01');
   EUR.daily[a] = ks.map((d) => [d, map[d]]);
 }
+/* Beimischungen: Coinbase ist hier die reguläre Quelle (kein Signal, deshalb keine Yahoo-Pflicht) */
+async function altQuotes() {
+  for (const alt of ALTS) {
+    try {
+      const d = await F.coinbase(alt.eur.sym);
+      const W = ENG.weeklyFromDaily(d.dates.slice(0, -1), d.closes.slice(0, -1), THIS_MON);
+      EUR.weekly[alt.id] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[alt.id] || []), W, false), 4);
+      setLatest(alt.id, TODAY, d.price, alt.eur.sym, 'coinbase ' + alt.eur.sym);
+    } catch (e) { vlog('Beimischung ' + alt.id + ': ' + e.message); RUN.summary.push('Kurs ' + alt.short + ' nicht aktualisiert (' + e.message.slice(0, 60) + ')'); }
+  }
+}
 async function dailyEur(keys) {
   EUR.daily = EUR.daily || {};
   const backfill = !(EUR.daily.btc && EUR.daily.btc.length > 30);
@@ -377,7 +390,8 @@ async function dailyEur(keys) {
   for (const a of keys) {
     try {
       if (a === 'eurusd') { const r = await F.ecbRange(since, TODAY); mergeDaily('eurusd', r.dates, r.closes, 6); }
-      else if (a === 'btc') { const r = await F.coinbaseDays('BTC-EUR', backfill ? 150 : 40); mergeDaily('btc', r.dates.slice(0, -1), r.closes.slice(0, -1), 2); if (backfill && r.dates[0] > since) { const r2 = await F.coinbaseDays('BTC-EUR', 300); mergeDaily('btc', r2.dates.slice(0, -1), r2.closes.slice(0, -1), 2); } }
+      else if (a === 'btc') { const r = await F.coinbaseDays('BTC-EUR', backfill ? 150 : 40); mergeDaily('btc', r.dates.slice(0, -1), r.closes.slice(0, -1), 2); if (backfill && r.dates[0] > since) { const r2 = await F.coinbaseDays('BTC-EUR', 300); mergeDaily('btc', r2.dates.slice(0, -1), r2.closes.slice(0, -1), 2); }
+        for (const alt of ALTS) { try { const ra = await F.coinbaseDays(alt.eur.sym, (EUR.daily[alt.id] && EUR.daily[alt.id].length > 30) ? 40 : 150); mergeDaily(alt.id, ra.dates.slice(0, -1), ra.closes.slice(0, -1), 4); } catch (e) { vlog('Tagesreihe ' + alt.id + ': ' + e.message); } } }
       else if (a === 'ftse') {
         if (RUN.yahooDailyFtse) mergeDaily('ftse', RUN.yahooDailyFtse.dates, RUN.yahooDailyFtse.closes, 4);
         else { const r = await F.avDaily('VWCE.DEX', false); mergeDaily('ftse', r.dates, r.closes, 4); } /* compact = letzte 100 Handelstage; full ist Bezahltarif. Ältere Tage überbrückt die Seite mit den Wochenschlüssen. */
@@ -415,6 +429,10 @@ async function liveTick() {
     fail('Live Gold', e.message);
     if (prev.prices && prev.prices.gold) out.prices.gold = prev.prices.gold;
   }
+  for (const alt of ALTS) {
+    try { const e = await F.coinbaseSpot(alt.eur.sym); out.prices[alt.id] = { eur: round(e.price, 4), src: 'coinbase ' + alt.eur.sym, t: NOW.toISOString() }; }
+    catch (e) { if (prev.prices && prev.prices[alt.id]) out.prices[alt.id] = prev.prices[alt.id]; }
+  }
   /* FTSE: letzter Tagesschluss aus dem eod-Lauf (Alpha Vantage), sonst aus der Wochenreihe */
   if (prev.prices && prev.prices.ftse && prev.prices.ftse.usd > 0) out.prices.ftse = prev.prices.ftse;
   else { const S = storedSeries('ftse'), i = S.k.length - 1; out.prices.ftse = { usd: S.c[i], d: S.d[i], src: 'Wochenschluss', eod: true }; }
@@ -426,6 +444,7 @@ async function liveTick() {
   if (out.prices.btc && out.prices.btc.eur > 0) EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.src, t: NOW.toISOString(), fallback: true, live: true };
   if (out.prices.gold && out.prices.gold.eur > 0) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor', t: NOW.toISOString(), fallback: true, estimate: true, live: true };
   if (fx) EUR.latest.eurusd = { d: TODAY, p: fx.rate, sym: CFG.fx.sym, src: fx.src, t: NOW.toISOString(), fallback: true, live: true };
+  ALTS.forEach((alt) => { const p = out.prices[alt.id]; if (p && p.eur > 0) EUR.latest[alt.id] = { d: TODAY, p: p.eur, sym: alt.eur.sym, src: p.src, t: NOW.toISOString(), live: true }; });
   EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
   RUN.changed = true;
   note('Live: ' + A.map((a) => { const p = out.prices[a], r = out.rule[a]; return p ? CFG.assets[a].short + ' ' + usd(a, p.usd) + (r ? ' (' + de(r.dist * 100, 1) + ' % zur Schwelle' + (r.would ? ', würde auslösen' : '') + ')' : '') : CFG.assets[a].short + ' –'; }).join(' · ') + (fx ? ' · EUR/USD ' + de(fx.rate, 4) : ''));

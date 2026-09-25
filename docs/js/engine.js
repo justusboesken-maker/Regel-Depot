@@ -104,7 +104,8 @@
   function book(tx) {
     var pos = { ftse: [], btc: [], gold: [] }, real = [];
     (tx || []).slice().sort(function (a, b) { return a.d < b.d ? -1 : a.d > b.d ? 1 : ((a.ts || 0) - (b.ts || 0)); }).forEach(function (t) {
-      if (!pos[t.a] || !(t.units > 0)) return;
+      if (!t.a || !(t.units > 0)) return;
+      if (!pos[t.a]) pos[t.a] = []; /* Beimischungen (z. B. eth, sol) bekommen ihre eigene FIFO-Liste */
       if (t.type === 'kauf') { pos[t.a].push({ d: t.d, units: t.units, cpu: (t.units * t.price + (t.fee || 0)) / t.units, id: t.id, est: !!t.est }); }
       else if (t.type === 'verkauf') {
         var left = t.units, per = (t.units * t.price - (t.fee || 0)) / t.units, cost = 0, sg = 0, lg = 0;

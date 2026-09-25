@@ -5,7 +5,7 @@
   --bg:#F3F5F8; --surface:#FFFFFF; --surface-2:#EDF0F4; --surface-3:#DDE2E9; --ink:#0F1724; --ink-2:#3F4A5A; --muted:#667085;
   --rule:#D8DEE6; --rule-strong:#B9C2CE; --accent:#1B3A6B; --accent-soft:#E4EBF6; --accent-ink:#FFFFFF;
   --good:#0B6B37; --good-bg:#DFF1E6; --warn:#7A5000; --warn-bg:#FAEFD2; --bad:#A8231B; --bad-bg:#FBE4E1;
-  --ftse:#2a78d6; --btc:#eb6834; --gold:#eda100; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
+  --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#eda100; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
@@ -18,7 +18,7 @@
     --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
     --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
     --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917;
-    --ftse:#3987e5; --btc:#d95926; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
+    --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
   }
@@ -28,7 +28,7 @@
   --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
   --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
   --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917;
-  --ftse:#3987e5; --btc:#d95926; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
+  --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
 }
@@ -354,3 +354,7 @@ td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 .link.del{font-size:12.5px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .link.del:hover,.link.del:focus-visible{color:var(--bad);text-decoration:underline}
 #signale .grid2{align-items:start}
+/* Beimischung (ETH, SOL) in der Positionstabelle: leise Unterzeilen */
+tr.altrow td{font-size:12.5px;color:var(--muted);padding-top:4px;padding-bottom:6px}
+tr.altrow td .sw{background:var(--alt)}
+tr.altrow .tag{font-size:10.5px;padding:1px 6px}

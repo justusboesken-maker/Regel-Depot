@@ -223,3 +223,19 @@ test('weeklyFromDaily und mergeWeekly mit Reskalierung', () => {
   const M2 = ENG.mergeWeekly(stored, fresh, false);
   assert.deepEqual(M2.c, [200, 105, 110]);
 });
+
+test('B-13 Beimischung: FIFO-Buch legt eigene Listen für weitere Anlagen an, § 23 wie Bitcoin', () => {
+  const B = ENG.book([
+    { id: 'e1', d: '2026-09-21', a: 'eth', type: 'kauf', units: 0.125, price: 2409.6, fee: 0 },
+    { id: 's1', d: '2026-09-21', a: 'sol', type: 'kauf', units: 1.4598, price: 103.1648, fee: 0 },
+    { id: 'b1', d: '2026-06-05', a: 'btc', type: 'kauf', units: 0.009452, price: 52985.61, fee: 0 },
+    { id: 'e2', d: '2026-11-02', a: 'eth', type: 'verkauf', units: 0.05, price: 3000, fee: 1 }
+  ]);
+  assert.ok(B.pos.eth && B.pos.sol && B.pos.btc, 'Listen für eth, sol und btc');
+  assert.ok(Math.abs(ENG.units(B.pos.eth) - 0.075) < 1e-9, 'Rest ETH nach Teilverkauf');
+  assert.ok(Math.abs(ENG.cost(B.pos.sol) - 150.6) < 0.01, 'Kosten SOL');
+  const r = B.real[0];
+  assert.equal(r.a, 'eth'); assert.ok(r.shortGain > 0 && r.longGain === 0, 'Verkauf innerhalb eines Jahres: kurzfristig (§ 23)');
+  const sm = ENG.simSell(B.pos.eth, 0.075 * 3000, 3000, '2026-12-30', 'eth', { tfs: 0.3 });
+  assert.ok(sm.sg > 0 && sm.g20 === 0, 'Beimischung zählt nicht zu § 20');
+});
