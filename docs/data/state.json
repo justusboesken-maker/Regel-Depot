@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-25T11:05:36.746Z",
+ "updated": "2026-09-25T11:21:07.429Z",
  "assets": {
   "ftse": {
    "k": "2026-09-14",
@@ -102,6 +102,6 @@
  "cross": {},
  "warn": {},
  "queue": [],
- "step": "eod",
+ "step": "live",
  "pendingQueue": 0
 }
