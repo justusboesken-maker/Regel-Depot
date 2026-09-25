@@ -69,8 +69,9 @@ nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px
 
 section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
 section>*{min-width:0}
-.sec-head{display:grid;gap:6px}
-.sec-head p{color:var(--ink-2);max-width:74ch}
+/* Abschnittstitel: eine kompakte Zeile statt Überschrift plus Einleitung */
+h2.eyebrow.sec{font-size:13px;letter-spacing:.1em;color:var(--ink-2);margin:0;padding-bottom:8px;border-bottom:1px solid var(--rule)}
+h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:8px}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);min-width:0}
 .pad{padding:16px 18px}
 .grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}

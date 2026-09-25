@@ -172,7 +172,7 @@
       var acts = el('div', 'actions'); var btn = el('a', 'btn sm', 'Zu den Einstellungen'); btn.href = '#einstellungen'; acts.appendChild(btn); b2.appendChild(acts); g.appendChild(b2); }
   }
   function renderTodo(Mo) {
-    var host = $('todo'); host.textContent = ''; var items = [];
+    var host = $('todo'); if (!host) return; host.textContent = ''; var items = [];
     A.forEach(function (a) {
       var act = actionFor(a, Mo), L = C[a].E.last, w = currentWarn(a), st = D.state && D.state.assets && D.state.assets[a];
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, liveTxt = rn && rn.would ? 'Aktuell ' + usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle): so käme das ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal') + '; es zählt allein der Wochenschluss ' + (CFG.assets[a].week === 'sun' ? 'am Sonntag um 24 Uhr UTC' : 'am Freitag') + '.' : '';
@@ -228,20 +228,14 @@
       if (st && st.pending) row.appendChild(chip('info', 'Schluss fehlt noch'));
       if (row.childNodes.length) top.appendChild(row);
       card.appendChild(top);
-      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text)); mid.appendChild(ab);
+      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); mid.appendChild(ab);
       card.appendChild(mid);
       var cw = el('div', 'cchart'), ch = el('div', 'chart'); ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
-      var dl = el('dl');
-      kv(dl, 'SMA50', usd(a, L.m)); kv(dl, 'Serie', streakText(L));
-      if (ls && ls.c > 0) kv(dl, 'Kurs seit dem ' + (ls.to ? 'Kauf' : 'Verkauf') + 'signal', pct(L.c / ls.c - 1, 1));
-      if (st && st.fallback && st.src) kv(dl, 'Quelle', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt').replace(/ \(Ersatzquelle\)/, ''));
-      bot.appendChild(dl);
-      var nx = el('p', 'next'); nx.appendChild(document.createTextNode(ti.text[0])); nx.appendChild(el('b', null, ti.text[1])); nx.appendChild(document.createTextNode(ti.text[2])); bot.appendChild(nx);
-      var det = el('details', 'box mini'); det.appendChild(el('summary', null, 'Letzte 12 Wochen als Tabelle')); var twr = el('div', 'body'), tw = el('div', 'tablewrap'); tw.appendChild(weeksTable(a)); twr.appendChild(tw); det.appendChild(twr); bot.appendChild(det);
-      card.appendChild(bot);
+      if (st && st.fallback && st.src) bot.appendChild(el('p', 'small muted', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt').replace(/ \(Ersatzquelle\)/, '') + ' (Yahoo war nicht erreichbar)'));
+      if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
     drawCharts();
@@ -289,17 +283,9 @@
       Mo.dep.tx.forEach(function (t) { if (t.est) txt.push(CFG.assets[t.a].inst + ': ' + (t.note || 'Werte geschätzt.')); });
       if (!Mo.cfg.pbKnown) txt.push('Der schon genutzte Pauschbetrag fehlt noch, gerechnet wird mit den vollen 1.000 €.');
       b1.appendChild(el('span', null, txt.join(' '))); ban.appendChild(b1); }
-    var tot = 0, inv = 0, cost = 0, cashT = 0;
-    A.forEach(function (a) { var P = Mo.pos[a]; inv += P.val || 0; cost += P.cost; cashT += P.cash; });
-    tot = inv + cashT; var gain = inv - cost;
-    var k = $('kpis'); k.textContent = '';
-    function kpi(label, val, sub, cls) { var c = el('div', 'card kpi'); c.appendChild(el('p', 'k', label)); c.appendChild(el('p', 'v ' + (cls || ''), val)); if (sub) c.appendChild(el('p', 'd', sub)); k.appendChild(c); }
-    var pd = pxOf('ftse') || pxOf('btc');
-    var estAny = A.some(function (a) { var p = pxOf(a); return p && p.estimate && Mo.pos[a].u > 0; });
-    kpi('Depotwert', eur(tot), pd ? 'Kurse vom ' + dDE(pd.d) + (estAny ? ', teils geschätzt' : '') : '');
-    kpi('Gewinn / Verlust', sgnEur(gain), cost > 0 ? pct(gain / cost, 1) + ' auf ' + eur(cost) + ' Einstand' : '', gain >= 0 ? 'up' : 'down');
-    kpi('Investiert', eur(inv), tot > 0 ? pctPlain(inv / tot, 0) + ' des Depots' : '');
-    kpi('Cash', eur(cashT), tot > 0 ? pctPlain(cashT / tot, 0) + ' des Depots · ' + pctPlain(Mo.cfg.cashRate || 0, 1) + ' Zins p. a., ca. ' + eur(cashT * (Mo.cfg.cashRate || 0) / 12) + ' im Monat' : '');
+    var tot = 0, inv = 0, cashT = 0;
+    A.forEach(function (a) { var P = Mo.pos[a]; inv += P.val || 0; cashT += P.cash; });
+    tot = inv + cashT;
     renderAlloc(Mo, tot, cashT);
     var pt = $('posTable'); pt.textContent = ''; var t = el('table'), th = el('thead'), tr = el('tr');
     ['Position', 'Regel', 'Bestand', 'Kurs', 'Wert', 'Cash', 'Summe', 'Anteil mit Cash', 'Ziel', 'Abweichung'].forEach(function (h, i) { var c = el('th', i > 1 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
@@ -567,8 +553,7 @@
   function renderReb(Mo) {
     var cards = $('rebCards'), notes = $('rebNotes'), ban = $('rebBanner'); cards.textContent = ''; notes.textContent = ''; ban.textContent = '';
     var cfg = Mo.cfg, date = cfg.rebalDate || CFG.taxLaw.rebalDate, days = ENG.daysBetween(todayISO(), date);
-    $('rebDate').textContent = dDE(date);
-    $('rebLede').textContent = (days >= 0 ? 'Noch ' + days + ' Tage. ' : 'Der Stichtag ist vorbei; trage unter Einstellungen den nächsten ein. ') + 'Zurück auf 50/30/20 mit den aktuellen Kursen und Regelständen; die Zahlen aktualisieren sich bis zum Stichtag.';
+    $('rebDate').textContent = dDE(date) + (days >= 0 ? ' · noch ' + days + ' Tage' : ' · Stichtag vorbei, nächsten unter Einstellungen eintragen');
     if (!Mo.ready) { cards.appendChild(el('div', 'card pad muted', 'Ohne Depotdaten keine Vorschau. Importiere dein Depot unter Einstellungen.')); return; }
     if (!cfg.pbKnown) { var b = el('div', 'banner'); b.appendChild(el('b', null, 'Pauschbetrag noch ohne Angabe von Trade Republic')); b.appendChild(el('span', null, 'Gerechnet wird, als wären die vollen 1.000 € frei, abzüglich der geschätzten Zinsen. Trag den genutzten Betrag unter Einstellungen ein.')); ban.appendChild(b); }
     var st = {}, px = {}, pos = {}, cash = {}, ty = { pbFree: Mo.ty.pbFree, s23Before: Mo.ty.s23Before }, open = [], noPx = [];
@@ -707,7 +692,7 @@
   var raf = 0, lastW = 0, lastPW = 0;
   function renderAll() {
     raf = 0; var Mo = model();
-    renderTop(Mo); renderGlobal(Mo); renderTodo(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
+    renderTop(Mo); renderGlobal(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
   }
   function schedule() { if (!raf) raf = requestAnimationFrame(renderAll); }
   function cardW() { var c = $('ch-ftse'); return c ? c.clientWidth : 0; }

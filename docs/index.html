@@ -14,7 +14,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
-<link rel="stylesheet" href="css/app.css?v=20260925-1344">
+<link rel="stylesheet" href="css/app.css?v=20260925-1419">
 </head>
 <body>
 
@@ -33,12 +33,7 @@
 <div id="globalBanner"></div>
 
 <section id="status" aria-labelledby="h-status">
-  <div class="sec-head">
-    <p class="eyebrow">Status</p>
-    <h2 id="h-status">Was die Regeln gerade sagen</h2>
-    <p>Stand jeder Regel zum letzten Wochenschluss, abgeglichen mit deinem Depot. Charts in US-Dollar: Wochenschlüsse, SMA50 gestrichelt, darunter der Abstand zur Schwelle.</p>
-  </div>
-  <div class="todo" id="todo"></div>
+  <h2 class="eyebrow sec" id="h-status">Status</h2>
   <div class="toolbar">
     <div class="chart-legend" id="chLegend"></div>
     <div class="seg" id="rangeSeg" role="group" aria-label="Zeitraum der Charts">
@@ -49,13 +44,8 @@
 </section>
 
 <section id="depot" aria-labelledby="h-depot">
-  <div class="sec-head">
-    <p class="eyebrow">Depot</p>
-    <h2 id="h-depot">Dein Depot bei Trade Republic</h2>
-    <p>Bewertet mit den letzten Euro-Kursen. Geld einer Position, die laut Regel nicht investiert ist, zählt als Cash dieser Position.</p>
-  </div>
+  <h2 class="eyebrow sec" id="h-depot">Depot</h2>
   <div id="depotBanner"></div>
-  <div class="kpis" id="kpis"></div>
   <div class="card pad alloc" id="alloc"></div>
   <div class="card chartcard" id="perfCard">
     <div class="perf-head"><p class="subhd">Depotentwicklung</p>
@@ -108,11 +98,7 @@
 </section>
 
 <section id="signale" aria-labelledby="h-signale">
-  <div class="sec-head">
-    <p class="eyebrow">Signale</p>
-    <h2 id="h-signale">Signale, Vorwarnungen und Benachrichtigungen</h2>
-    <p>Push-Nachricht bei jedem Signal und als Vorwarnung, wenn der Kurs kurz vor dem Wochenschluss auf der Signalseite liegt. Hier der Verlauf, die nächsten Läufe und die Einrichtung.</p>
-  </div>
+  <h2 class="eyebrow sec" id="h-signale">Signale</h2>
   <div class="grid2">
     <div style="display:grid;gap:14px;min-width:0">
       <div class="card pad pushcard" id="pushCard"></div>
@@ -131,22 +117,14 @@
 </section>
 
 <section id="rebalancing" aria-labelledby="h-reb">
-  <div class="sec-head">
-    <p class="eyebrow">Rebalancing</p>
-    <h2 id="h-reb">Rebalancing am <span id="rebDate">30.12.2026</span></h2>
-    <p id="rebLede">Zurück auf 50/30/20, gerechnet mit den aktuellen Kursen und Regelständen. Die Seite rechnet nach jedem Wochenschluss neu.</p>
-  </div>
+  <h2 class="eyebrow sec" id="h-reb">Rebalancing <span id="rebDate">30.12.2026</span></h2>
   <div id="rebBanner"></div>
   <div class="grid2" id="rebCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
 </section>
 
 <section id="einstellungen" aria-labelledby="h-set">
-  <div class="sec-head">
-    <p class="eyebrow">Einstellungen</p>
-    <h2 id="h-set">Depotdaten, Steuern und Cash</h2>
-    <p>Alles hier bleibt in diesem Browser gespeichert. Sichere es regelmäßig als Datei und übertrage es damit auf andere Geräte.</p>
-  </div>
+  <h2 class="eyebrow sec" id="h-set">Einstellungen</h2>
   <details class="box" id="dataBox" open>
     <summary>Depotdaten sichern, importieren, zurücksetzen</summary>
     <div class="body">
@@ -207,11 +185,7 @@
 </section>
 
 <section id="regeln" aria-labelledby="h-regeln">
-  <div class="sec-head">
-    <p class="eyebrow">Regeln</p>
-    <h2 id="h-regeln">Die Regeln und Daten</h2>
-    <p>Signale kommen immer aus den Dollar-Kursen zum Wochenschluss, gehandelt wird zur Eröffnung der Folgewoche. Jede Position ist entweder investiert oder in Cash.</p>
-  </div>
+  <h2 class="eyebrow sec" id="h-regeln">Regeln</h2>
   <div class="rules" id="ruleCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Datenquellen und Ablauf</p><div class="notes" id="srcNotes"></div></div>
   <footer>
@@ -223,9 +197,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260925-1344"></script>
-<script src="js/store.js?v=20260925-1344"></script>
-<script src="js/charts.js?v=20260925-1344"></script>
-<script src="js/app.js?v=20260925-1344"></script>
+<script src="js/engine.js?v=20260925-1419"></script>
+<script src="js/store.js?v=20260925-1419"></script>
+<script src="js/charts.js?v=20260925-1419"></script>
+<script src="js/app.js?v=20260925-1419"></script>
 </body>
 </html>
