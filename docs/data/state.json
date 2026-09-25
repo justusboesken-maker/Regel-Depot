@@ -1,42 +1,43 @@
 {
  "version": 1,
- "updated": "2026-09-25T18:45:33.628Z",
+ "updated": "2026-09-25T18:50:14.394Z",
  "assets": {
   "ftse": {
-   "k": "2026-09-14",
-   "d": "2026-09-18",
-   "c": 185.13,
-   "m": 172.3443,
-   "dist": 0.074187,
+   "k": "2026-09-21",
+   "d": "2026-09-25",
+   "c": 186.92,
+   "m": 172.9621,
+   "dist": 0.080699,
    "st": 1,
-   "up": 73,
+   "up": 74,
    "dn": 0,
    "changed": false,
    "lastSwitch": {
     "k": "2025-05-05",
     "d": "2025-05-09",
     "to": 1,
-    "c": 135.9337,
+    "c": 135.9336,
     "m": 132.5619
    },
    "next": {
-    "above": 172.6487,
-    "bandUp": 177.9371,
-    "bandDown": 167.3668
+    "above": 173.266,
+    "bandUp": 178.5733,
+    "bandDown": 167.9652
    },
    "rule": {
     "type": "confirm",
     "n": 2
    },
-   "weeks": 748,
-   "updated": "2026-09-25T08:30:00.000Z",
-   "src": "yahoo VWRD.L adjclose",
+   "weeks": 749,
+   "updated": "2026-09-25T18:50:14.394Z",
+   "src": "alphavantage VWRD.LON weekly adjusted + Schlusskurs 2026-09-25 von EODHD (Tagesschluss)",
    "fallback": false,
-   "pending": {
-    "k": "2026-09-21",
-    "reason": "Kursabruf fehlgeschlagen: Yahoo: kein Crumb (HTTP 429) (Ersatzquelle erst im nächsten Anlauf)",
-    "at": "2026-09-25T17:32:32.938Z"
-   }
+   "primaryError": null,
+   "pending": null,
+   "holiday": false,
+   "partial": false,
+   "edge": false,
+   "preliminary": null
   },
   "btc": {
    "k": "2026-09-14",
@@ -100,7 +101,11 @@
    "updated": "2026-09-25T08:30:00.000Z",
    "src": "lbma gold pm usd",
    "fallback": false,
-   "pending": null
+   "pending": {
+    "k": "2026-09-21",
+    "reason": "Freitagsschluss (25.09.) fehlt noch",
+    "at": "2026-09-25T18:50:14.394Z"
+   }
   }
  },
  "cross": {},
@@ -131,6 +136,6 @@
   }
  },
  "queue": [],
- "step": "test-sources",
+ "step": "fr-close",
  "pendingQueue": 0
 }
