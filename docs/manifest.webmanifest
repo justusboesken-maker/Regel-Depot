@@ -1,0 +1,16 @@
+{
+  "name": "Regel-Depot 50/30/20",
+  "short_name": "Regel-Depot",
+  "description": "Signale, Depot und Rebalancing für das Regel-Depot 50/30/20",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#F3F5F8",
+  "theme_color": "#1B3A6B",
+  "lang": "de",
+  "icons": [
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "icons/icon-512-maskable.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}

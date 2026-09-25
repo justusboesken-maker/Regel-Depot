@@ -1,0 +1,90 @@
+name: Regel-Depot Update
+
+on:
+  schedule:
+    # Alle Zeiten UTC (Berlin = UTC+2 im Sommer, UTC+1 im Winter). GitHub startet geplante Läufe oft einige Minuten später.
+    - cron: '17 13 * * 5'    # Freitag: Vorwarnung FTSE All-World und Gold
+    - cron: '23 17 * * 5'    # Freitag: Wochenschluss FTSE All-World, Euro-Kurse
+    - cron: '53 18 * * 5'    # Freitag: Wiederholung, falls der Schluss fehlte
+    - cron: '17 19 * * 0'    # Sonntag: Vorwarnung Bitcoin
+    - cron: '23 0 * * 1'     # Montag: Wochenschluss Bitcoin und Gold (Push erst am Morgen)
+    - cron: '23 2 * * 1'     # Montag: Wiederholung, letzter Versuch der Nacht
+    - cron: '53 5 * * 1'     # Montag: Benachrichtigungen vom Wochenende verschicken
+    - cron: '37 17 * * 1-4'  # Mo–Do: Euro-Kurse für die Depotbewertung
+  workflow_dispatch:
+    inputs:
+      step:
+        description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
+        type: choice
+        default: auto
+        options: [auto, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-push]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: regel-depot-update
+  cancel-in-progress: false
+
+jobs:
+  update:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+
+      - name: Schritt bestimmen
+        id: step
+        shell: bash
+        run: |
+          FINAL=""
+          case "${{ github.event.schedule }}" in
+            "17 13 * * 5") STEP=fr-warn ;;
+            "23 17 * * 5") STEP=fr-close ;;
+            "53 18 * * 5") STEP=fr-close ;;
+            "17 19 * * 0") STEP=so-warn ;;
+            "23 0 * * 1")  STEP=mo-close ;;
+            "23 2 * * 1")  STEP=mo-close; FINAL="--final" ;;
+            "53 5 * * 1")  STEP=mo-notify ;;
+            "37 17 * * 1-4") STEP=eod ;;
+            *) STEP="${{ inputs.step || 'auto' }}" ;;
+          esac
+          echo "step=$STEP" >> "$GITHUB_OUTPUT"
+          echo "final=$FINAL" >> "$GITHUB_OUTPUT"
+          echo "Schritt: $STEP $FINAL"
+
+      - name: Kurse holen, Regeln rechnen, Benachrichtigungen
+        id: run
+        env:
+          VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
+          PUSH_SUB_1: ${{ secrets.PUSH_SUB_1 }}
+          PUSH_SUB_2: ${{ secrets.PUSH_SUB_2 }}
+          PUSH_SUB_3: ${{ secrets.PUSH_SUB_3 }}
+          PUSH_SUB_4: ${{ secrets.PUSH_SUB_4 }}
+          PUSH_SUB_5: ${{ secrets.PUSH_SUB_5 }}
+          ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
+        run: node scripts/update.mjs --step "${{ steps.step.outputs.step }}" ${{ steps.step.outputs.final }}
+
+      - name: Änderungen speichern
+        shell: bash
+        env:
+          STEP: ${{ steps.step.outputs.step }}
+          SUMMARY: ${{ steps.run.outputs.summary }}
+        run: |
+          git config user.name "regel-depot-bot"
+          git config user.email "regel-depot-bot@users.noreply.github.com"
+          git add docs/data
+          if git diff --cached --quiet; then echo "Keine Änderungen."; exit 0; fi
+          git commit -m "Update $STEP $(date -u +'%Y-%m-%d %H:%M UTC')" -m "$SUMMARY"
+          for i in 1 2 3; do
+            if git push; then exit 0; fi
+            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || true
+            sleep 5
+          done
+          git push

@@ -1,0 +1,191 @@
+{
+  "version": 1,
+  "site": {
+    "title": "Regel-Depot 50/30/20",
+    "url": "https://justusboesken-maker.github.io/regel-depot/",
+    "repo": "justusboesken-maker/regel-depot"
+  },
+  "assets": {
+    "ftse": {
+      "name": "FTSE All-World",
+      "short": "FTSE",
+      "inst": "Vanguard FTSE All-World UCITS ETF (VWCE)",
+      "isin": "IE00BK5BQT80",
+      "w": 0.5,
+      "rule": {
+        "type": "confirm",
+        "n": 2
+      },
+      "ruleName": "2-Wochen-Regel",
+      "signal": {
+        "src": "yahoo",
+        "sym": "VWRD.L",
+        "adj": true,
+        "label": "VWRD (London, USD, Ausschüttungen wieder angelegt)"
+      },
+      "eur": {
+        "src": "yahoo",
+        "sym": "VWCE.DE",
+        "label": "VWCE an der Xetra"
+      },
+      "week": "fri",
+      "dec": 2,
+      "unit": "Stück"
+    },
+    "btc": {
+      "name": "Bitcoin",
+      "short": "Bitcoin",
+      "inst": "Bitcoin (direkt bei Trade Republic)",
+      "w": 0.3,
+      "rule": {
+        "type": "band",
+        "p": 0.03
+      },
+      "ruleName": "3-%-Band",
+      "signal": {
+        "src": "yahoo",
+        "sym": "BTC-USD",
+        "adj": false,
+        "label": "BTC-USD, Woche Montag bis Sonntag (UTC)"
+      },
+      "eur": {
+        "src": "yahoo",
+        "sym": "BTC-EUR",
+        "label": "Bitcoin in Euro"
+      },
+      "week": "sun",
+      "dec": 0,
+      "unit": "BTC"
+    },
+    "gold": {
+      "name": "Gold",
+      "short": "Gold",
+      "inst": "WisdomTree Physical Swiss Gold (ETC)",
+      "isin": "JE00B588CD74",
+      "w": 0.2,
+      "rule": {
+        "type": "confirm",
+        "n": 4
+      },
+      "ruleName": "4-Wochen-Regel",
+      "signal": {
+        "src": "lbma",
+        "fix": "pm",
+        "label": "LBMA-Goldpreis, Nachmittagsfixing (USD)"
+      },
+      "cross": {
+        "src": "yahoo",
+        "sym": "GC=F",
+        "label": "COMEX-Future (Gegenprobe)"
+      },
+      "eur": {
+        "src": "yahoo",
+        "sym": "SGBS.MI",
+        "label": "WisdomTree Physical Swiss Gold in Mailand"
+      },
+      "week": "fri",
+      "dec": 2,
+      "unit": "Stück"
+    }
+  },
+  "fx": {
+    "src": "yahoo",
+    "sym": "EURUSD=X"
+  },
+  "warn": {
+    "pct": 0.015,
+    "note": "ANNAHME A-12: Vorwarnung, wenn der aktuelle Kurs zum Wochenschluss ein Signal auslösen würde oder weniger als 1,5 % von der Schwelle entfernt ist."
+  },
+  "edge": {
+    "pct": 0.005,
+    "note": "ANNAHME A-12: Grenzfall, wenn ein Wochenschluss weniger als 0,5 % von der Schwelle entfernt liegt."
+  },
+  "push": {
+    "vapidPublicKey": "BNx376u7qlskf6dc_NNTd6xxmtwUj-YPUdCTOcnkcaeN9BwA17M51BsWutF39NuJittAmN_biOi1YyUu4LnB0Qk",
+    "subject": "https://justusboesken-maker.github.io/regel-depot/",
+    "weeklySummary": true,
+    "maxSubscriptions": 5
+  },
+  "schedule": [
+    {
+      "id": "fr-warn",
+      "cron": "17 13 * * 5",
+      "label": "Vorwarnung FTSE All-World und Gold"
+    },
+    {
+      "id": "fr-close",
+      "cron": "23 17 * * 5",
+      "label": "Wochenschluss FTSE All-World, Euro-Kurse"
+    },
+    {
+      "id": "fr-close",
+      "cron": "53 18 * * 5",
+      "label": "Wiederholung, falls der Schluss noch fehlte",
+      "retry": true
+    },
+    {
+      "id": "so-warn",
+      "cron": "17 19 * * 0",
+      "label": "Vorwarnung Bitcoin"
+    },
+    {
+      "id": "mo-close",
+      "cron": "23 0 * * 1",
+      "label": "Wochenschluss Bitcoin und Gold"
+    },
+    {
+      "id": "mo-close",
+      "cron": "23 2 * * 1",
+      "label": "Wiederholung, falls ein Schluss noch fehlte",
+      "retry": true
+    },
+    {
+      "id": "mo-notify",
+      "cron": "53 5 * * 1",
+      "label": "Benachrichtigungen vom Wochenende"
+    },
+    {
+      "id": "eod",
+      "cron": "37 17 * * 1-4",
+      "label": "Euro-Kurse für die Depotbewertung"
+    }
+  ],
+  "holidays": {
+    "note": "Tage ohne Handel in London bzw. ohne LBMA-Fixing, die auf einen Freitag fallen (dann ist der Donnerstag der Wochenschluss)",
+    "fridays": [
+      "2026-12-25",
+      "2027-01-01",
+      "2027-03-26",
+      "2028-04-14",
+      "2029-03-30"
+    ]
+  },
+  "oneTimeHints": [
+    {
+      "id": "btc-start",
+      "date": "2026-09-28",
+      "asset": "btc",
+      "ifState": 0,
+      "text": "Hältst du noch Bitcoin, verkaufst du laut Regel zur Eröffnung heute (Steuerhinweis auf der Seite)."
+    }
+  ],
+  "trading": {
+    "rebalanceDate": "2026-12-30",
+    "note": "Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Handel zur Eröffnung der Folgewoche, Montag ab 7:30 Uhr; Bitcoin jederzeit."
+  },
+  "taxLaw": {
+    "note": "Rechtsstand September 2026, keine persönlichen Angaben. Persönliche Steuerdaten liegen nur im Browser (Einstellungen).",
+    "year": 2026,
+    "pb": 1000,
+    "abg": 0.26375,
+    "tfs": 0.3,
+    "fg": 1000,
+    "basiszins": 0.032,
+    "vwceStart": 145.14,
+    "buffer": 25,
+    "fee": 1,
+    "minOrder": 25,
+    "rebalDate": "2026-12-30",
+    "krypto": "Referentenentwurf des BMF (September 2026): Bitcoin-Käufe ab 01.01.2027 sollen unter die Abgeltungsteuer fallen, Bestände bis 31.12.2026 behalten die Haltefrist. Noch kein Gesetz."
+  }
+}

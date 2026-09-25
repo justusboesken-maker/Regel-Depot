@@ -1,0 +1,12 @@
+{
+  "name": "regel-depot",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Regel-Depot 50/30/20: Signale, Depot und Rebalancing-Vorschau als statische Website mit GitHub-Actions-Updates",
+  "type": "commonjs",
+  "scripts": {
+    "test": "node --test",
+    "update": "node scripts/update.mjs"
+  },
+  "engines": { "node": ">=20" }
+}

@@ -1,0 +1,211 @@
+<!doctype html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>Regel-Depot 50/30/20</title>
+<meta name="description" content="Kauf- und Verkaufssignale, Depotstand und Rebalancing-Vorschau für das Regel-Depot 50/30/20 (FTSE All-World, Bitcoin, Gold).">
+<meta name="theme-color" content="#1B3A6B" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#0E1217" media="(prefers-color-scheme: dark)">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="default">
+<meta name="apple-mobile-web-app-title" content="Regel-Depot">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png" type="image/png">
+<link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
+<link rel="stylesheet" href="css/app.css">
+</head>
+<body>
+
+<div class="wrap">
+  <header class="top">
+    <p class="eyebrow">Enjoyer OS · 50/30/20 bei Trade Republic</p>
+    <h1>Regel-Depot</h1>
+    <div class="meta" id="topMeta"><span>Lade Daten …</span></div>
+  </header>
+</div>
+<nav class="toc" aria-label="Abschnitte"><div class="in">
+  <a href="#status">Status</a><a href="#depot">Depot</a><a href="#signale">Signale<span class="cnt" id="navCnt" hidden></span></a><a href="#rebalancing">Rebalancing</a><a href="#einstellungen">Einstellungen</a><a href="#regeln">Regeln</a>
+</div></nav>
+<div class="wrap">
+
+<div id="globalBanner"></div>
+
+<section id="status" aria-labelledby="h-status">
+  <div class="sec-head">
+    <p class="eyebrow">Status</p>
+    <h2 id="h-status">Was die Regeln gerade sagen</h2>
+    <p>Zustand jeder Regel zum letzten Wochenschluss, abgeglichen mit deinem Depot. Die Charts zeigen die Wochenschlüsse in US-Dollar mit dem 50-Wochen-Durchschnitt (SMA50); darunter der Abstand zum SMA50 gegen die Schwelle der Regel.</p>
+  </div>
+  <div class="todo" id="todo"></div>
+  <div class="toolbar">
+    <div class="summary" id="statusSummary" aria-label="Übersicht"></div>
+    <div class="seg" id="rangeSeg" role="group" aria-label="Zeitraum der Charts">
+      <button type="button" data-r="52" aria-pressed="false">1 J</button><button type="button" data-r="156" aria-pressed="true">3 J</button><button type="button" data-r="260" aria-pressed="false">5 J</button><button type="button" data-r="520" aria-pressed="false">10 J</button><button type="button" data-r="0" aria-pressed="false">Max</button>
+    </div>
+  </div>
+  <div class="chart-legend" id="chLegend"></div>
+  <div class="scards" id="statusCards"></div>
+</section>
+
+<section id="depot" aria-labelledby="h-depot">
+  <div class="sec-head">
+    <p class="eyebrow">Depot</p>
+    <h2 id="h-depot">Dein Depot bei Trade Republic</h2>
+    <p>Bewertet mit den letzten Euro-Kursen. Das Geld einer Position, die gerade nicht investiert ist, zählt als Cash dieser Position. Die Depotdaten liegen nur in diesem Browser.</p>
+  </div>
+  <div id="depotBanner"></div>
+  <div class="kpis" id="kpis"></div>
+  <div class="card pad alloc" id="alloc"></div>
+  <div class="card chartcard" id="perfCard">
+    <div class="perf-head"><p class="subhd">Performance deiner Positionen</p>
+      <div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button></div></div>
+    <div class="chart-legend" id="perfLegend"></div>
+    <div class="chart" id="chPerf" role="img" aria-label="Gewinn oder Verlust der Positionen je Woche"></div>
+    <p class="cap" id="perfCap"></p>
+  </div>
+  <div class="card">
+    <div class="pad" style="padding-bottom:6px"><p class="subhd">Positionen</p></div>
+    <div class="tablewrap" id="posTable"></div>
+  </div>
+  <div class="card">
+    <div class="pad" style="padding-bottom:6px"><p class="subhd">Käufe und Verkäufe</p></div>
+    <div class="tablewrap" id="txTable"></div>
+  </div>
+  <details class="box" id="txBox">
+    <summary>Kauf oder Verkauf eintragen</summary>
+    <div class="body">
+      <form class="form" id="txForm" novalidate>
+        <label>Datum<input type="date" id="fDate" required></label>
+        <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option></select></label>
+        <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option></select></label>
+        <label>Stück<input type="number" id="fUnits" step="any" min="0" inputmode="decimal" required></label>
+        <label>Kurs je Stück in €<input type="number" id="fPrice" step="any" min="0" inputmode="decimal" required></label>
+        <label>Gebühr in €<input type="number" id="fFee" step="any" min="0" value="1" inputmode="decimal"></label>
+        <label>Notiz<small>optional</small><input type="text" id="fNote" maxlength="120"></label>
+        <button class="btn" type="submit" id="fSubmit">Eintragen</button>
+      </form>
+      <p class="formmsg" id="fMsg" role="status"></p>
+      <p class="small muted">Ein Verkauf schreibt den Erlös dem Cash dieser Position gut, ein Kauf zieht den Betrag davon ab. Steuern rechnet die Seite nach FIFO, also ältester Kauf zuerst.</p>
+    </div>
+  </details>
+</section>
+
+<section id="signale" aria-labelledby="h-signale">
+  <div class="sec-head">
+    <p class="eyebrow">Signale</p>
+    <h2 id="h-signale">Signale, Vorwarnungen und Benachrichtigungen</h2>
+    <p>Bei jedem Kauf- oder Verkaufssignal bekommst du eine Push-Nachricht, dazu eine Vorwarnung, wenn der Kurs kurz vor dem Wochenschluss ein Signal auslösen würde. Hier stehen alle gesammelt.</p>
+  </div>
+  <div class="grid2">
+    <div style="display:grid;gap:14px;min-width:0">
+      <div class="card pad pushcard" id="pushCard"></div>
+      <div class="card"><div class="pad" style="padding-bottom:8px"><p class="subhd">Verlauf</p></div><div class="feed" id="feed"></div></div>
+    </div>
+    <div class="card">
+      <div class="pad" style="padding-bottom:8px"><p class="subhd">Nächste Aktualisierungen</p></div>
+      <div class="sched" id="sched"></div>
+      <div class="pad" style="padding-bottom:8px;border-top:1px solid var(--rule)"><p class="subhd">Letzte Läufe</p></div>
+      <div class="runlog" id="runlog"></div>
+      <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Kurse holt ein automatischer Lauf bei GitHub (Yahoo Finance und LBMA). LBMA veröffentlicht den Goldpreis erst um Mitternacht (London), deshalb kommt das Gold-Signal in der Nacht auf Montag; die Push-Nachrichten vom Wochenende werden Montag früh verschickt. GitHub startet geplante Läufe oft einige Minuten später.</div>
+    </div>
+  </div>
+</section>
+
+<section id="rebalancing" aria-labelledby="h-reb">
+  <div class="sec-head">
+    <p class="eyebrow">Rebalancing</p>
+    <h2 id="h-reb">Rebalancing am <span id="rebDate">30.12.2026</span></h2>
+    <p id="rebLede">Zurück auf 50/30/20, gerechnet mit den aktuellen Kursen und Regelständen. Die Seite rechnet nach jedem Wochenschluss neu.</p>
+  </div>
+  <div id="rebBanner"></div>
+  <div class="grid2" id="rebCards"></div>
+  <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
+</section>
+
+<section id="einstellungen" aria-labelledby="h-set">
+  <div class="sec-head">
+    <p class="eyebrow">Einstellungen</p>
+    <h2 id="h-set">Depotdaten, Steuern und Cash</h2>
+    <p>Alles hier bleibt in diesem Browser gespeichert. Sichere es regelmäßig als Datei und übertrage es damit auf andere Geräte.</p>
+  </div>
+  <details class="box" id="dataBox" open>
+    <summary>Depotdaten sichern, importieren, zurücksetzen</summary>
+    <div class="body">
+      <div class="btnrow">
+        <button class="btn" type="button" id="btnExport">Als Datei sichern</button>
+        <label class="btn ghost" for="fileImport" style="display:inline-block">Datei importieren</label>
+        <input type="file" id="fileImport" accept="application/json,.json" hidden>
+        <button class="btn ghost" type="button" id="btnPaste">Text einfügen</button>
+        <button class="btn ghost danger" type="button" id="btnReset" style="background:transparent;color:var(--bad)">Alles löschen</button>
+      </div>
+      <div id="pasteBox" hidden>
+        <textarea id="pasteArea" placeholder='{"version":1,"tx":[…],"cash":{…},"tax":{…}}' aria-label="Depotdaten als JSON"></textarea>
+        <div class="btnrow" style="margin-top:8px"><button class="btn" type="button" id="btnPasteImport">Importieren</button></div>
+      </div>
+      <p class="formmsg" id="dMsg" role="status"></p>
+      <p class="small muted" id="dataInfo"></p>
+    </div>
+  </details>
+  <details class="box" id="taxBox">
+    <summary>Steuerangaben <span class="small muted" id="taxYearLbl"></span></summary>
+    <div class="body">
+      <form class="form" id="taxForm" novalidate>
+        <label>Pauschbetrag genutzt (€)<small>laut Trade Republic, Profil › Steuern</small><input type="number" id="tPbUsed" step="any" min="0" inputmode="decimal"></label>
+        <label>Stand dieser Angabe<small>spätere Verkäufe rechnet die Seite dazu</small><input type="date" id="tPbDate"></label>
+        <label>Weitere Zinsen bis 31.12. (€)<small>Schätzung für den Rest des Jahres</small><input type="number" id="tInt" step="any" min="0" inputmode="decimal"></label>
+        <label>Verlusttopf „Sonstige“ (€)<input type="number" id="tLoss" step="any" min="0" inputmode="decimal"></label>
+        <label>Andere private Veräußerungen (€)<small>Gewinn minus Verlust im Jahr, z. B. andere Kryptowerte</small><input type="number" id="tS23" step="any" inputmode="decimal"></label>
+        <label>Persönlicher Grenzsteuersatz (%)<small>0, solange dein Einkommen unter dem Grundfreibetrag bleibt</small><input type="number" id="tRate" step="any" min="0" max="50" inputmode="decimal"></label>
+        <label>Spielraum bis zum Grundfreibetrag (€)<small>wie viel Einkommen dieses Jahr noch steuerfrei bleibt</small><input type="number" id="tHead" step="any" min="0" inputmode="decimal"></label>
+        <label class="check"><input type="checkbox" id="tNv"> NV-Bescheinigung liegt Trade Republic vor<small>dann behält die Bank keine Abgeltungsteuer ein</small></label>
+        <label>Abstand zur Freigrenze (€)<small>Puffer für Kursschwankungen</small><input type="number" id="tBuf" step="any" min="0" inputmode="decimal"></label>
+        <label>Mindestbetrag je Order (€)<small>kleinere Umschichtungen sind optional</small><input type="number" id="tMin" step="any" min="0" inputmode="decimal"></label>
+        <label>Rebalancing-Stichtag<input type="date" id="tReb"></label>
+        <button class="btn" type="submit">Speichern</button>
+      </form>
+      <p class="formmsg" id="tMsg" role="status"></p>
+      <p class="small muted" id="taxNote"></p>
+    </div>
+  </details>
+  <details class="box" id="cashBox">
+    <summary>Cash je Position</summary>
+    <div class="body">
+      <form class="form" id="cashForm" novalidate>
+        <label>FTSE All-World (€)<input type="number" id="cFtse" step="any" min="0" inputmode="decimal"></label>
+        <label>Bitcoin (€)<input type="number" id="cBtc" step="any" min="0" inputmode="decimal"></label>
+        <label>Gold (€)<input type="number" id="cGold" step="any" min="0" inputmode="decimal"></label>
+        <button class="btn" type="submit">Speichern</button>
+      </form>
+      <p class="formmsg" id="cMsg" role="status"></p>
+      <p class="small muted">Annahme A-1: Das Cash gehört jeweils zu einer Position. Beim Kaufsignal wird genau dieses Cash wieder angelegt, beim Verkaufssignal bleibt der Erlös als Cash der Position. Zwischen den Positionen wird nur beim Rebalancing umgeschichtet.</p>
+    </div>
+  </details>
+  <details class="box" id="assumeBox">
+    <summary>Annahmen und feste Parameter</summary>
+    <div class="body"><div class="notes" id="assumeNotes"></div></div>
+  </details>
+</section>
+
+<section id="regeln" aria-labelledby="h-regeln">
+  <div class="sec-head">
+    <p class="eyebrow">Regeln</p>
+    <h2 id="h-regeln">Die Regeln und Daten</h2>
+    <p>Signale kommen immer aus den Dollar-Kursen zum Wochenschluss, gehandelt wird zur Eröffnung der Folgewoche. Jede Position ist entweder investiert oder in Cash.</p>
+  </div>
+  <div class="rules" id="ruleCards"></div>
+  <div class="card pad"><p class="subhd" style="margin-bottom:8px">Datenquellen und Ablauf</p><div class="notes" id="srcNotes"></div></div>
+  <footer>
+    <p>Das ist die Ausgabe deiner eigenen Regeln, keine Anlage- und keine Steuerberatung. Steuerwerte sind Schätzungen nach Rechtsstand September 2026. Die geplante Neuregelung für Krypto ist ein Referentenentwurf, noch kein Gesetz.</p>
+    <p id="footSrc"></p>
+  </footer>
+</section>
+</div>
+
+<script src="js/engine.js"></script>
+<script src="js/store.js"></script>
+<script src="js/charts.js"></script>
+<script src="js/app.js"></script>
+</body>
+</html>

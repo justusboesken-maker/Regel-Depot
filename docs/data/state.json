@@ -1,0 +1,107 @@
+{
+ "version": 1,
+ "updated": "2026-09-25T08:30:00.000Z",
+ "assets": {
+  "ftse": {
+   "k": "2026-09-14",
+   "d": "2026-09-18",
+   "c": 185.13,
+   "m": 172.3443,
+   "dist": 0.074187,
+   "st": 1,
+   "up": 73,
+   "dn": 0,
+   "changed": false,
+   "lastSwitch": {
+    "k": "2025-05-05",
+    "d": "2025-05-09",
+    "to": 1,
+    "c": 135.9337,
+    "m": 132.5619
+   },
+   "next": {
+    "above": 172.6487,
+    "bandUp": 177.9371,
+    "bandDown": 167.3668
+   },
+   "rule": {
+    "type": "confirm",
+    "n": 2
+   },
+   "weeks": 748,
+   "updated": "2026-09-25T08:30:00.000Z",
+   "src": "yahoo VWRD.L adjclose",
+   "fallback": false,
+   "pending": null
+  },
+  "btc": {
+   "k": "2026-09-14",
+   "d": "2026-09-20",
+   "c": 81142.61,
+   "m": 78787.7604,
+   "dist": 0.029889,
+   "st": 0,
+   "up": 1,
+   "dn": 0,
+   "changed": false,
+   "lastSwitch": {
+    "k": "2025-11-10",
+    "d": "2025-11-16",
+    "to": 0,
+    "c": 94177.08,
+    "m": 102948.7418
+   },
+   "next": {
+    "above": 78045.2704,
+    "bandUp": 80435.875,
+    "bandDown": 75657.5913
+   },
+   "rule": {
+    "type": "band",
+    "p": 0.03
+   },
+   "weeks": 627,
+   "updated": "2026-09-25T08:30:00.000Z",
+   "src": "yahoo BTC-USD",
+   "fallback": false,
+   "pending": null
+  },
+  "gold": {
+   "k": "2026-09-14",
+   "d": "2026-09-18",
+   "c": 4348.15,
+   "m": 4459.312,
+   "dist": -0.024928,
+   "st": 0,
+   "up": 0,
+   "dn": 3,
+   "changed": false,
+   "lastSwitch": {
+    "k": "2026-06-29",
+    "d": "2026-07-03",
+    "to": 0,
+    "c": 4164.15,
+    "m": 4290.081
+   },
+   "next": {
+    "above": 4469.2061,
+    "bandUp": 4606.1024,
+    "bandDown": 4332.4774
+   },
+   "rule": {
+    "type": "confirm",
+    "n": 4
+   },
+   "weeks": 872,
+   "updated": "2026-09-25T08:30:00.000Z",
+   "src": "lbma gold pm usd",
+   "fallback": false,
+   "pending": null
+  }
+ },
+ "cross": {},
+ "warn": {},
+ "queue": [],
+ "step": "init",
+ "pendingQueue": 0
+}
