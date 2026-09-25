@@ -101,7 +101,7 @@
     "note": "ANNAHME A-12: Grenzfall, wenn ein Wochenschluss weniger als 0,5 % von der Schwelle entfernt liegt."
   },
   "push": {
-    "vapidPublicKey": "BNx376u7qlskf6dc_NNTd6xxmtwUj-YPUdCTOcnkcaeN9BwA17M51BsWutF39NuJittAmN_biOi1YyUu4LnB0Qk",
+    "vapidPublicKey": "BMtaohF2Hx8p0b7SkhYNZu5ZD2ivmQw2e1Gc8fM0qlJsQ0avsNMXH9ivBYI0ChInvZY4mFu-JUgfe2vV46nlX1I",
     "subject": "https://justusboesken-maker.github.io/regel-depot/",
     "weeklySummary": true,
     "maxSubscriptions": 5
