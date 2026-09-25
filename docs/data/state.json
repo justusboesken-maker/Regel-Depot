@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-25T17:17:42.752Z",
+ "updated": "2026-09-25T17:32:32.938Z",
  "assets": {
   "ftse": {
    "k": "2026-09-14",
@@ -32,7 +32,11 @@
    "updated": "2026-09-25T08:30:00.000Z",
    "src": "yahoo VWRD.L adjclose",
    "fallback": false,
-   "pending": null
+   "pending": {
+    "k": "2026-09-21",
+    "reason": "Kursabruf fehlgeschlagen: Yahoo: kein Crumb (HTTP 429) (Ersatzquelle erst im nächsten Anlauf)",
+    "at": "2026-09-25T17:32:32.938Z"
+   }
   },
   "btc": {
    "k": "2026-09-14",
@@ -127,6 +131,6 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-close",
  "pendingQueue": 0
 }
