@@ -6,7 +6,8 @@
   "type": "commonjs",
   "scripts": {
     "test": "node --test",
-    "update": "node scripts/update.mjs"
+    "update": "node scripts/update.mjs",
+    "stamp": "node scripts/stamp.mjs"
   },
   "engines": { "node": ">=20" }
 }

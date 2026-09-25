@@ -723,6 +723,18 @@
   /* Prüf-Zugang für automatische Tests (keine Daten nach außen): Depotverlauf nachrechnen */
   window.RegelDepot = { perf: function (grid, from) { var Mo = model(); return Mo.ready ? perfSeries(Mo, grid, from) : null; } };
 
-  loadAll().then(function () { wireForms(); wireFolds(); return pushInit(); }).then(function () { renderAll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; })
-    .catch(function (e) { var g = $('globalBanner'); g.textContent = ''; var b = el('div', 'banner bad'); b.appendChild(el('b', null, 'Die Kursdaten konnten nicht geladen werden')); b.appendChild(el('span', null, e.message + '. Lade die Seite neu; bleibt der Fehler, prüfe das Repo.')); g.appendChild(b); $('topMeta').textContent = 'Fehler beim Laden'; console.error(e); });
+  /* Ladefehler (Daten) und Anzeigefehler (meist eine veraltete Version der Seite im Browser-Speicher) getrennt melden */
+  function failBanner(title, text, reload) {
+    var g = $('globalBanner'); if (!g) return; g.textContent = '';
+    var b = el('div', 'banner bad'); b.appendChild(el('b', null, title)); b.appendChild(el('span', null, text));
+    if (reload) { var acts = el('div', 'actions'), btn = el('button', 'btn sm', 'Seite neu laden'); btn.type = 'button'; btn.addEventListener('click', function () { try { location.reload(); } catch (e) { /* still */ } }); acts.appendChild(btn); b.appendChild(acts); }
+    g.appendChild(b); var tm = $('topMeta'); if (tm) tm.textContent = 'Fehler beim Laden';
+  }
+  var loaded = false;
+  loadAll().then(function () { loaded = true; wireForms(); wireFolds(); return pushInit(); }).then(function () { renderAll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; })
+    .catch(function (e) {
+      console.error(e);
+      if (loaded) failBanner('Die Seite konnte nicht vollständig angezeigt werden', 'Wahrscheinlich liegt noch eine ältere Version der Seite im Browser-Speicher. Bitte einmal komplett neu laden: Safari Option + Cmd + R, Chrome oder Firefox Cmd + Shift + R. Fehler: ' + e.message, true);
+      else failBanner('Die Kursdaten konnten nicht geladen werden', e.message + '. Lade die Seite neu; bleibt der Fehler, prüfe das Repo.', true);
+    });
 })();
