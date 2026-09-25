@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-25T13:20:22.919Z",
+ "updated": "2026-09-25T13:27:40.418Z",
  "assets": {
   "ftse": {
    "k": "2026-09-14",
@@ -100,8 +100,33 @@
   }
  },
  "cross": {},
- "warn": {},
+ "warn": {
+  "ftse": {
+   "t": "2026-09-25T13:27:40.418Z",
+   "forWeek": "2026-09-21",
+   "price": 185.49,
+   "priceTime": "2026-09-24T16:30:00Z",
+   "thr": 172.6487,
+   "dist": 0.074378,
+   "level": "none",
+   "would": null,
+   "text": "FTSE All-World steht gerade bei 185,49 $ (Ersatzquelle Alpha Vantage: Schlusskurs vom 24.09., kein Tageskurs). Schwelle für den Wochenschluss am Freitag: 172,65 $, 7,4 % darüber. Schließt die Woche so, bleibt die Regel investiert.",
+   "src": "alphavantage VWRD.LON quote (Ersatzquelle)"
+  },
+  "gold": {
+   "t": "2026-09-25T13:27:40.418Z",
+   "forWeek": "2026-09-21",
+   "price": 4282.8999,
+   "priceTime": "2026-09-25T13:27:58Z",
+   "thr": 4469.2061,
+   "dist": -0.041687,
+   "level": "none",
+   "would": null,
+   "text": "Gold steht gerade bei 4.282,90 $ (Spotpreis (gold-api.com)). Schwelle für den Wochenschluss am Freitag: 4.469,21 $, 4,2 % darunter. Schließt die Woche so, bleibt die Regel auf Cash.",
+   "src": "gold-api.com XAU/USD spot (Ersatzquelle)"
+  }
+ },
  "queue": [],
- "step": "live",
+ "step": "fr-warn",
  "pendingQueue": 0
 }
