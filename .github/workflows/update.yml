@@ -8,7 +8,7 @@ on:
     - cron: '23 18 * * 5'    # Freitag: Wiederholung, falls ein Schluss fehlte (Alpha Vantage / LBMA liefern oft erst abends)
     - cron: '23 20 * * 5'    # Freitag: Wiederholung
     - cron: '7 22 * * 5'     # Freitag: letzte Wiederholung
-    - cron: '7 7 * * 6'      # Samstag: fehlende Schlüsse nachholen, Euro-Schlüsse vom Freitag
+    - cron: '23 7 * * 6'     # Samstag: fehlende Schlüsse nachholen, Euro-Schlüsse vom Freitag (nicht zur gleichen Minute wie der Ticker)
     - cron: '17 19 * * 0'    # Sonntag: Vorwarnung Bitcoin
     - cron: '7 0 * * 1'      # Montag: Wochenschluss Bitcoin (Push erst am Morgen)
     - cron: '23 2 * * 1'     # Montag: Wiederholung, letzter Versuch der Nacht
@@ -55,7 +55,7 @@ jobs:
             "23 18 * * 5") STEP=fr-close; FINAL="--fallback" ;;
             "23 20 * * 5") STEP=fr-close; FINAL="--fallback" ;;
             "7 22 * * 5")  STEP=fr-close; FINAL="--fallback" ;;
-            "7 7 * * 6")   STEP=sa-close; FINAL="--fallback" ;;
+            "23 7 * * 6")  STEP=sa-close; FINAL="--fallback" ;;
             "17 19 * * 0") STEP=so-warn ;;
             "7 0 * * 1")   STEP=mo-close ;;
             "23 2 * * 1")  STEP=mo-close; FINAL="--final --fallback" ;;
@@ -69,8 +69,8 @@ jobs:
           echo "final=$FINAL" >> "$GITHUB_OUTPUT"
           echo "Schritt: $STEP $FINAL"
 
-      - name: Kurse holen, Regeln rechnen, Benachrichtigungen
-        id: run
+      - name: Kurse holen, Regeln rechnen, Benachrichtigungen, Änderungen speichern
+        shell: bash
         env:
           VAPID_PRIVATE_KEY: ${{ secrets.VAPID_PRIVATE_KEY }}
           PUSH_SUB_1: ${{ secrets.PUSH_SUB_1 }}
@@ -80,22 +80,30 @@ jobs:
           PUSH_SUB_5: ${{ secrets.PUSH_SUB_5 }}
           ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
           EODHD_KEY: ${{ secrets.EODHD_KEY }}
-        run: node scripts/update.mjs --step "${{ steps.step.outputs.step }}" ${{ steps.step.outputs.final }}
-
-      - name: Änderungen speichern
-        shell: bash
-        env:
+          PUSH_SENT_FILE: ${{ runner.temp }}/push-sent.json
           STEP: ${{ steps.step.outputs.step }}
-          SUMMARY: ${{ steps.run.outputs.summary }}
+          FINAL: ${{ steps.step.outputs.final }}
         run: |
           git config user.name "regel-depot-bot"
           git config user.email "regel-depot-bot@users.noreply.github.com"
-          git add docs/data
-          if git diff --cached --quiet; then echo "Keine Änderungen."; exit 0; fi
-          git commit -m "Update $STEP $(date -u +'%Y-%m-%d %H:%M UTC')" -m "$SUMMARY"
+          run_step() { node scripts/update.mjs --step "$STEP" $FINAL; }
+          save() {
+            git add docs/data
+            if git diff --cached --quiet; then echo "Keine Änderungen."; return 0; fi
+            SUMMARY=$(grep '^summary=' "$GITHUB_OUTPUT" | tail -1 | cut -d= -f2- | head -c 900 || true)
+            git commit -q -m "Update $STEP $(date -u +'%Y-%m-%d %H:%M UTC')" -m "${SUMMARY:-–}"
+            git push
+          }
+          run_step
+          # Läuft parallel ein anderer Lauf (etwa der stündliche Ticker), lehnt GitHub den Push ab. Dann nicht blind zusammenführen
+          # (das würde dessen Ergebnis überschreiben), sondern auf den neuen Stand aufsetzen und den Schritt wiederholen.
+          # Push-Nachrichten, die der erste Anlauf schon zugestellt hat, merkt sich das Skript in PUSH_SENT_FILE und schickt sie nicht doppelt.
           for i in 1 2 3; do
-            if git push; then exit 0; fi
-            git pull --rebase -X theirs origin "${GITHUB_REF_NAME}" || true
+            if save; then exit 0; fi
+            echo "Push abgelehnt, ein anderer Lauf war schneller: neu aufsetzen und Schritt wiederholen ($i)"
+            git fetch -q origin "$GITHUB_REF_NAME"
+            git reset -q --hard "origin/$GITHUB_REF_NAME"
             sleep 5
+            run_step
           done
-          git push
+          save

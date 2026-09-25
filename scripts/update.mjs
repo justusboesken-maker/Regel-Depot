@@ -69,7 +69,11 @@ function addEvent(ev) {
   RUN.changed = true;
   return true;
 }
-function queuePush(p) { STATE.queue = STATE.queue || []; if (STATE.queue.some((q) => q.id === p.id)) return; STATE.queue.push(p); RUN.changed = true; }
+/* Zweiter Anlauf nach einem Git-Konflikt (Workflow): Nachrichten, die der erste Anlauf schon zugestellt hat, stehen in PUSH_SENT_FILE und werden nicht noch einmal verschickt */
+const SENT_FILE = process.env.PUSH_SENT_FILE || '';
+function sentBefore() { try { return SENT_FILE && fs.existsSync(SENT_FILE) ? JSON.parse(fs.readFileSync(SENT_FILE, 'utf8')) : []; } catch (e) { return []; } }
+function rememberSent(ids) { if (!SENT_FILE || !ids.length) return; try { fs.writeFileSync(SENT_FILE, JSON.stringify([...new Set(sentBefore().concat(ids))])); } catch (e) { /* nur Komfort */ } }
+function queuePush(p) { STATE.queue = STATE.queue || []; if (STATE.queue.some((q) => q.id === p.id)) return; if (sentBefore().includes(p.id)) { log('Push ' + p.id + ' wurde im ersten Anlauf schon zugestellt'); return; } STATE.queue.push(p); RUN.changed = true; }
 function subscriptions() {
   const out = [];
   for (let i = 1; i <= (CFG.push.maxSubscriptions || 5); i++) { const s = process.env['PUSH_SUB_' + i]; if (s && s.trim().startsWith('{')) { try { out.push({ n: i, sub: JSON.parse(s) }); } catch (e) { fail('Push', 'PUSH_SUB_' + i + ' ist kein gültiges JSON'); } } }
@@ -82,16 +86,18 @@ async function flushQueue() {
   const subs = subscriptions(), priv = process.env.VAPID_PRIVATE_KEY;
   if (!subs.length || !priv) { note('Push: ' + q.length + ' Nachricht(en) bleiben in der Warteschlange (' + (!priv ? 'VAPID_PRIVATE_KEY fehlt' : 'keine Push-Anmeldung hinterlegt') + ')'); return; }
   const vapid = { subject: CFG.push.subject, publicKey: CFG.push.vapidPublicKey, privateKey: priv };
-  const keep = [];
+  const keep = [], sentIds = [], before = sentBefore();
   for (const p of q) {
+    if (before.includes(p.id)) { log('Push ' + p.id + ' wurde im ersten Anlauf schon zugestellt'); continue; }
     let sent = 0, gone = 0;
     for (const s of subs) {
       try { const r = await sendPush(s.sub, { title: p.title, body: p.body, url: p.url || './', tag: p.tag || p.id, ts: p.ts || NOW.toISOString() }, vapid, { topic: (p.tag || 'rd').replace(/[^A-Za-z0-9_-]/g, '').slice(0, 32) || undefined });
         if (r.ok) sent++; else if (r.gone) { gone++; fail('Push', 'Anmeldung PUSH_SUB_' + s.n + ' ist abgelaufen (HTTP ' + r.status + '), bitte auf der Seite neu einrichten'); } else fail('Push', 'PUSH_SUB_' + s.n + ' HTTP ' + r.status + ' ' + r.text); }
       catch (e) { fail('Push', 'PUSH_SUB_' + s.n + ': ' + e.message); }
     }
-    if (sent) { RUN.notified += sent; } else if (!gone && subs.length) { keep.push(p); }
+    if (sent) { RUN.notified += sent; sentIds.push(p.id); } else if (!gone && subs.length) { keep.push(p); }
   }
+  rememberSent(sentIds);
   STATE.queue = keep;
   RUN.changed = true;
   note('Push: ' + RUN.notified + ' Nachricht(en) zugestellt' + (keep.length ? ', ' + keep.length + ' bleiben in der Warteschlange' : ''));
@@ -282,6 +288,18 @@ async function closeAsset(a) {
       const id = 'korr-' + a + '-' + L.d, body = 'Endgültiger Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' statt vorläufig ' + usd(a, prev.c) + '. Laut Regel jetzt ' + (L.st === 1 ? 'investiert' : 'Cash') + '.';
       if (addEvent({ id, kind: L.st === 1 ? 'kauf' : 'verkauf', a, k: L.k, d: L.d, title: name(a) + ': Korrektur des Wochenschlusses', text: body, c: round(L.c, 4), m: round(L.m, 4) })) queuePush({ id, title: name(a) + ': Korrektur', body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
     } else note(name(a) + ': endgültiger Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' bestätigt den vorläufigen Stand');
+  }
+  /* Rückwirkende Datenänderung: Liefert die Quelle für schon gebuchte Wochen andere Schlüsse, kann sich der Regelzustand nachträglich ändern.
+     Das wird protokolliert; dreht dadurch der aktuelle Zustand ohne frisches Signal, gibt es eine Nachricht. */
+  if (prevK && stored.k.length) {
+    const E0 = ENG.evalRule(stored, c.rule), changed = [];
+    for (let i = 0; i < stored.k.length; i++) { const k = stored.k[i]; if (k > prevK) continue; const j = merged.k.indexOf(k); if (j >= 0 && E0.st[i] != null && E.st[j] != null && E0.st[i] !== E.st[j]) changed.push(k); }
+    if (changed.length) {
+      const flip = prev && prev.st != null && prev.st !== L.st && !newSw.length && !(already && prev.preliminary);
+      const id = 'rev-' + a + '-' + L.d, body = 'Die Kursquelle (' + src.src + ') liefert für ' + changed.length + ' frühere Woche(n) andere Schlüsse (ab ' + ds(changed[0]) + '); der Regelzustand dieser Wochen ist rückwirkend anders.' + (flip ? ' Laut Regel jetzt ' + (L.st === 1 ? 'investiert' : 'Cash') + ' statt ' + (prev.st === 1 ? 'investiert' : 'Cash') + '.' : ' Der aktuelle Zustand bleibt ' + (L.st === 1 ? 'investiert' : 'Cash') + '.');
+      if (addEvent({ id, kind: flip ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': Datenrevision', text: body, c: round(L.c, 4), m: round(L.m, 4) }) && flip) queuePush({ id, title: name(a) + ': Datenrevision', body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
+      note(name(a) + ': Datenrevision, ' + changed.length + ' Woche(n) rückwirkend anders' + (flip ? ', ZUSTAND GEDREHT' : ''));
+    }
   }
   const edge = Math.abs(L.c / (c.rule.type === 'band' ? L.m * (L.st === 1 ? 1 - c.rule.p : 1 + c.rule.p) : L.m) - 1) < (CFG.edge ? CFG.edge.pct : 0.005);
   if (edge && !newSw.length) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle (SMA50 ' + usd(a, L.m) + '). Quelle: ' + src.src + '.' });
@@ -526,18 +544,24 @@ async function liveTick() {
 async function ftseEod() {
   try {
     const r = await F.av('VWRD.LON'); const i = r.dates.length - 1;
+    /* Alpha Vantage hängt oft einen Tag zurück: Ist der gespeicherte Wochenschluss (z. B. von EODHD) neuer, gilt der */
+    let d = r.dates[i], c = r.closes[i], src = r.src;
+    const S = storedSeries('ftse'), j = S.k.length - 1;
+    if (j >= 0 && S.d[j] > d) { d = S.d[j]; c = S.c[j]; src = 'Wochenschluss ' + ds(d) + (WEEKLY.ftse && /EODHD/.test(WEEKLY.ftse.src || '') ? ' (EODHD)' : ''); }
     const live = loadJson('live.json', { prices: {}, rule: {} }); live.prices = live.prices || {};
-    live.prices.ftse = { usd: round(r.closes[i], 4), d: r.dates[i], src: r.src, eod: true, t: NOW.toISOString() };
-    const fx = (live.prices.eurusd && live.prices.eurusd.rate) || (EUR.latest.eurusd && EUR.latest.eurusd.p); if (fx && calib('ftse')) live.prices.ftse.eur = round(r.closes[i] / fx * calib('ftse').ratio, 4);
-    const rr = ruleNow('ftse', r.closes[i]); if (rr) { live.rule = live.rule || {}; live.rule.ftse = rr; }
+    const have = live.prices.ftse;
+    if (have && have.d && have.d > d) { note('FTSE Tagesschluss: Quelle liefert ' + ds(d) + ', Anzeige behält den neueren Stand vom ' + ds(have.d)); return; }
+    live.prices.ftse = { usd: round(c, 4), d, src, eod: true, t: NOW.toISOString() };
+    const fx = (live.prices.eurusd && live.prices.eurusd.rate) || (EUR.latest.eurusd && EUR.latest.eurusd.p); if (fx && calib('ftse')) live.prices.ftse.eur = round(c / fx * calib('ftse').ratio, 4);
+    const rr = ruleNow('ftse', c); if (rr) { live.rule = live.rule || {}; live.rule.ftse = rr; }
     saveJson('live.json', live); RUN.changed = true;
     /* Der Xetra-Schluss kommt erst abends: bis dahin den Euro-Kurs des ETF aus dem Londoner Schluss schätzen, damit die Depotbewertung nicht einen Tag hinterherhinkt */
     const cur = EUR.latest && EUR.latest.ftse;
-    if (live.prices.ftse.eur > 0 && (!cur || !cur.d || cur.d < r.dates[i])) {
-      setLatest('ftse', r.dates[i], live.prices.ftse.eur, CFG.assets.ftse.eur.sym, 'geschätzt: VWRD ' + de(r.closes[i], 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', { estimate: true });
-      upsertWeekly('ftse', r.dates[i], live.prices.ftse.eur, 4); EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
+    if (live.prices.ftse.eur > 0 && (!cur || !cur.d || cur.d < d)) {
+      setLatest('ftse', d, live.prices.ftse.eur, CFG.assets.ftse.eur.sym, 'geschätzt: VWRD ' + de(c, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', { estimate: true });
+      upsertWeekly('ftse', d, live.prices.ftse.eur, 4); EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
     }
-    note('FTSE Tagesschluss ' + ds(r.dates[i]) + ': ' + usd('ftse', r.closes[i]));
+    note('FTSE Tagesschluss ' + ds(d) + ': ' + usd('ftse', c));
   } catch (e) { RUN.summary.push('FTSE-Tagesschluss nicht aktualisiert (' + e.message.slice(0, 80) + ')'); }
 }
 

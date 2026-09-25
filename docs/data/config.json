@@ -168,7 +168,7 @@
     },
     {
       "id": "sa-close",
-      "cron": "7 7 * * 6",
+      "cron": "23 7 * * 6",
       "label": "Samstag: fehlende Schlüsse (FTSE, Gold) und Euro-Schlüsse vom Freitag"
     },
     {
