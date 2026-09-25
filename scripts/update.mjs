@@ -103,7 +103,7 @@ async function fetchMock(key) {
   if (!fs.existsSync(p)) throw new Error('Mock fehlt: ' + path.basename(p));
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
-const AVKEY = process.env.ALPHAVANTAGE_KEY || '';
+const AVKEY = process.env.ALPHAVANTAGE_KEY || '', EODKEY = process.env.EODHD_KEY || '';
 const AVMEMO = {};
 const F = {
   yahoo: (sym, opts) => OPT.mock ? fetchMock('yahoo_' + sym) : SRC.yahooDaily(sym, opts),
@@ -120,6 +120,8 @@ const F = {
   goldSpot1: () => OPT.mock ? fetchMock('goldprice') : SRC.goldSpotGoldpriceOrg(),
   goldSpot2: () => OPT.mock ? fetchMock('goldapi') : SRC.goldSpotGoldApi(),
   ecb: () => OPT.mock ? fetchMock('ecb') : SRC.ecbEurUsd(),
+  eodhd: (sym, from) => OPT.mock ? fetchMock('eodhd_' + sym) : SRC.eodhdDaily(sym, EODKEY, from),
+  eodhdLive: (sym) => OPT.mock ? fetchMock('eodhdlive_' + sym) : SRC.eodhdLive(sym, EODKEY),
   kraken: (pair, days) => OPT.mock ? fetchMock('kraken_' + pair) : SRC.krakenDaily(pair, days || 60),
   krakenTicker: (pair) => OPT.mock ? fetchMock('krakenticker_' + pair) : SRC.krakenTicker(pair)
 };
@@ -143,12 +145,18 @@ async function avSignalFtse() {
   try {
     const dueK = addDays(dueCutoff('ftse'), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || FRI_CLOSED;
     if (i >= 0 && r.dates[i] < fri && afterClose) {
-      const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
-      if (qd && qd >= fri && q.price > 0) {
-        if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = qd; r.closes[i] = q.price; } else { r.dates.push(qd); r.closes.push(q.price); }
-        r.src += ' + Schlusskurs ' + qd + ' aus dem Quote'; r.preliminary = qd;
-        vlog('FTSE: Wochenschluss ' + qd + ' aus dem Alpha-Vantage-Quote ergänzt: ' + q.price);
-      } else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt');
+      const put = (d, p, label, prelim) => { if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = d; r.closes[i] = p; } else { r.dates.push(d); r.closes.push(p); } r.src += ' + Schlusskurs ' + d + ' ' + label; r.preliminary = prelim ? d : null; vlog('FTSE: Wochenschluss ' + d + ' ' + label + ': ' + p); };
+      let done = false;
+      if (EODKEY) {
+        /* EODHD veröffentlicht den Londoner Tagesschluss meist ein bis zwei Stunden nach Handelsschluss: endgültiger Kurs */
+        try { const e = await F.eodhd('VWRD.LSE', dueK); const k = e.dates.indexOf(fri); if (k >= 0) { put(fri, e.closes[k], 'von EODHD (Tagesschluss)', false); done = true; } else vlog('FTSE: EODHD hat den ' + fri + ' noch nicht (letzter Tag ' + e.dates[e.dates.length - 1] + ')'); } catch (e) { vlog('EODHD: ' + e.message); }
+        if (!done) { try { const l = await F.eodhdLive('VWRD.LSE'), ld = l.priceTime.slice(0, 10); if (ld >= fri && l.price > 0) { put(ld, l.price, 'aus dem EODHD-Live-Kurs (vorläufig)', true); done = true; } } catch (e) { vlog('EODHD live: ' + e.message); } }
+      }
+      if (!done) {
+        const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
+        if (qd && qd >= fri && q.price > 0) put(qd, q.price, 'aus dem Alpha-Vantage-Quote (vorläufig)', true);
+        else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt');
+      }
     }
   } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); }
   return { daily: r, src: r.src, weeklyAlready: true, preliminary: r.preliminary || null };
@@ -636,6 +644,8 @@ async function main() {
         ['Alpha Vantage VWCE.DEX quote', async () => { const r = await F.avQuote('VWCE.DEX'); return de(r.price, 2) + ' ' + (r.priceTime || ''); }],
         ['Alpha Vantage GZUR.DEX daily (Gold-ETC Xetra)', async () => { const r = await F.avDaily('GZUR.DEX', false); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
         ['Alpha Vantage VWCE.DEX daily', async () => { const r = await F.avDaily('VWCE.DEX', false); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
+        ['EODHD VWRD.LSE eod (ab Montag dieser Woche)', async () => { const r = await F.eodhd('VWRD.LSE', THIS_MON); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
+        ['EODHD VWRD.LSE live', async () => { const r = await F.eodhdLive('VWRD.LSE'); return de(r.price, 2) + ' ' + r.priceTime; }],
         ['Kraken XBTUSD daily', async () => { const r = await F.kraken('XBTUSD', 10); return r.dates[r.dates.length - 1] + ' ' + de(r.closes[r.closes.length - 1], 2) + ' (' + r.dates.length + ' Tage)'; }],
         ['Kraken XBTEUR ticker', async () => { const r = await F.krakenTicker('XBTEUR'); return de(r.price, 2); }],
         ['Kraken ETHEUR ticker', async () => { const r = await F.krakenTicker('ETHEUR'); return de(r.price, 2); }],

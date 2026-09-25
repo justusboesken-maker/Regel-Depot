@@ -164,6 +164,34 @@ export async function coinbaseSpot(product = 'BTC-EUR') {
   return { price: +j.data.amount, priceTime: new Date().toISOString(), src: 'coinbase ' + product + ' spot' };
 }
 
+/* ---------- EODHD (kostenloser Key, 20 Abrufe am Tag; Tagesschlüsse europäischer Börsen meist 1–2 Stunden nach Handelsschluss) ---------- */
+export const eodhdStatus = { calls: 0, budget: 4 };
+async function eodhdJson(pathAndQuery, key) {
+  if (!key) throw new Error('EODHD: kein Key (Secret EODHD_KEY)');
+  if (eodhdStatus.calls >= eodhdStatus.budget) throw new Error('EODHD: Abrufbudget dieses Laufs aufgebraucht');
+  eodhdStatus.calls++;
+  const res = await get('https://eodhd.com/api/' + pathAndQuery + (pathAndQuery.includes('?') ? '&' : '?') + 'api_token=' + encodeURIComponent(key) + '&fmt=json');
+  if (!res.ok) throw new Error('EODHD HTTP ' + res.status);
+  const j = await res.json();
+  if (j && !Array.isArray(j) && (j.errors || j.message)) throw new Error('EODHD: ' + String(j.message || JSON.stringify(j.errors)).slice(0, 120));
+  return j;
+}
+/* Tagesschlüsse (unbereinigt und bereinigt), sym z. B. VWRD.LSE */
+export async function eodhdDaily(sym, key, from) {
+  const j = await eodhdJson('eod/' + encodeURIComponent(sym) + '?period=d&order=a' + (from ? '&from=' + from : ''), key);
+  if (!Array.isArray(j) || !j.length) throw new Error('EODHD ' + sym + ': keine Daten');
+  const rows = j.filter((r) => r && r.date && +r.close > 0);
+  if (!rows.length) throw new Error('EODHD ' + sym + ': keine Schlusskurse');
+  return { dates: rows.map((r) => r.date), closes: rows.map((r) => +r.close), adj: rows.map((r) => +(r.adjusted_close || r.close)), price: +rows[rows.length - 1].close, priceTime: rows[rows.length - 1].date + 'T16:30:00Z', src: 'eodhd ' + sym };
+}
+/* Letzter Kurs (15–20 Minuten verzögert); nach Börsenschluss der Schlusskurs */
+export async function eodhdLive(sym, key) {
+  const j = await eodhdJson('real-time/' + encodeURIComponent(sym), key);
+  const p = +(j && j.close), ts = j && +j.timestamp;
+  if (!(p > 0) || !(ts > 0)) throw new Error('EODHD ' + sym + ': kein Kurs');
+  return { price: p, priceTime: new Date(ts * 1000).toISOString(), src: 'eodhd ' + sym + ' live (verzögert)' };
+}
+
 /* ---------- Kraken (öffentliche API, ohne Key) ---------- */
 function krakenResult(j) {
   if (!j || (j.error && j.error.length)) throw new Error('Kraken: ' + (j && j.error ? j.error.join(', ') : 'keine Antwort'));

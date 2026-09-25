@@ -79,6 +79,7 @@ jobs:
           PUSH_SUB_4: ${{ secrets.PUSH_SUB_4 }}
           PUSH_SUB_5: ${{ secrets.PUSH_SUB_5 }}
           ALPHAVANTAGE_KEY: ${{ secrets.ALPHAVANTAGE_KEY }}
+          EODHD_KEY: ${{ secrets.EODHD_KEY }}
         run: node scripts/update.mjs --step "${{ steps.step.outputs.step }}" ${{ steps.step.outputs.final }}
 
       - name: Änderungen speichern
