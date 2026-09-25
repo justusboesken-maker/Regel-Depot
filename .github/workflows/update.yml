@@ -10,14 +10,15 @@ on:
     - cron: '23 0 * * 1'     # Montag: Wochenschluss Bitcoin und Gold (Push erst am Morgen)
     - cron: '23 2 * * 1'     # Montag: Wiederholung, letzter Versuch der Nacht
     - cron: '53 5 * * 1'     # Montag: Benachrichtigungen vom Wochenende verschicken
-    - cron: '37 17 * * 1-4'  # Mo–Do: Euro-Kurse für die Depotbewertung
+    - cron: '37 17 * * 1-4'  # Mo–Do: Euro-Kurse für die Depotbewertung, FTSE-Tagesschluss
+    - cron: '7 5-21 * * *'   # täglich stündlich 05–21 UTC: Kurs-Ticker (Bitcoin, Gold, EUR/USD)
   workflow_dispatch:
     inputs:
       step:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
+        options: [auto, live, fr-warn, fr-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
 
 permissions:
   contents: write
@@ -53,6 +54,7 @@ jobs:
             "23 2 * * 1")  STEP=mo-close; FINAL="--final --fallback" ;;
             "53 5 * * 1")  STEP=mo-notify ;;
             "37 17 * * 1-4") STEP=eod ;;
+            "7 5-21 * * *") STEP=live ;;
             *) STEP="${{ inputs.step || 'auto' }}" ;;
           esac
           echo "step=$STEP" >> "$GITHUB_OUTPUT"

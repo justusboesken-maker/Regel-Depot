@@ -134,6 +134,14 @@ export async function coinbaseDaily(product = 'BTC-USD', days = 60) {
   const dates = j.map((c) => iso(c[0] * 1000)), closes = j.map((c) => c[4]);
   return { dates, closes, price: closes[closes.length - 1], priceTime: new Date().toISOString(), src: 'coinbase ' + product + ' (Ersatzquelle)' };
 }
+/* Wechselkurs (Basis -> Gegenwährung), aktualisiert sich laufend */
+export async function coinbaseFx(base = 'EUR', quote = 'USD') {
+  const res = await get('https://api.coinbase.com/v2/exchange-rates?currency=' + base);
+  if (!res.ok) throw new Error('Coinbase HTTP ' + res.status);
+  const j = await res.json(), r = j && j.data && j.data.rates && +j.data.rates[quote];
+  if (!(r > 0)) throw new Error('Coinbase: kein Kurs ' + base + '/' + quote);
+  return { rate: r, priceTime: new Date().toISOString(), src: 'coinbase ' + base + '-' + quote + ' (Ersatzquelle)' };
+}
 export async function coinbaseSpot(product = 'BTC-EUR') {
   const res = await get('https://api.coinbase.com/v2/prices/' + product + '/spot');
   if (!res.ok) throw new Error('Coinbase HTTP ' + res.status);

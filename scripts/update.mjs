@@ -107,6 +107,7 @@ const F = {
   av: (sym) => OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY),
   avCrypto: (sym, mkt) => OPT.mock ? fetchMock('avcrypto_' + sym) : SRC.alphaVantageCryptoDaily(sym, mkt, AVKEY),
   avQuote: (sym) => OPT.mock ? fetchMock('avquote_' + sym) : SRC.alphaVantageQuote(sym, AVKEY),
+  coinbaseFx: (b, q) => OPT.mock ? fetchMock('coinbasefx_' + b + q) : SRC.coinbaseFx(b, q),
   goldSpot1: () => OPT.mock ? fetchMock('goldprice') : SRC.goldSpotGoldpriceOrg(),
   goldSpot2: () => OPT.mock ? fetchMock('goldapi') : SRC.goldSpotGoldApi(),
   ecb: () => OPT.mock ? fetchMock('ecb') : SRC.ecbEurUsd()
@@ -296,7 +297,7 @@ async function currentPrice(a) {
   }
   return firstOk('FTSE', [
     async function yahoo() { const r = await F.yahoo(c.signal.sym, { range: '5d', adj: false }); if (!(r.price > 0)) throw new Error('kein Kurs'); return { price: r.price, priceTime: r.priceTime, src: r.src }; },
-    async function alphaVantage() { const r = await F.avQuote('VWRD.LON'); return { price: r.price, priceTime: r.priceTime, note: 'Ersatzquelle Alpha Vantage, verzögert', src: r.src }; }
+    async function alphaVantage() { const r = await F.avQuote('VWRD.LON'); const old = r.priceTime && r.priceTime.slice(0, 10) < TODAY; return { price: r.price, priceTime: r.priceTime, note: old ? 'Ersatzquelle Alpha Vantage: Schlusskurs vom ' + ds(r.priceTime.slice(0, 10)) + ', kein Tageskurs' : 'Ersatzquelle Alpha Vantage, verzögert', src: r.src }; }
   ]);
 }
 
@@ -356,6 +357,60 @@ async function eurQuotes(keys) {
   note('Euro-Kurse: ' + order.map((a) => a + ' ' + (EUR.latest[a] ? de(EUR.latest[a].p, a === 'eurusd' ? 4 : 2) + ' (' + ds(EUR.latest[a].d) + (EUR.latest[a].estimate ? ', geschätzt' : EUR.latest[a].fallback ? ', Ersatz' : '') + ')' : '–')).join(', '));
 }
 
+/* ---------- Live-Ticker (stündlich): aktuelle Kurse und Abstand zur Wochenschluss-Schwelle ----------
+   Bitcoin und Gold laufend (Coinbase, gold-api), EUR/USD laufend (Coinbase-Wechselkurs), FTSE nur mit dem letzten Tagesschluss (Alpha Vantage, im eod-Lauf). */
+function ruleNow(a, price) {
+  const c = CFG.assets[a], stored = storedSeries(a);
+  const cut = stored.k.map((k, i) => k < THIS_MON ? i : -1).filter((i) => i >= 0);
+  const S = { k: cut.map((i) => stored.k[i]), d: cut.map((i) => stored.d[i]), c: cut.map((i) => stored.c[i]) };
+  if (S.k.length < 60 || !(price > 0)) return null;
+  const E = ENG.evalRule(S, c.rule), ft = ENG.flipThreshold(E, c.rule), E2 = ENG.whatIf(S, c.rule, TODAY, price);
+  return { thr: round(ft.thr, 4), dist: round(price / ft.thr - 1, 6), can: ft.can, need: ft.need || null, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, sma: round(E.last.m, 4), up: E2.last.up, dn: E2.last.dn, week: THIS_MON };
+}
+async function liveTick() {
+  const prev = loadJson('live.json', { prices: {} }), out = { t: NOW.toISOString(), prices: {}, rule: {} };
+  let fx = null;
+  try { const r = await F.coinbaseFx('EUR', 'USD'); fx = { rate: round(r.rate, 6), src: r.src, t: NOW.toISOString() }; }
+  catch (e) { try { const r = await F.ecb(); fx = { rate: round(r.price, 6), src: r.src, t: r.priceTime }; } catch (e2) { fx = EUR.latest && EUR.latest.eurusd ? { rate: EUR.latest.eurusd.p, src: EUR.latest.eurusd.src, t: EUR.latest.eurusd.t } : null; } }
+  out.prices.eurusd = fx;
+  try { const u = await F.coinbaseSpot('BTC-USD'), e = await F.coinbaseSpot('BTC-EUR'); out.prices.btc = { usd: round(u.price, 2), eur: round(e.price, 2), src: u.src, t: NOW.toISOString() }; }
+  catch (e) { fail('Live Bitcoin', e.message); if (prev.prices && prev.prices.btc) out.prices.btc = prev.prices.btc; }
+  try {
+    let g = null; try { g = await F.goldSpot2(); } catch (e) { g = await F.goldSpot1(); }
+    const cb = calib('gold');
+    out.prices.gold = { usd: round(g.price, 2), eur: fx && cb ? round(g.price / fx.rate * cb.ratio, 4) : null, src: g.src, t: g.priceTime || NOW.toISOString(), spot: true };
+  } catch (e) {
+    fail('Live Gold', e.message);
+    if (prev.prices && prev.prices.gold) out.prices.gold = prev.prices.gold;
+  }
+  /* FTSE: letzter Tagesschluss aus dem eod-Lauf (Alpha Vantage), sonst aus der Wochenreihe */
+  if (prev.prices && prev.prices.ftse && prev.prices.ftse.usd > 0) out.prices.ftse = prev.prices.ftse;
+  else { const S = storedSeries('ftse'), i = S.k.length - 1; out.prices.ftse = { usd: S.c[i], d: S.d[i], src: 'Wochenschluss', eod: true }; }
+  if (fx && calib('ftse') && out.prices.ftse.usd > 0 && !(out.prices.ftse.eur > 0)) out.prices.ftse.eur = round(out.prices.ftse.usd / fx.rate * calib('ftse').ratio, 4);
+  A.forEach((a) => { const p = out.prices[a]; const r = p && p.usd > 0 ? ruleNow(a, p.usd) : null; if (r) out.rule[a] = r; });
+  saveJson('live.json', out);
+  /* Depotbewertung mit den aktuellen Kursen (Wochenreihen bleiben unberührt) */
+  EUR.latest = EUR.latest || {};
+  if (out.prices.btc && out.prices.btc.eur > 0) EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.src, t: NOW.toISOString(), fallback: true, live: true };
+  if (out.prices.gold && out.prices.gold.eur > 0) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor', t: NOW.toISOString(), fallback: true, estimate: true, live: true };
+  if (fx) EUR.latest.eurusd = { d: TODAY, p: fx.rate, sym: CFG.fx.sym, src: fx.src, t: NOW.toISOString(), fallback: true, live: true };
+  EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
+  RUN.changed = true;
+  note('Live: ' + A.map((a) => { const p = out.prices[a], r = out.rule[a]; return p ? CFG.assets[a].short + ' ' + usd(a, p.usd) + (r ? ' (' + de(r.dist * 100, 1) + ' % zur Schwelle' + (r.would ? ', würde auslösen' : '') + ')' : '') : CFG.assets[a].short + ' –'; }).join(' · ') + (fx ? ' · EUR/USD ' + de(fx.rate, 4) : ''));
+}
+/* Letzter Tagesschluss VWRD (USD) für die Live-Anzeige, einmal am Tag */
+async function ftseEod() {
+  try {
+    const r = await F.av('VWRD.LON'); const i = r.dates.length - 1;
+    const live = loadJson('live.json', { prices: {}, rule: {} }); live.prices = live.prices || {};
+    live.prices.ftse = { usd: round(r.closes[i], 4), d: r.dates[i], src: r.src, eod: true, t: NOW.toISOString() };
+    const fx = live.prices.eurusd && live.prices.eurusd.rate; if (fx && calib('ftse')) live.prices.ftse.eur = round(r.closes[i] / fx * calib('ftse').ratio, 4);
+    const rr = ruleNow('ftse', r.closes[i]); if (rr) { live.rule = live.rule || {}; live.rule.ftse = rr; }
+    saveJson('live.json', live); RUN.changed = true;
+    note('FTSE Tagesschluss ' + ds(r.dates[i]) + ': ' + usd('ftse', r.closes[i]));
+  } catch (e) { RUN.summary.push('FTSE-Tagesschluss nicht aktualisiert (' + e.message.slice(0, 80) + ')'); }
+}
+
 /* ---------- Gegenprobe Gold (COMEX) ---------- */
 async function goldCross() {
   const c = CFG.assets.gold;
@@ -398,7 +453,7 @@ function autoStep() {
   if (DOW === 6) return 'so-warn';
   if (DOW === 0 && HOUR < 4) return 'mo-close';
   if (DOW === 0 && HOUR < 9) return 'mo-notify';
-  return 'eod';
+  return 'live';
 }
 
 /* ---------- Hauptprogramm ---------- */
@@ -418,6 +473,8 @@ async function main() {
     } else if (step === 'fr-close') {
       await closeAsset('ftse');
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
+      await ftseEod();
+      await liveTick();
     } else if (step === 'so-warn') {
       try { await warnAsset('btc', await currentPrice('btc')); } catch (e) { fail(name('btc'), 'Vorwarnung: ' + e.message); }
     } else if (step === 'mo-close') {
@@ -430,9 +487,13 @@ async function main() {
     } else if (step === 'mo-notify') {
       for (const a of A) { if (STATE.assets[a] && STATE.assets[a].pending) await closeAsset(a); }
       weeklySummary();
+    } else if (step === 'live') {
+      await liveTick(); flush = false;
     } else if (step === 'eod') {
       for (const a of A) { if (STATE.assets[a] && STATE.assets[a].pending) await closeAsset(a); }
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
+      await ftseEod();
+      await liveTick();
     } else if (step === 'all') {
       for (const a of A) await closeAsset(a);
       await goldCross();

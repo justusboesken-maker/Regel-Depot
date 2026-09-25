@@ -102,6 +102,16 @@ section>*{min-width:0}
 .todo .it .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;margin-top:2px}
 .todo .it.buy .ic{background:var(--sig-buy)} .todo .it.sell .ic{background:var(--sig-sell)} .todo .it.warn .ic{background:#b98300} .todo .it.info .ic{background:var(--cash)}
 
+/* Live-Block auf den Status-Karten */
+.scard .live{border-radius:8px;padding:9px 12px;background:var(--surface-2);display:grid;gap:3px}
+.scard .live.would{background:var(--warn-bg)}
+.scard .live .lh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
+.scard .live .ll{font-size:12.5px;color:var(--muted)}
+.scard .live .lv{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
+.scard .live .ld{font-size:13px;color:var(--ink-2)}
+.scard .live.would .ld{color:var(--warn);font-weight:500}
+.scard .live .ls{font-size:11.5px;color:var(--muted)}
+
 /* Status-Karten */
 .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
 .summary{display:flex;flex-wrap:wrap;gap:8px}

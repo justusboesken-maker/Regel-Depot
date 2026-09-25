@@ -32,8 +32,43 @@
       jobs.push(getJson('state.json').then(function (j) { D.state = j; }).catch(function (e) { D.errors.push(e.message); D.state = { assets: {}, warn: {}, cross: {} }; }));
       jobs.push(getJson('events.json').then(function (j) { D.events = j; }).catch(function () { D.events = []; }));
       jobs.push(getJson('runs.json').then(function (j) { D.runs = j; }).catch(function () { D.runs = []; }));
+      jobs.push(getJson('live.json').then(function (j) { D.live = j; }).catch(function () { D.live = null; }));
+      jobs.push(fetchBrowserLive());
       return Promise.all(jobs);
-    }).then(function () { A.forEach(function (a) { var S = ENG.fromRows(D.weekly[a].w); C[a] = { S: S, E: ENG.evalRule(S, CFG.assets[a].rule) }; }); });
+    }).then(function () { A.forEach(function (a) { var S = ENG.fromRows(D.weekly[a].w); C[a] = { S: S, E: ENG.evalRule(S, CFG.assets[a].rule) }; }); applyBrowserLiveToEur(); });
+  }
+
+  /* ---------- Live-Kurse im Browser (Coinbase, gold-api), still bei Fehlern ---------- */
+  D.browserLive = {};
+  function fetchTimeout(url, ms) { var ctl = 'AbortController' in window ? new AbortController() : null; var t = setTimeout(function () { if (ctl) ctl.abort(); }, ms || 5000); return fetch(url, { signal: ctl ? ctl.signal : undefined, cache: 'no-store' }).then(function (r) { clearTimeout(t); if (!r.ok) throw new Error('HTTP ' + r.status); return r.json(); }, function (e) { clearTimeout(t); throw e; }); }
+  function fetchBrowserLive() {
+    var now = new Date().toISOString();
+    var p1 = Promise.all([fetchTimeout('https://api.coinbase.com/v2/prices/BTC-USD/spot'), fetchTimeout('https://api.coinbase.com/v2/prices/BTC-EUR/spot')]).then(function (r) { var u = +r[0].data.amount, e = +r[1].data.amount; if (u > 0 && e > 0) D.browserLive.btc = { usd: u, eur: e, t: now, src: 'Coinbase (live im Browser)' }; }).catch(function () { /* still */ });
+    var p2 = fetchTimeout('https://api.gold-api.com/price/XAU').then(function (j) { if (+j.price > 0) D.browserLive.gold = { usd: +j.price, t: j.updatedAt || now, src: 'gold-api.com (live im Browser)' }; }).catch(function () { /* still */ });
+    var p3 = fetchTimeout('https://api.coinbase.com/v2/exchange-rates?currency=EUR').then(function (j) { var r = j && j.data && j.data.rates && +j.data.rates.USD; if (r > 0) D.browserLive.eurusd = { rate: r, t: now }; }).catch(function () { /* still */ });
+    return Promise.all([p1, p2, p3]);
+  }
+  function utcToday() { return new Date().toISOString().slice(0, 10); }
+  /* Aktueller Kurs je Anlage: Browser-Live vor Ticker (live.json) vor Tagesschluss */
+  function livePrice(a) {
+    var b = D.browserLive[a], l = D.live && D.live.prices && D.live.prices[a];
+    if (b && b.usd > 0 && (!l || !l.t || b.t >= l.t)) return { usd: b.usd, eur: b.eur || null, t: b.t, src: b.src, live: true };
+    if (l && l.usd > 0) return { usd: l.usd, eur: l.eur || null, t: l.t || (D.live && D.live.t), src: l.src, eod: !!l.eod, d: l.d || null, spot: !!l.spot };
+    return null;
+  }
+  function ruleNow(a, price) {
+    var S0 = C[a].S, rule = CFG.assets[a].rule, mon = ENG.mondayOf(utcToday()), S = { k: [], d: [], c: [] };
+    for (var i = 0; i < S0.k.length; i++) { if (S0.k[i] < mon) { S.k.push(S0.k[i]); S.d.push(S0.d[i]); S.c.push(S0.c[i]); } }
+    if (S.k.length < 60 || !(price > 0)) return null;
+    var E = ENG.evalRule(S, rule), ft = ENG.flipThreshold(E, rule), E2 = ENG.whatIf(S, rule, utcToday(), price);
+    return { thr: ft.thr, dist: price / ft.thr - 1, can: ft.can, need: ft.need, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, up: E2.last.up, dn: E2.last.dn };
+  }
+  function applyBrowserLiveToEur() {
+    if (!D.eur || !D.eur.latest) return;
+    var b = D.browserLive.btc; if (b && b.eur > 0) D.eur.latest.btc = { d: utcToday(), p: b.eur, sym: 'BTC-EUR', src: b.src, t: b.t, live: true, fallback: true };
+    var g = D.browserLive.gold, fx = D.browserLive.eurusd && D.browserLive.eurusd.rate, cb = D.eur.calib && D.eur.calib.gold;
+    if (g && fx > 0 && cb && cb.ratio > 0) D.eur.latest.gold = { d: utcToday(), p: g.usd / fx * cb.ratio, sym: 'SGBS.MI', src: 'geschätzt aus Spot ' + de(g.usd, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (live im Browser)', t: g.t, live: true, fallback: true, estimate: true };
+    if (fx > 0) D.eur.latest.eurusd = { d: utcToday(), p: fx, sym: 'EURUSD=X', src: 'Coinbase (live im Browser)', t: D.browserLive.eurusd.t, live: true, fallback: true };
   }
 
   /* ---------- Modell ---------- */
@@ -123,6 +158,7 @@
     function s(label, val, cls) { var e = el('span', cls || null); e.appendChild(el('b', null, label + ' ')); e.appendChild(document.createTextNode(val)); h.appendChild(e); }
     s('Wochenschluss', 'FTSE ' + dShort(C.ftse.E.last.d) + ' · Gold ' + dShort(C.gold.E.last.d) + ' · Bitcoin ' + dShort(C.btc.E.last.d));
     var p = pxOf('ftse') || pxOf('btc'); if (p) s('Euro-Kurse', 'vom ' + dShort(p.d));
+    if (D.live && D.live.t) s('Kurs-Ticker', dtDE(D.live.t) + (D.browserLive.btc ? ' · Bitcoin live' : ''));
     var r = lastRun(); if (r) s('Letzter Lauf', dtDE(r.t) + (r.ok ? '' : ' · mit Fehlern'), r.ok ? null : 'bad');
     s('Depot', Mo.ready ? 'in diesem Browser' : 'noch nicht importiert');
   }
@@ -140,6 +176,8 @@
       var act = actionFor(a, Mo), L = C[a].E.last, w = currentWarn(a), st = D.state && D.state.assets && D.state.assets[a];
       if (act.todo) items.push({ cls: act.cls, ic: act.cls === 'buy' ? '▲' : '▼', title: CFG.assets[a].name + ': ' + act.title, text: act.text + (act.next ? ' ' + act.next : ''), href: '#card-' + a });
       if (w && w.level !== 'none') items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Vorwarnung ' + dtDE(w.t), text: w.text, href: '#card-' + a });
+      var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
+      if (rn && rn.would && !(w && w.level !== 'none')) items.push({ cls: 'warn', ic: '!', title: CFG.assets[a].name + ': Kurs aktuell auf der Signalseite', text: 'Aktuell ' + usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + '). Schließt die Woche so, gibt es ein ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal') + '. Entscheidend ist allein der Wochenschluss ' + (CFG.assets[a].week === 'sun' ? 'am Sonntag um 24 Uhr UTC' : 'am Freitag') + '.', href: '#card-' + a });
       if (st && st.pending) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Wochenschluss fehlt noch', text: st.pending.reason + ' (Stand ' + dtDE(st.pending.at) + '). Die Seite zeigt bis dahin die Vorwoche.', href: '#signale' });
       if (st && st.fallback) items.push({ cls: 'info', ic: 'i', title: CFG.assets[a].name + ': Ersatzquelle', text: 'Der letzte Wochenschluss stammt aus einer Ersatzquelle (' + st.src + '), weil Yahoo nicht erreichbar war. Nah an der Schwelle mit Yahoo gegenprüfen.', href: '#card-' + a });
     });
@@ -177,6 +215,15 @@
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d))); hd.appendChild(right);
       top.appendChild(hd);
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
+      var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
+      if (lp && rn) {
+        var lv = el('div', 'live' + (rn.would ? ' would' : ''));
+        var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : 'Aktuell ' + (lp.t ? new Date(lp.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
+        var what = rn.would ? ('Schließt die Woche so: ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal')) : (CFG.assets[a].rule.type === 'confirm' && ((rn.st === 1 && lp.usd < rn.thr) || (rn.st === 0 && lp.usd > rn.thr)) ? 'So wäre das der ' + (lp.usd > rn.thr ? rn.up : rn.dn) + '. Schluss ' + (lp.usd > rn.thr ? 'über' : 'unter') + ' dem SMA50, Signal erst nach ' + CFG.assets[a].rule.n : 'Schließt die Woche so, bleibt die Regel ' + (rn.wouldSt ? 'investiert' : 'auf Cash'));
+        lv.appendChild(el('p', 'ld', pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + ' · ' + what + '.'));
+        if (lp.live || lp.src) lv.appendChild(el('p', 'ls', (lp.live ? 'Live im Browser' : lp.spot ? 'Spotpreis, stündlich' : lp.eod ? 'Tagesschluss, kein Intraday-Kurs verfügbar' : 'stündlich') + (lp.src ? ' · ' + lp.src.replace(/ \(Ersatzquelle\)/, '') : '')));
+        top.appendChild(lv);
+      }
       var row = el('div', 'row'), ti = thresholdInfo(a);
       if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
       if (ti.edge) row.appendChild(chip('warn', 'Grenzfall'));
@@ -345,7 +392,7 @@
   }
   function renderSched() {
     var host = $('sched'); host.textContent = ''; var now = new Date(), seen = {};
-    (CFG.schedule || []).filter(function (s) { return !s.retry; }).map(function (s) { return { d: nextCron(s.cron, now), label: s.label, id: s.id }; }).filter(function (o) { return o.d && !seen[o.id + o.label] && (seen[o.id + o.label] = 1); })
+    (CFG.schedule || []).filter(function (s) { return !s.retry && !s.quiet; }).map(function (s) { return { d: nextCron(s.cron, now), label: s.label, id: s.id }; }).filter(function (o) { return o.d && !seen[o.id + o.label] && (seen[o.id + o.label] = 1); })
       .sort(function (x, y) { return x.d - y.d; }).slice(0, 6).forEach(function (o) { var r = el('div'); r.appendChild(el('span', null, o.label)); r.appendChild(el('b', null, o.d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr')); host.appendChild(r); });
   }
   var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE', 'so-warn': 'Vorwarnung Bitcoin', 'mo-close': 'Wochenschluss Bitcoin und Gold', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push' };
