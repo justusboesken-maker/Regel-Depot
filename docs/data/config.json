@@ -24,9 +24,10 @@
         "label": "VWRD (London, USD, Ausschüttungen wieder angelegt) von Alpha Vantage; Gegenprobe Yahoo VWRD.L, wenn erreichbar"
       },
       "eur": {
-        "src": "alphavantage",
+        "src": "ls",
+        "ls": { "id": 1045625, "label": "VWCE", "isin": "IE00BK5BQT80" },
         "sym": "VWCE.DEX",
-        "label": "VWCE an der Xetra (Alpha Vantage, Tagesschluss)"
+        "label": "VWCE bei Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); Ersatz: Xetra-Tagesschluss von Alpha Vantage (VWCE.DEX)"
       },
       "week": "fri",
       "dec": 2,
@@ -79,9 +80,10 @@
         "label": "COMEX-Future (Gegenprobe)"
       },
       "eur": {
-        "src": "alphavantage",
+        "src": "ls",
+        "ls": { "id": 1372782, "label": "Gold-ETC", "isin": "JE00B588CD74" },
         "sym": "GZUR.DEX",
-        "label": "WisdomTree Physical Swiss Gold an der Xetra (Alpha Vantage, Tagesschluss); untertägig geschätzt aus dem Spotpreis"
+        "label": "WisdomTree Physical Swiss Gold bei Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); Ersatz: Xetra-Tagesschluss von Alpha Vantage (GZUR.DEX), untertägig geschätzt aus dem Spotpreis"
       },
       "week": "fri",
       "dec": 2,
@@ -125,11 +127,11 @@
   },
   "warn": {
     "pct": 0.015,
-    "note": "ANNAHME A-12: Vorwarnung, wenn der aktuelle Kurs zum Wochenschluss ein Signal auslösen würde oder weniger als 1,5 % von der Schwelle entfernt ist."
+    "note": "Festgelegt von Justus am 26.09.2026 (vorher Annahme A-12): Vorwarnung, wenn der aktuelle Kurs zum Wochenschluss ein Signal auslösen würde oder weniger als 1,5 % von der Schwelle entfernt ist."
   },
   "edge": {
     "pct": 0.005,
-    "note": "ANNAHME A-12: Grenzfall, wenn ein Wochenschluss weniger als 0,5 % von der Schwelle entfernt liegt."
+    "note": "Festgelegt von Justus am 26.09.2026 (vorher Annahme A-12): Grenzfall, wenn ein Wochenschluss weniger als 0,5 % von der Schwelle entfernt liegt."
   },
   "push": {
     "vapidPublicKey": "BMtaohF2Hx8p0b7SkhYNZu5ZD2ivmQw2e1Gc8fM0qlJsQ0avsNMXH9ivBYI0ChInvZY4mFu-JUgfe2vV46nlX1I",

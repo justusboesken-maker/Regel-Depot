@@ -1,5 +1,6 @@
-/* Kursquellen für das Update-Skript. Hauptquellen: Alpha Vantage (VWRD.LON bereinigt, VWCE.DEX, GZUR.DEX), Coinbase (Krypto),
-   LBMA (Gold), EZB (EUR/USD). Weitere Quellen: Kraken (Krypto), Yahoo Finance (Gegenprobe; von GitHub-Runnern meist mit HTTP 429 abgewiesen), gold-api.
+/* Kursquellen für das Update-Skript. Hauptquellen: Alpha Vantage (VWRD.LON bereinigt), EODHD (VWRD.LSE Tagesschluss), Coinbase (Krypto),
+   LBMA (Gold), EZB (EUR/USD), Lang & Schwarz (Euro-Kurse von ETF und Gold-ETC wie bei Trade Republic; Ersatz: Alpha Vantage VWCE.DEX, GZUR.DEX).
+   Weitere Quellen: Kraken (Krypto), Yahoo Finance (Gegenprobe; von GitHub-Runnern meist mit HTTP 429 abgewiesen), gold-api.
    Welche Quelle als „Ersatzquelle“ gilt, entscheidet das Update-Skript anhand der Konfiguration, nicht diese Datei. Alle Funktionen liefern {dates:[ISO], closes:[Zahl], price?, priceTime?, src}
    in chronologischer Reihenfolge. */
 
@@ -190,6 +191,41 @@ export async function eodhdLive(sym, key) {
   const p = +(j && j.close), ts = j && +j.timestamp;
   if (!(p > 0) || !(ts > 0)) throw new Error('EODHD ' + sym + ': kein Kurs');
   return { price: p, priceTime: new Date(ts * 1000).toISOString(), src: 'eodhd ' + sym + ' live (verzögert)' };
+}
+
+/* ---------- Lang & Schwarz TradeCenter (ls-tc.de) ----------
+   Kurse des Market Makers, den auch Trade Republic stellt (LS Exchange). Es sind die Endpunkte, die die Website selbst für Suche und Chart nutzt (nicht dokumentiert).
+   Zeitstempel kommen als Berliner Uhrzeit, die wie UTC kodiert ist; für Tagesdaten zählt deshalb das UTC-Datum des Stempels. */
+const lsData = (x) => Array.isArray(x) ? x : (x && Array.isArray(x.data) ? x.data : []);
+function berlinOffsetMs(t) {
+  /* Abstand Berlin zu UTC zum Zeitpunkt t (Sommer 2 h, Winter 1 h) */
+  const parts = new Intl.DateTimeFormat('en-US', { timeZone: 'Europe/Berlin', hour12: false, year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', second: '2-digit' }).formatToParts(new Date(t));
+  const g = (k) => +parts.find((p) => p.type === k).value;
+  return Date.UTC(g('year'), g('month') - 1, g('day'), g('hour') % 24, g('minute'), g('second')) - Math.floor(t / 1000) * 1000;
+}
+export async function lsSearch(query) {
+  const res = await get('https://www.ls-tc.de/_rpc/json/.lstc/instrument/search/main?q=' + encodeURIComponent(query) + '&localeId=2');
+  if (!res.ok) throw new Error('L&S Suche HTTP ' + res.status);
+  const j = await res.json(), list = Array.isArray(j) ? j : [];
+  const hit = list.find((x) => x.isin === query || x.wkn === query) || list[0];
+  if (!hit || !hit.instrumentId) throw new Error('L&S: ' + query + ' nicht gefunden');
+  return { id: hit.instrumentId || hit.id, name: hit.displayname || hit.displayName || '', isin: hit.isin, wkn: hit.wkn, src: 'ls-tc.de Suche' };
+}
+/* Tagesschlüsse (Schluss um 23 Uhr Berlin) und letzter Kurs (Mitte aus Geld und Brief). id = L&S-Instrument-ID, label nur für die Quellenangabe */
+export async function lsChart(id, label) {
+  const res = await get('https://www.ls-tc.de/_rpc/json/instrument/chart/dataForInstrument?container=chart1&instrumentId=' + id + '&marketId=1&quotetype=mid&series=intraday%2Chistory&type=&localeId=2');
+  if (!res.ok) throw new Error('L&S HTTP ' + res.status);
+  const j = await res.json(), S = j.series || {};
+  const hist = lsData(S.history).filter((p) => p && p[1] > 0).sort((a, b) => a[0] - b[0]);
+  const intra = lsData(S.intraday).filter((p) => p && p[1] > 0).sort((a, b) => a[0] - b[0]);
+  const byDay = {}; hist.forEach((p) => { byDay[iso(p[0])] = p[1]; });
+  const dates = Object.keys(byDay).sort(), closes = dates.map((d) => byDay[d]);
+  let price = null, priceTime = null, priceDay = null;
+  if (intra.length) { const last = intra[intra.length - 1]; price = last[1]; priceDay = iso(last[0]); priceTime = new Date(last[0] - berlinOffsetMs(last[0])).toISOString(); }
+  else if (dates.length) { price = closes[closes.length - 1]; priceDay = dates[dates.length - 1]; }
+  if (!dates.length && !(price > 0)) throw new Error('L&S: keine Daten für ' + (label || id));
+  const prev = ((j.info || {}).plotlines || []).find((x) => x.id === 'previousDay');
+  return { dates, closes, price, priceTime, priceDay, prevClose: prev ? prev.value : null, isin: (j.info || {}).isin || null, src: 'ls-tc.de ' + (label || id) };
 }
 
 /* ---------- Kraken (öffentliche API, ohne Key) ---------- */
