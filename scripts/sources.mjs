@@ -104,8 +104,8 @@ async function avJson(params, key) {
 export async function alphaVantageWeeklyAdjusted(sym, key) {
   const j = await avJson({ function: 'TIME_SERIES_WEEKLY_ADJUSTED', symbol: sym }, key), ts = j['Weekly Adjusted Time Series'];
   if (!ts) throw new Error('Alpha Vantage ' + sym + ': keine Wochendaten');
-  const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['5. adjusted close']);
-  return { dates, closes, src: 'alphavantage ' + sym + ' weekly adjusted' };
+  const dates = Object.keys(ts).sort(), closes = dates.map((d) => +ts[d]['5. adjusted close']), raw = dates.map((d) => +ts[d]['4. close']);
+  return { dates, closes, raw, src: 'alphavantage ' + sym + ' weekly adjusted' };
 }
 /* Kryptowährung täglich in USD (volle Historie) */
 export async function alphaVantageCryptoDaily(symbol, market, key) {

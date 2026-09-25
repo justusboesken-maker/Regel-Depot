@@ -22,7 +22,7 @@ on:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-push]
+        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-eodhd, test-push]
 
 permissions:
   contents: write

@@ -655,6 +655,26 @@ async function main() {
       ];
       for (const [label, fn] of probes) { try { note('OK ' + label + ': ' + await fn()); } catch (e) { RUN.summary.push('FEHLT ' + label + ': ' + e.message.slice(0, 120)); log('! ' + label + ': ' + e.message); } }
       RUN.ok = true; flush = false;
+    } else if (step === 'test-eodhd') {
+      /* Datenvergleich EODHD gegen Alpha Vantage und die gespeicherte Reihe: Wochenschlüsse roh und bereinigt, nur runs.json wird geschrieben */
+      const e = await F.eodhd('VWRD.LSE', addDays(TODAY, -420)), av = await F.av('VWRD.LON'), stored = storedSeries('ftse');
+      note('EODHD VWRD.LSE: ' + e.dates.length + ' Tage von ' + e.dates[0] + ' bis ' + e.dates[e.dates.length - 1] + ' (letzter Schluss ' + de(e.closes[e.closes.length - 1], 2) + ', bereinigt ' + de(e.adj[e.adj.length - 1], 2) + ')');
+      const wRaw = ENG.weeklyFromDaily(e.dates, e.closes, null), wAdj = ENG.weeklyFromDaily(e.dates, e.adj, null);
+      const avAdj = {}, avRaw = {}; av.dates.forEach((d, i) => { avAdj[mondayOf(d)] = { d, c: av.closes[i] }; avRaw[mondayOf(d)] = { d, c: av.raw ? av.raw[i] : null }; });
+      const stMap = {}; stored.k.forEach((k, i) => { stMap[k] = { d: stored.d[i], c: stored.c[i] }; });
+      function compare(label, W, ref, skipLast) {
+        const diffs = [], dateMismatch = [];
+        for (let i = 0; i < W.k.length - (skipLast ? 1 : 0); i++) { const r = ref[W.k[i]]; if (!r || !(r.c > 0)) continue; if (r.d !== W.d[i]) dateMismatch.push(W.d[i] + '/' + r.d); diffs.push({ d: W.d[i], e: W.c[i], r: r.c, rel: W.c[i] / r.c - 1 }); }
+        if (!diffs.length) { note(label + ': keine gemeinsamen Wochen'); return; }
+        const abs = diffs.map((x) => Math.abs(x.rel)).sort((a, b) => a - b), mean = diffs.reduce((s, x) => s + x.rel, 0) / diffs.length, worst = diffs.slice().sort((a, b) => Math.abs(b.rel) - Math.abs(a.rel)).slice(0, 3);
+        note(label + ': ' + diffs.length + ' Wochen, mittlere Abweichung ' + de(mean * 100, 3) + ' %, Median ' + de(abs[Math.floor(abs.length / 2)] * 100, 3) + ' %, größte ' + de(abs[abs.length - 1] * 100, 3) + ' %, über 0,1 %: ' + abs.filter((x) => x > 0.001).length + (dateMismatch.length ? ', Wochenschlusstag abweichend bei ' + dateMismatch.length + ' Wochen (' + dateMismatch.slice(0, 3).join(', ') + ')' : '') + ' · größte: ' + worst.map((x) => ds(x.d) + ' ' + de(x.e, 2) + ' vs ' + de(x.r, 2)).join('; '));
+      }
+      compare('EODHD roh vs Alpha Vantage roh', wRaw, avRaw, false);
+      compare('EODHD bereinigt vs Alpha Vantage bereinigt', wAdj, avAdj, false);
+      compare('EODHD bereinigt vs gespeicherte Signalreihe', wAdj, stMap, false);
+      /* Signalprüfung: SMA50-Zustand der letzten Wochen mit EODHD-Daten (an die gespeicherte Reihe angehängt) gegen den gespeicherten Zustand */
+      try { const merged = ENG.mergeWeekly(stored, wAdj, true), E1 = ENG.evalRule(merged, CFG.assets.ftse.rule), E0 = ENG.evalRule(stored, CFG.assets.ftse.rule); const n = Math.min(52, E0.st.length); let diff = 0; for (let i = 1; i <= n; i++) { const k = stored.k[stored.k.length - i], j = merged.k.indexOf(k); if (j >= 0 && E1.st[j] !== E0.st[E0.st.length - i]) diff++; } note('Regelzustand der letzten ' + n + ' Wochen mit EODHD-Daten: ' + (diff ? diff + ' Woche(n) anders' : 'identisch')); } catch (e2) { note('Regelprüfung nicht möglich: ' + e2.message); }
+      RUN.ok = true; flush = false;
     } else if (step === 'test-push') {
       queuePush({ id: 'test-' + NOW.toISOString(), title: 'Regel-Depot: Test', body: 'Push funktioniert. ' + NOW.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) + ' Uhr.', tag: 'test', url: './#signale', ts: NOW.toISOString() });
     } else { throw new Error('unbekannter Schritt ' + step); }
