@@ -139,8 +139,9 @@
     host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
     /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
        im Chart-Container); ohne Zeiger zeigt sie den letzten Wochenschluss */
-    var rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd');
-    var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
+    /* o.readout === false: keine Werte-Zeile (Status-Karten seit 27.09.2026, Wunsch Justus); Linie und Punkte beim Darüberfahren bleiben */
+    var rd = null; if (o.readout !== false) { rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd'); }
+    var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); if (rd) rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
     var cross = mk('line', { y1: m.t, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dotC = mk('circle', { r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var dotS = mk('circle', { r: 3.5, fill: col.sma, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
@@ -154,13 +155,14 @@
     function read(k) {
       var t = textAt(k);
       t.groups = [{ rows: [{ color: col.line, label: 'Schluss', val: o.usd(S.c[k]) }, { color: col.sma, dash: true, label: 'SMA50', val: o.usd(E.sma[k]) }] }];
-      readout(rd, t);
+      if (rd) readout(rd, t);
     }
     /* Aufteilung der Werte-Zeile nach der verfügbaren Breite, mit der Schrift des Geräts gemessen und für alle sichtbaren Wochen gleich (sonst
        sprängen Zeile und Chart beim Darüberfahren): rd-wide = drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand); rd-mid = Datum und
        Abstand in zwei Zeilen; ohne Klasse zusätzlich Schluss und SMA50 untereinander (auch, wenn nicht gemessen werden kann); rd-two = der
        Regelstand darf zwei Zeilen nutzen, die Höhe ist immer reserviert. Die Status-Karten gleichen sich danach an (app.js unifyReadouts). */
     function fitMode() {
+      if (!rd) return;
       rd.classList.remove('rd-wide', 'rd-mid', 'rd-two');
       var bw = rd.clientWidth, cx = null, k, T = [], head = 0, note = 0, hb = [], nw = [];
       if (!bw) return;

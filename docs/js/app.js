@@ -301,7 +301,7 @@
       var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); mid.appendChild(ab);
       card.appendChild(mid);
       /* Werte-Zeile über dem Chart (Justus 26.09.2026): zeigt die Woche unter dem Zeiger, sonst den letzten Wochenschluss */
-      var cw = el('div', 'cchart'), rdl = el('div', 'chart-legend readout rule-rd'), ch = el('div', 'chart'); rdl.id = 'rd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(rdl); cw.appendChild(ch); card.appendChild(cw);
+      var cw = el('div', 'cchart'), ch = el('div', 'chart'); ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
@@ -383,14 +383,8 @@
   }
   function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); unifyReadouts(); }
-  /* Die Werte-Zeilen der drei Status-Karten gleich aufteilen (die schmalste Aufteilung gilt für alle), damit die Charts auf gleicher Höhe bleiben */
-  function unifyReadouts() {
-    var rds = A.map(function (a) { return $('rd-' + a); }).filter(Boolean); if (rds.length < 2) return;
-    var lvl = Math.min.apply(null, rds.map(function (r) { return r.classList.contains('rd-wide') ? 2 : r.classList.contains('rd-mid') ? 1 : 0; }));
-    var two = rds.some(function (r) { return r.classList.contains('rd-two'); });
-    rds.forEach(function (r) { r.classList.toggle('rd-wide', lvl === 2); r.classList.toggle('rd-mid', lvl === 1); r.classList.toggle('rd-two', two); });
-  }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: false }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); }
+  /* Status-Karten ohne Werte-Zeile über den Charts (Justus 27.09.2026: „Den Part wegmachen“); die Großansicht behält ihre Werte-Zeile */
 
   /* ---------- Depot ---------- */
   function renderDepot(Mo) {
