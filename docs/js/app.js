@@ -515,7 +515,9 @@
   function hasDaily() { return !!(D.eur && D.eur.daily && D.eur.daily.btc && D.eur.daily.btc.length > 5); }
   /* Depotverlauf: Positionen zu Euro-Kursen (letzter bekannter Kurs am Stichtag), Cash je Baustein rückwärts aus den Buchungen,
      Zinsen auf Cash (cashRate p. a.) über die Zeit aufgelaufen. grid: 'tag' oder 'woche'; from: erster Stichtag (ISO) oder null */
-  function perfSeries(Mo, grid, from) {
+  /* opt (nur Vergleich): cashFrom = Cash ab diesem Tag zählen (statt ab „Stand vom“), noFloor = zurückgerechnetes Cash nicht bei 0 kappen */
+  function perfSeries(Mo, grid, from, opt) {
+    opt = opt || {};
     var tx = Mo.dep.tx.filter(function (t) { return t && t.d && (CFG.assets[t.a] || ALT[t.a]); });
     if (!tx.length) return null;
     var daily = grid === 'tag', P = {}, idx = {}, first = tx.reduce(function (mn, t) { return t.d < mn ? t.d : mn; }, '9999-12-31');
@@ -526,20 +528,20 @@
     if (daily) { while (d <= lastDate) { stamps.push(d); d = ENG.addDays(d, 1); } }
     else { while (d <= lastDate) { stamps.push(d); d = ENG.addDays(d, 7); } }
     if (!stamps.length) return null;
-    function priceAt(a, date) { var rows = P[a], v = null; for (var i = 0; i < rows.length && rows[i][0] <= date; i++) v = rows[i]; return v; }
+    function priceAt(a, date) { return lastAt(P[a], date); }
     /* Cash-Modell: Das heutige Cash je Baustein ist der Anker (es enthält alle bisher gutgeschriebenen Zinsen).
        Ab dem Regelstart (config trading.start) bewegen Käufe, Verkäufe, Ein- und Auszahlungen das Cash, und es wird täglich mit cashRate verzinst (geschätzt).
        Käufe vor dem Regelstart gelten als von außen bezahlt (Kraken, Überweisungen); davor ist das Cash so hoch wie heute, ohne Zinsen.
        Ein Baustein zählt erst ab seiner ersten Buchung; Bausteine ohne Buchungen (nur Cash) zählen ab dem Beginn der Reihe. */
     var START = (CFG.trading && CFG.trading.start) || '2026-09-28', rate = Mo.cfg.cashRate || 0;
     /* Das eingetragene Cash gilt ab „Stand vom“ (cashDate); ohne Datum erst ab dem Regelstart. Davor nimmt die Seite kein Cash an. */
-    var CASH_FROM = Mo.dep.cashDate || START;
+    var CASH_FROM = opt.cashFrom || Mo.dep.cashDate || START;
     var cashTx = tx.filter(function (t) { return t.d >= START; });
     function principalAt(a, date) { var c = Mo.cash[a] || 0; cashTx.forEach(function (t) { if (t.d > date) c -= cashEffect(t, a); }); return c; }
     var cum = {}, totalI = {};
     A.forEach(function (a) { cum[a] = {}; var acc = 0, dd = START; while (dd <= today) { acc += Math.max(0, principalAt(a, dd)) * rate / 365; cum[a][dd] = acc; dd = ENG.addDays(dd, 1); } totalI[a] = acc; });
     function interestAt(a, date) { return date < START ? 0 : (cum[a][date] || 0); }
-    function cashAt(a, date) { if (date < CASH_FROM) return 0; var Pr = principalAt(a, date); return Math.max(0, Pr - (totalI[a] - interestAt(a, date))); }
+    function cashAt(a, date) { if (date < CASH_FROM) return 0; var v = principalAt(a, date) - (totalI[a] - interestAt(a, date)); return opt.noFloor ? v : Math.max(0, v); }
     var firstTx = {}; tx.forEach(function (t) { [bucketOf(t.a)].concat(t.to ? [t.to] : []).forEach(function (b) { if (!firstTx[b] || t.d < firstTx[b]) firstTx[b] = t.d; }); });
     /* Ein Baustein zählt ab seiner ersten Buchung, und ab dem Cash-Stichtag, wenn er da schon Cash hatte (sonst fiele reines Cash, das erst
        später gekauft oder umgebucht wird, bis dahin aus dem Verlauf) */
@@ -567,7 +569,12 @@
   }
   var PERF_RANGES = [['tage', '1 M · Tage'], ['wochen', '1 J · Wochen'], ['jahr', 'Jahr ' + new Date().getFullYear()], ['alles', 'Alles']];
   function drawPerf(Mo) {
-    var host = $('chPerf'), leg = $('perfLegend'), cap = $('perfCap');
+    var host = $('chPerf'), leg = $('perfLegend'), cap = $('perfCap'), cmp = PERF.mode === 'vergleich';
+    if ($('perfRange')) $('perfRange').hidden = cmp;
+    if (cmp) { drawCompare(Mo); return; }
+    if ($('perfDD')) { $('perfDD').hidden = true; $('perfDD').textContent = ''; }
+    resetKeys(host);
+    host.setAttribute('aria-label', (PERF.mode === 'wert' ? 'Wert' : 'Gewinn oder Verlust') + ' des Depots und der Bausteine');
     var series = [{ key: 'total', label: 'Depot gesamt' }, { key: 'ftse', label: 'FTSE-Baustein', colorVar: '--ftse' }, { key: 'btc', label: 'Bitcoin-Baustein', colorVar: '--btc' }, { key: 'gold', label: 'Gold-Baustein', colorVar: '--gold' }];
     var est = Mo.dep.tx.filter(function (t) { return t.est; }).map(function (t) { return (({ btc: 'Bitcoin', ftse: 'VWCE', gold: 'Gold-ETC' })[t.a] || INFO(t.a).short) + ' ' + dDE(t.d); });
     var r = PERF.range, today = todayISO(), grid = 'woche', from = null, note = '';
@@ -583,6 +590,97 @@
     if (skipped.length) capText += ' Ausgelassen, weil für eine gehaltene Position noch kein Euro-Kurs vorliegt: ' + (skipped.length === 1 ? 'der Punkt vom ' + dDE(skipped[0]) : skipped.length + ' Punkte vom ' + dDE(skipped[0]) + ' bis ' + dDE(skipped[skipped.length - 1])) + '.';
     CH.portfolioSplit(host, leg, cap, pts && pts.length ? pts : null, PERF.mode, series, capText);
     if (!(pts && pts.length >= 2) && skipped.length && cap) cap.textContent = capText;
+  }
+
+  /* ---------- Vergleich mit Buy & Hold 50/30/20 (Justus 26.09.2026) ----------
+     Ab dem Regelstart je Tag: dein Depot (Positionen samt Beimischung und Cash, wie „Wert“) zeitgewichtet gegen ein Buy-&-Hold-Depot, das am
+     Starttag zum Tagesschluss den Gesamtwert deines Depots zu 50/30/20 in VWCE, Bitcoin und Gold-ETC anlegt, jedes Jahr am Rebalancing-Stichtag
+     auf 50/30/20 zurückgeht und dieselben Ein- und Auszahlungen bekommt (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern.
+     Darunter der Drawdown beider Linien mit Max DD, Hoch → Tief und aktuellem Rückgang. */
+  var BH_W = { ftse: 0.5, btc: 0.3, gold: 0.2 };
+  /* Geld von außen je Buchung: Ein- und Auszahlungen; bei einem Kauf der Teil, den das Cash des Bausteins nicht gedeckt hat (tx.cash kleiner als
+     der Kaufbetrag, gilt als von außen bezahlt). Verkäufe und Umbuchungen bleiben im Depot. */
+  function extFlow(t) {
+    if (t.type === 'einzahlung' || t.type === 'auszahlung') return econDelta(t);
+    var v = (+t.units || 0) * (+t.price || 0), fee = +t.fee || 0;
+    if (t.type === 'kauf') return Math.max(0, v + fee + econDelta(t));
+    if (t.type === 'verkauf') return Math.min(0, econDelta(t) - (v - fee));   /* nur, wenn weniger als der Erlös ins Cash ging */
+    return 0;
+  }
+  /* Rebalancing-Tage für Buy & Hold: je Jahr der gebuchte Stichtag (tx.reb), für Jahre ohne Buchung der Tag aus den Einstellungen (sonst 30.12.) */
+  function rebalDays(Mo, from, to) {
+    var md = rebalMd(Mo), booked = {}, out = [];
+    Mo.dep.tx.forEach(function (t) { var r = t && t.reb && ENG.parseDate(t.reb); if (r) { var y = r.slice(0, 4); if (!booked[y] || r < booked[y]) booked[y] = r; } });
+    for (var y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) { var d = booked[y] || (y + '-' + md); if (d > from && d <= to) out.push(d); }
+    return out;
+  }
+  function rebalMd(Mo) { var t = (Mo.dep && Mo.dep.tax) || {}, law = CFG.taxLaw || {}; return t.rebalDate ? String(t.rebalDate).slice(5, 10) : (law.rebalDay || (law.rebalDate ? String(law.rebalDate).slice(5) : '12-30')); }
+  /* Letzter Eintrag [Datum, Kurs] bis einschließlich d in einer nach Datum sortierten Liste (Binärsuche) */
+  function lastAt(rows, d) { var lo = 0, hi = rows.length - 1, v = null; while (lo <= hi) { var mid = (lo + hi) >> 1; if (rows[mid][0] <= d) { v = rows[mid]; lo = mid + 1; } else hi = mid - 1; } return v; }
+  function compareData(Mo) {
+    var START = (CFG.trading && CFG.trading.start) || '2026-09-28', today = todayISO(), out = { start: START, skipped: [] };
+    if (today < START) { out.wait = 'Der Vergleich beginnt am ' + dDE(START) + ' mit dem Regelstart. Die Linien erscheinen ab dem ' + dDE(ENG.addDays(START, 1)) + ', sobald es zwei Tagespunkte gibt.'; return out; }
+    /* Für die zeitgewichtete Rechnung zählt das Cash ab dem Start (auch wenn „Stand vom“ später liegt) und wird nicht bei 0 gekappt: Sonst
+       erschiene es an seinem Stichtag als Gewinn, und eine Korrektur des Cash nach unten als Verlust (Prüfung 26.09.2026) */
+    var cf = Mo.dep.cashDate && Mo.dep.cashDate < START ? Mo.dep.cashDate : START;
+    var pts = Mo.ready ? perfSeries(Mo, 'tag', START, { cashFrom: cf, noFloor: true }) : null;
+    if (pts) pts = pts.filter(function (p) { if (p.d < START) return false; var miss = Object.keys(p.parts).some(function (a) { return p.parts[a].missing; }); if (miss) out.skipped.push(p.d); return !miss && p.total > 0.005; });
+    if (!pts || pts.length < 2) { out.wait = pts && pts.length === 1 ? 'Der Vergleich startet mit dem Tagesschluss vom ' + dDE(pts[0].d) + '. Die Linien erscheinen ab dem nächsten Tag.' : 'Für den Vergleich fehlen noch Buchungen oder Euro-Kurse.'; return out; }
+    var keys = Object.keys(BH_W), rows = {}, px = {}, miss = null;
+    keys.forEach(function (a) { rows[a] = eurPoints(a, true); px[a] = []; });
+    pts.forEach(function (p) { keys.forEach(function (a) { var r = lastAt(rows[a], p.d); if (!(r && r[1] > 0)) miss = miss || a; px[a].push(r ? r[1] : NaN); }); });
+    if (miss) { out.wait = 'Für das Buy-&-Hold-Depot fehlt zum Start ein Euro-Kurs (' + INFO(miss).short + ').'; return out; }
+    var dates = pts.map(function (p) { return p.d; }), first = dates[0], last = dates[dates.length - 1];
+    out.first = first;
+    var flows = dates.map(function () { return 0; }), reb = dates.map(function () { return false; }), i;
+    /* Zahlungen nach dem ersten Punkt dem ersten Tagespunkt ab ihrem Datum zuordnen; bis zum ersten Punkt stecken sie im Startwert */
+    Mo.dep.tx.forEach(function (t) { if (!t || !t.d || t.d <= first || t.d > last || !(CFG.assets[t.a] || ALT[t.a])) return; var f = extFlow(t); if (!(Math.abs(f) >= 0.005)) return; for (var k = 1; k < dates.length; k++) if (dates[k] >= t.d) { flows[k] += f; break; } });
+    rebalDays(Mo, first, last).forEach(function (rd) { for (i = 1; i < dates.length; i++) if (dates[i] >= rd) { reb[i] = true; break; } });
+    var vals = pts.map(function (p) { return p.total; }), mine = ENG.twrIndex(vals, flows), bh = ENG.buyHold(px, BH_W, vals[0], flows, reb);
+    out.dates = dates; out.vals = vals; out.flows = flows; out.reb = reb; out.rebDays = rebalDays(Mo, first, last);
+    out.mine = mine; out.bh = bh; out.ddMine = ENG.drawdown(mine); out.ddBh = ENG.drawdown(bh.idx);
+    return out;
+  }
+  /* Tastatur-Bedienung, die der Vergleich auf #chPerf setzt, in den anderen Ansichten wieder entfernen */
+  function resetKeys(host) { host.removeAttribute('tabindex'); host.onkeydown = null; host.onfocus = null; host.onblur = null; }
+  function drawCompare(Mo) {
+    var host = $('chPerf'), box = $('perfDD'), leg = $('perfLegend'), cap = $('perfCap');
+    host.textContent = ''; box.textContent = ''; leg.textContent = ''; cap.textContent = '';
+    function legItem(v, dash, text) { var sp = el('span'), i = el('i'); i.style.borderTopColor = 'var(' + v + ')'; i.style.width = '26px'; if (dash) i.className = 'dash'; else i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(text)); leg.appendChild(sp); }
+    legItem('--ink', false, 'Dein Depot (regelbasiert)'); legItem('--muted', true, 'Buy & Hold 50/30/20');
+    var c = compareData(Mo), START = c.first || c.start, md = rebalMd(Mo);
+    var capText = 'Beide Linien starten am ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
+      + 'Dein Depot: alle Positionen samt ETH/SOL und Cash (Zinsen ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a., geschätzt), zeitgewichtet gerechnet, also ohne Sprünge durch Ein- und Auszahlungen. '
+      + 'Buy & Hold: legt am ' + dDE(START) + ' zum Tagesschluss den Gesamtwert deines Depots' + (c.vals ? ' (' + eur(c.vals[0]) + ')' : '') + ' zu 50 % in VWCE, 30 % in Bitcoin und 20 % in WisdomTree Physical Swiss Gold an, geht jedes Jahr am Rebalancing-Stichtag (' + dShort('2000-' + md) + ') zurück auf 50/30/20 und bekommt dieselben Ein- und Auszahlungen wie dein Depot (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern. '
+      + 'Drawdown: Rückgang vom bisherigen Höchststand der jeweiligen Linie.'
+      + (c.skipped.length ? ' Ausgelassen, weil für eine gehaltene Position ein Euro-Kurs fehlte: ' + (c.skipped.length === 1 ? 'der ' + dDE(c.skipped[0]) : c.skipped.length + ' Tage vom ' + dDE(c.skipped[0]) + ' bis ' + dDE(c.skipped[c.skipped.length - 1])) + '.' : '');
+    cap.textContent = capText;
+    if (c.wait) { box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', c.wait)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + c.wait); return; }
+    var n = c.dates.length, pM = c.mine.map(function (x) { return x - 1; }), pB = c.bh.idx.map(function (x) { return x - 1; }), narrow = (host.clientWidth || 700) < 560;
+    function pp(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' Prozentpunkte'; }
+    CH.pctChart(host, c.dates, [
+      { vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot' },
+      { vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
+    ], { height: narrow ? 230 : 280, ends: true,
+      sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(c.vals[i]) + ', Buy & Hold ' + eur(c.bh.vals[i]) + (c.flows[i] ? ' · ' + (c.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(c.flows[i])) : '') + (c.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
+      aria: 'Vergleich seit ' + dDE(START) + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
+    box.hidden = false;
+    var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
+    ddBox.appendChild(el('p', 'subhd', 'Drawdown: Rückgang vom bisherigen Höchststand')); ddBox.appendChild(ddCh); box.appendChild(ddBox);
+    CH.pctChart(ddCh, c.dates, [
+      { vals: c.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
+      { vals: c.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
+    ], { height: narrow ? 140 : 160, dd: true, ends: true, aria: 'Drawdown seit ' + dDE(START) + ': Max DD dein Depot ' + pct(c.ddMine.max.v, 1) + ', Buy & Hold ' + pct(c.ddBh.max.v, 1) });
+    /* Kennzahlen */
+    var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody');
+    t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich'));
+    ['', 'Dein Depot', 'Buy & Hold'].forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; tr.appendChild(x); }); th.appendChild(tr); t.appendChild(th);
+    function span(D) { return D.max.peak < 0 ? 'kein Rückgang' : dDE(c.dates[D.max.peak]) + ' → ' + dDE(c.dates[D.max.trough]); }
+    [['Max DD', function (D) { return pct(D.max.v, 1); }, ''], ['Hoch → Tief', span, 'wrap'], ['Aktuell', function (D) { return pct(D.cur, 1); }, '']].forEach(function (row) {
+      var r = el('tr'), h = el('th', null, row[0]); h.scope = 'row'; r.appendChild(h);
+      [c.ddMine, c.ddBh].forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
+    });
+    t.appendChild(tb); tw.appendChild(t); box.appendChild(tw);
   }
 
   /* ---------- Signale: Verlauf, Push, Zeitplan, Läufe ---------- */
@@ -1184,7 +1282,7 @@
   try { var r0s = localStorage.getItem('regelDepot.range'), r0 = r0s == null ? NaN : +r0s; if (!isNaN(r0)) { VIEW.range = r0; Array.prototype.forEach.call($('rangeSeg').querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-r') === r0)); }); } } catch (e) { /* still */ }
 
   /* Prüf-Zugang für automatische Tests (keine Daten nach außen): Depotverlauf nachrechnen */
-  window.RegelDepot = { perf: function (grid, from) { var Mo = model(); return Mo.ready ? perfSeries(Mo, grid, from) : null; } };
+  window.RegelDepot = { perf: function (grid, from) { var Mo = model(); return Mo.ready ? perfSeries(Mo, grid, from) : null; }, compare: function () { return compareData(model()); } };
 
   /* Ladefehler (Daten) und Anzeigefehler (meist eine veraltete Version der Seite im Browser-Speicher) getrennt melden */
   function failBanner(title, text, reload) {

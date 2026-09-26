@@ -352,8 +352,53 @@
     return iso(dt.getTime());
   }
 
+  /* ---------- Vergleich mit Buy & Hold (Justus 26.09.2026) ---------- */
+  /* Zeitgewichtete Entwicklung als Index (Start 1): Ein- und Auszahlungen F_t zählen am Tagesende und bewegen den Index nicht,
+     r_t = (V_t − F_t) / V_(t−1) − 1. values: Wert je Tag, flows: Geld von außen je Tag (Einzahlung +, Auszahlung −; flows[0] steckt im Startwert).
+     Passt ein Tag nicht zusammen (Vortag ohne Wert oder Wert ohne die Zahlung nicht positiv), bleibt der Index an diesem Tag stehen. */
+  function twrIndex(values, flows) {
+    var out = [], I = 1;
+    for (var t = 0; t < values.length; t++) {
+      if (t > 0) { var prev = values[t - 1], num = values[t] - ((flows && flows[t]) || 0); if (prev > 0.005 && num > 0 && isFinite(num)) I *= num / prev; }
+      out.push(I);
+    }
+    return out;
+  }
+  /* Buy & Hold nach Gewichten w ({Anlage: Anteil}), ohne Gebühren und Steuern: Tag 0 kauft für v0 zum Tagesschluss. Ab Tag 1 je Tag die
+     Wertänderung der Stücke, dann am Tagesschluss Einzahlung nach w kaufen bzw. Auszahlung anteilig verkaufen, an Rebalancing-Tagen
+     (reb[t]) zurück auf w. px: {Anlage: [Kurs je Tag]}. Ergebnis: vals (Wert je Tag), idx (zeitgewichtet, Start 1), units (Stücke am Ende). */
+  function buyHold(px, w, v0, flows, reb) {
+    var keys = Object.keys(w), n = keys.length && px[keys[0]] ? px[keys[0]].length : 0, units = {}, vals = [], idx = [], I = 1, t;
+    function value(i) { var s = 0; keys.forEach(function (a) { s += units[a] * px[a][i]; }); return s; }
+    function setTo(i, v) { keys.forEach(function (a) { units[a] = v * w[a] / px[a][i]; }); }
+    if (!n || !(v0 > 0)) return { vals: vals, idx: idx, units: units };
+    setTo(0, v0); vals.push(value(0)); idx.push(1);
+    for (t = 1; t < n; t++) {
+      var v = value(t), prev = vals[t - 1], f = (flows && flows[t]) || 0;
+      if (prev > 0.005) I *= v / prev;
+      if (f > 0) keys.forEach(function (a) { units[a] += f * w[a] / px[a][t]; });
+      else if (f < 0) { var k = v > 0.005 ? Math.max(0, 1 + f / v) : 0; keys.forEach(function (a) { units[a] *= k; }); }
+      if (reb && reb[t]) { var v2 = value(t); if (v2 > 0.005) setTo(t, v2); }
+      vals.push(value(t)); idx.push(I);
+    }
+    return { vals: vals, idx: idx, units: units };
+  }
+  /* Drawdown eines Index: Abstand zum bisherigen Höchststand je Tag (0 oder negativ). max: tiefster Rückgang mit dem Hoch davor (peak) und
+     dem Tief (trough) als Positionen; bei gleich tiefen Rückgängen zählt der erste. cur: Abstand am letzten Tag. */
+  function drawdown(idx) {
+    var dd = [], hi = -Infinity, hiT = 0, max = { v: 0, peak: -1, trough: -1 };
+    for (var t = 0; t < idx.length; t++) {
+      if (idx[t] > hi) { hi = idx[t]; hiT = t; }
+      var v = hi > 0 ? idx[t] / hi - 1 : 0; if (v > -1e-12) v = 0;
+      dd.push(v);
+      if (v < max.v - 1e-12) max = { v: v, peak: hiT, trough: t };
+    }
+    return { dd: dd, max: max, cur: dd.length ? dd[dd.length - 1] : 0 };
+  }
+
   var ENG = {
     parseNum: parseNum, parseDate: parseDate, easterSunday: easterSunday, ukHolidays: ukHolidays, calendar: calendar,
+    twrIndex: twrIndex, buyHold: buyHold, drawdown: drawdown,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf,

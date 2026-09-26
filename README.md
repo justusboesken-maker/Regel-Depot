@@ -8,6 +8,7 @@ Jeder Baustein folgt einer Trendregel auf dem 50-Wochen-Durchschnitt (FTSE 2-Woc
   schreibt `docs/data/*.json` und verschickt Web-Push-Nachrichten (VAPID, ohne Fremdpakete). Node 24.
 - **Handelskalender:** Feiertage in London (Ostern, Bank Holidays mit Ersatztagen) rechnet `docs/js/engine.js` selbst aus; kein LBMA-Nachmittagsfixing am letzten Geschäftstag vor Weihnachten und vor Neujahr (meist 24.12. und 31.12., am Wochenende der Freitag davor). Sonderfeiertage (etwa ein zusätzlicher Bank Holiday) kommen in `docs/data/config.json` unter `holidays.extra`, ein gestrichener unter `holidays.notHolidays`.
 - **Rebalancing:** Am Stichtag (30.12.) und bis 7 Tage danach trägt der Knopf „Vorgeschlagenes Rebalancing umgesetzt“ die Orders des gewählten Vorschlags ein (vorausgefüllt, änderbar) und bucht das Cash zwischen den Bausteinen als Umbuchung; eine Umbuchung lässt sich auch einzeln im Buchungsformular eintragen.
+- **Depotentwicklung:** „Gewinn“ und „Wert“ zeigen das Depot und die Bausteine in Euro; „Vergleich“ zeigt ab dem Regelstart (28.09.2026) dein Depot in Prozent (durchgehend, zeitgewichtet, also ohne Sprünge durch Ein- und Auszahlungen) gegen ein Buy-&-Hold-Depot 50/30/20 aus VWCE, Bitcoin und WisdomTree Physical Swiss Gold (gestrichelt; Start mit dem Gesamtwert deines Depots zum Tagesschluss am 28.09., jedes Jahr am 30.12. zurück auf 50/30/20, dieselben Ein- und Auszahlungen, ohne Gebühren und Steuern), mit Tagespunkten; darunter der Drawdown beider Linien mit Max DD, Hoch → Tief und aktuellem Rückgang.
 - **Rechenkern:** `docs/js/engine.js` (Browser und Node), Tests in `test/` gegen die Rechenbeispiele des Übergabedokuments mit festen Testdaten (`test/fixtures`): `npm test`.
 
 ## Zeitplan (Berliner Zeit, im Sommer wie im Winter)
@@ -23,7 +24,7 @@ GitHub-Cron kennt nur UTC. Deshalb stehen die meisten Zeiten doppelt im Workflow
 | Mo 0:07 UTC, 2:23 UTC | Wochenschluss Bitcoin (die Bitcoin-Woche endet So 24 Uhr UTC) |
 | Mo 7:53 | Wochenübersicht und Nachrichten der Nacht zum Montag |
 | Mo–Do 19:37 und 23:37 | Euro-Kurse, FTSE-Tagesschluss |
-| stündlich (7 Minuten nach, 5–21 Uhr UTC) | Kurs-Ticker; montags holt er die Wochenübersicht nach, falls der 7:53-Lauf ausfiel |
+| stündlich (7 Minuten nach, 5–21 Uhr UTC) | Kurs-Ticker; trägt einmal am Tag den Krypto-Tagesschluss vom Vortag nach; montags holt er die Wochenübersicht nach, falls der 7:53-Lauf ausfiel |
 | Mo–Do 15:17 und 18:47 | nur wenn die Woche vor dem Freitag endet (Gründonnerstag, Gold vor Weihnachten und Neujahr): Vorwarnung und vorgezogener Wochenschluss am letzten Handelstag |
 | Mo–Fr im Dezember 11:17 und 14:47 | nur an FTSE-Halbtagen (London schließt am letzten Geschäftstag vor Weihnachten und vor Neujahr um 12:30 Uhr) |
 

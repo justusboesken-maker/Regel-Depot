@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260926-1237">
+<link rel="stylesheet" href="css/app.css?v=20260926-1351">
 </head>
 <body>
 
@@ -53,9 +53,10 @@
   <div class="card pad alloc" id="alloc"></div>
   <div class="card chartcard" id="perfCard">
     <div class="perf-head"><p class="subhd">Depotentwicklung</p>
-      <div class="controls"><div class="seg" id="perfRange" role="group" aria-label="Zeitraum"></div><div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button></div></div></div>
+      <div class="controls"><div class="seg" id="perfRange" role="group" aria-label="Zeitraum"></div><div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button><button type="button" data-m="vergleich" aria-pressed="false" title="Dein Depot seit dem Regelstart gegen Buy &amp; Hold 50/30/20, in Prozent, mit Drawdown">Vergleich</button></div></div></div>
     <div class="chart-legend" id="perfLegend"></div>
-    <div class="chart" id="chPerf" role="img" aria-label="Gewinn oder Verlust der Positionen je Woche"></div>
+    <div class="chart" id="chPerf" role="img" aria-label="Gewinn oder Verlust des Depots und der Bausteine"></div>
+    <div class="perfdd" id="perfDD" hidden></div>
     <p class="cap" id="perfCap"></p>
   </div>
   <div class="card">
@@ -209,9 +210,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260926-1237"></script>
-<script src="js/store.js?v=20260926-1237"></script>
-<script src="js/charts.js?v=20260926-1237"></script>
-<script src="js/app.js?v=20260926-1237"></script>
+<script src="js/engine.js?v=20260926-1351"></script>
+<script src="js/store.js?v=20260926-1351"></script>
+<script src="js/charts.js?v=20260926-1351"></script>
+<script src="js/app.js?v=20260926-1351"></script>
 </body>
 </html>

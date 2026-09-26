@@ -921,6 +921,10 @@ async function main() {
       for (const a of A) await closeAsset(a);
       weeklySummary();
     } else if (step === 'live') {
+      /* Krypto-Tagesschluss (24 Uhr UTC) einmal am Tag nachtragen, sobald der Vortag fehlt: Sonst rechnen die Tagesansicht und der Vergleich
+         mit Buy & Hold bis zum Abendlauf mit dem Schluss von vorgestern */
+      const dl = EUR.daily && EUR.daily.btc, lastBtc = dl && dl.length ? dl[dl.length - 1][0] : '';
+      if (lastBtc < addDays(TODAY, -1)) { try { await eurQuotes(['btc']); } catch (e) { vlog('Krypto-Tagesschluss: ' + e.message); } }
       await liveTick();
       /* Montag: Die Nachrichten vom Wochenende gehen um 7:53 Uhr (Berlin) mit mo-notify hinaus. Fällt dieser Lauf aus oder verdrängt GitHub ihn,
          holt der nächste Ticker-Lauf das nach (Wochenschlüsse, Wochenübersicht, Warteschlange). Sonst verschickt der Ticker, was noch wartet. */
