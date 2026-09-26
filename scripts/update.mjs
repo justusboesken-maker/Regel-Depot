@@ -46,9 +46,11 @@ const TODAY = iso(NOW.getTime()), THIS_MON = mondayOf(TODAY), DOW = (NOW.getUTCD
 const NEXT_MON = addDays(THIS_MON, 7);
 const isHolidayFriday = (d) => (CFG.holidays && CFG.holidays.fridays || []).includes(d);
 /* Londoner Ortszeit (Sommer-/Winterzeit): die Börse schließt 16:30, die Schlussauktion endet 16:35 */
-function localHour(tz) { const parts = {}; new Intl.DateTimeFormat('en-GB', { timeZone: tz, hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(NOW).forEach((x) => { parts[x.type] = x.value; }); return ((+parts.hour) % 24) + (+parts.minute) / 60; }
-const LONDON_HOUR = localHour('Europe/London');
-const FRI_CLOSED = DOW === 4 && LONDON_HOUR >= 16.67;              /* Freitag nach dem Londoner Schluss: die laufende Woche ist fällig */
+function localParts(tz) { const parts = {}; new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(NOW).forEach((x) => { parts[x.type] = x.value; }); return { dow: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday), hour: ((+parts.hour) % 24) + (+parts.minute) / 60 }; }
+const LONDON = localParts('Europe/London'), LONDON_HOUR = LONDON.hour, LONDON_DOW = LONDON.dow;
+/* Freitag nach dem Londoner Schluss ist die laufende Woche fällig. Im Sommer ist es in London zwischen 23 und 24 Uhr UTC schon Samstag,
+   während UTC noch Freitag zeigt: auch dann gilt die Woche als geschlossen (sonst würde ein offener Wochenschluss verworfen). */
+const FRI_CLOSED = DOW === 4 && (LONDON_DOW !== 4 || LONDON_HOUR >= 16.67);
 
 /* ---------- Formatierung (Meldungstexte) ---------- */
 const de = (x, d) => (+x).toLocaleString('de-DE', { minimumFractionDigits: d, maximumFractionDigits: d });
@@ -402,12 +404,21 @@ function calib(a) { return EUR.calib && EUR.calib[a] && EUR.calib[a].ratio > 0 ?
 function lsCfg(a) { const e = CFG.assets[a] && CFG.assets[a].eur; return e && e.src === 'ls' && e.ls && e.ls.id ? e.ls : null; }
 async function lsQuote(a) { const l = lsCfg(a); if (!l) return null; return F.ls(l.id, l.label || CFG.assets[a].short); }
 function cryptoDaily(product, days) {
-  return firstOk(product, [async function coinbase() { return F.coinbaseDays(product, days); }, async function kraken() { return F.kraken(KRAKEN_PAIR[product] || product.replace('-', ''), days); }]);
+  return firstOk(product, [async function coinbase() { return F.coinbaseDays(product, days); }, async function kraken() { return Object.assign({ fallback: true }, await F.kraken(KRAKEN_PAIR[product] || product.replace('-', ''), days)); }]);
 }
-function weeklyFromDailyRows(a, r, dec, dropLast) {
+/* Lang & Schwarz nicht erreichbar: der letzte L&S-Kurs bleibt stehen und wird markiert (keine Xetra-Kurse, keine Schätzung) */
+function lsStale(a, msg) {
+  const cur = EUR.latest && EUR.latest[a];
+  if (cur) cur.stale = NOW.toISOString();
+  RUN.lsStale = RUN.lsStale || {};
+  if (!RUN.lsStale[a]) { RUN.lsStale[a] = true; RUN.summary.push('L&S ' + CFG.assets[a].short + ' nicht erreichbar, letzter L&S-Kurs vom ' + (cur && cur.d ? ds(cur.d) : '–') + ' bleibt stehen'); }
+  vlog('L&S ' + a + ': ' + msg);
+}
+function weeklyFromDailyRows(a, r, dec, dropLast, onlyMissing) {
   const dates = dropLast ? r.dates.slice(0, -1) : r.dates, closes = dropLast ? r.closes.slice(0, -1) : r.closes;
   const cutoff = (a === 'btc' || ALTS.some((x) => x.id === a)) ? THIS_MON : ((DOW >= 5 || FRI_CLOSED) ? NEXT_MON : THIS_MON);
-  const W = ENG.weeklyFromDaily(dates, closes, cutoff);
+  let W = ENG.weeklyFromDaily(dates, closes, cutoff);
+  if (onlyMissing) { const have = {}; (EUR.weekly[a] || []).forEach((x) => { have[x[0]] = 1; }); const keep = W.k.map((k, i) => have[k] ? -1 : i).filter((i) => i >= 0); W = { k: keep.map((i) => W.k[i]), d: keep.map((i) => W.d[i]), c: keep.map((i) => W.c[i]) }; }
   EUR.weekly[a] = ENG.toRows(ENG.mergeWeekly(ENG.fromRows(EUR.weekly[a] || []), W, false), dec);
 }
 /* Kalibrierfaktor Euro-Kurs / (USD-Referenz / EURUSD) aus dem jüngsten gemeinsamen Tag */
@@ -430,26 +441,36 @@ async function eurQuotes(keys) {
         const i = r.dates.length - 1; setLatest(a, r.dates[i], r.closes[i], sym, 'ezb eurusd'); upsertWeekly(a, r.dates[i], r.closes[i], dec);
       } else if (a === 'btc') {
         const d = await cryptoDaily('BTC-EUR', backfill ? 150 : 40);
-        weeklyFromDailyRows(a, d, dec, true); mergeDaily('btc', d.dates.slice(0, -1), d.closes.slice(0, -1), 2);
+        mergeDaily('btc', d.dates.slice(0, -1), d.closes.slice(0, -1), 2);
         if (backfill && d.dates[0] > since) { try { const d2 = await cryptoDaily('BTC-EUR', 300); mergeDaily('btc', d2.dates.slice(0, -1), d2.closes.slice(0, -1), 2); } catch (e) { vlog('BTC-EUR Rückfüllung: ' + e.message); } }
-        setLatest(a, TODAY, d.price, sym, d.src);
-      } else {
-        /* ETF und Gold-ETC: Kurse von Lang & Schwarz (Tagesschlüsse 23 Uhr und letzter Kurs, wie bei Trade Republic);
-           Ersatz: Xetra-Tagesschlüsse von Alpha Vantage (VWCE.DEX, GZUR.DEX), 100 Handelstage */
-        let r = null, viaLs = false;
-        if (lsCfg(a)) { try { r = await lsQuote(a); viaLs = true; } catch (e) { vlog('L&S ' + a + ': ' + e.message); RUN.summary.push('L&S ' + CFG.assets[a].short + ' nicht erreichbar, Xetra-Schluss als Ersatz'); } }
-        if (!r) { r = await F.avDaily(sym, false); r.fallback = !!lsCfg(a); }
+        /* Wochenwerte aus derselben Tagesreihe (Coinbase, Schluss 24 Uhr UTC), damit Tages- und Wochenansicht dieselbe Quelle haben */
+        const dly = EUR.daily.btc || []; weeklyFromDailyRows(a, { dates: dly.map((x) => x[0]), closes: dly.map((x) => x[1]) }, dec, false);
+        setLatest(a, TODAY, d.price, sym, d.src, d.fallback ? { fallback: true } : undefined);
+      } else if (lsCfg(a)) {
+        /* ETF und Gold-ETC: ausschließlich Lang & Schwarz (Kurse wie bei Trade Republic; Tagesschlüsse 23 Uhr, dazu der letzte Kurs).
+           Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs stehen und wird markiert; keine Xetra-Kurse, keine Schätzung. */
+        let r = null;
+        try { r = await lsQuote(a); } catch (e) { lsStale(a, e.message); continue; }
         const i = r.dates.length - 1;
         if (i >= 0) { mergeDaily(a, r.dates, r.closes, 4); weeklyFromDailyRows(a, r, dec, false); }
+        if (r.price > 0) setLatest(a, r.priceDay || r.dates[i], r.price, sym, r.src, { live: r.priceDay === TODAY, quoteTime: r.priceTime || null });
+        else if (i >= 0) setLatest(a, r.dates[i], r.closes[i], sym, r.src);
+        /* Kalibrierfaktor Dollar-Referenz -> L&S-Kurs (für die Umrechnung der Dollar-Schwellen in Euro-Kurse des Wertpapiers) */
+        if (a === 'gold') { try { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); recalibrate('gold', r.dates, r.closes, pm.dates, pm.closes); } catch (e) { vlog('Kalibrierung Gold: ' + e.message); } }
+        if (a === 'ftse') { const w = WEEKLY.ftse && WEEKLY.ftse.w; if (RUN.avWeeklyFtse) recalibrate('ftse', r.dates, r.closes, RUN.avWeeklyFtse.dates, RUN.avWeeklyFtse.closes); else if (w && w.length) recalibrate('ftse', r.dates, r.closes, w.map((x) => x[1]), w.map((x) => x[2])); }
+      } else {
+        /* Ohne L&S-Konfiguration: Xetra-Tagesschlüsse von Alpha Vantage (100 Handelstage) */
+        const r = await F.avDaily(sym, false), i = r.dates.length - 1;
+        mergeDaily(a, r.dates, r.closes, 4); weeklyFromDailyRows(a, r, dec, false);
         const prev = EUR.latest[a];
-        if (viaLs && r.price > 0) setLatest(a, r.priceDay || r.dates[i], r.price, sym, r.src, { live: r.priceDay === TODAY, quoteTime: r.priceTime || null });
         /* Der Xetra-Schluss ersetzt einen Ticker-Schätzwert nur, wenn er nicht älter ist */
-        else if (i >= 0 && (!prev || !prev.estimate || !prev.d || prev.d <= r.dates[i])) setLatest(a, r.dates[i], r.closes[i], sym, r.src, r.fallback ? { fallback: true } : undefined);
+        if (!prev || !prev.estimate || !prev.d || prev.d <= r.dates[i]) setLatest(a, r.dates[i], r.closes[i], sym, r.src);
         if (a === 'gold') { try { const pm = await F.lbma(CFG.assets.gold.signal.fix || 'pm'); recalibrate('gold', r.dates, r.closes, pm.dates, pm.closes); } catch (e) { vlog('Kalibrierung Gold: ' + e.message); } }
         if (a === 'ftse') { const w = WEEKLY.ftse && WEEKLY.ftse.w; if (RUN.avWeeklyFtse) recalibrate('ftse', r.dates, r.closes, RUN.avWeeklyFtse.dates, RUN.avWeeklyFtse.closes); else if (w && w.length) recalibrate('ftse', r.dates, r.closes, w.map((x) => x[1]), w.map((x) => x[2])); }
       }
     } catch (e) {
       vlog('Euro-Kurs ' + sym + ': ' + e.message);
+      if (lsCfg(a)) { lsStale(a, e.message); continue; }
       /* Notlösungen: Schätzung aus USD-Referenz, zuletzt Yahoo */
       try {
         if (a === 'eurusd') { const q = await F.coinbaseFx('EUR', 'USD'); setLatest(a, TODAY, q.rate, sym, q.src, { fallback: true }); }
@@ -464,15 +485,15 @@ async function eurQuotes(keys) {
     }
   }
   if (order.includes('btc')) await altQuotes(backfill);
-  if (order.includes('gold')) await goldDailyFallback();
+  if (order.includes('gold') && !lsCfg('gold')) await goldDailyFallback();   /* Schätzreihe aus LBMA nur ohne L&S */
   EUR.updated = NOW.toISOString();
   saveJson('eur.json', EUR);
   RUN.changed = true;
   note('Euro-Kurse: ' + order.map((a) => a + ' ' + (EUR.latest[a] ? de(EUR.latest[a].p, a === 'eurusd' ? 4 : 2) + ' (' + ds(EUR.latest[a].d) + (EUR.latest[a].estimate ? ', geschätzt' : EUR.latest[a].fallback ? ', Ersatz' : '') + ')' : '–')).join(', '));
 }
-function mergeDaily(a, dates, closes, dec) {
+function mergeDaily(a, dates, closes, dec, onlyMissing) {
   EUR.daily = EUR.daily || {}; const map = {}; (EUR.daily[a] || []).forEach((r) => { map[r[0]] = r[1]; });
-  for (let i = 0; i < dates.length; i++) if (closes[i] > 0) map[dates[i]] = round(closes[i], dec == null ? 4 : dec);
+  for (let i = 0; i < dates.length; i++) if (closes[i] > 0 && !(onlyMissing && map[dates[i]] > 0)) map[dates[i]] = round(closes[i], dec == null ? 4 : dec);
   const ks = Object.keys(map).sort().filter((d) => d >= '2026-05-01');
   EUR.daily[a] = ks.map((d) => [d, map[d]]);
 }
@@ -482,8 +503,9 @@ async function altQuotes(backfill) {
     try {
       const have = EUR.daily[alt.id] && EUR.daily[alt.id].length > 30;
       const d = await cryptoDaily(alt.eur.sym, have && !backfill ? 40 : 150);
-      weeklyFromDailyRows(alt.id, d, 4, true); mergeDaily(alt.id, d.dates.slice(0, -1), d.closes.slice(0, -1), 4);
-      setLatest(alt.id, TODAY, d.price, alt.eur.sym, d.src);
+      mergeDaily(alt.id, d.dates.slice(0, -1), d.closes.slice(0, -1), 4);
+      const dly = EUR.daily[alt.id] || []; weeklyFromDailyRows(alt.id, { dates: dly.map((x) => x[0]), closes: dly.map((x) => x[1]) }, 4, false);
+      setLatest(alt.id, TODAY, d.price, alt.eur.sym, d.src, d.fallback ? { fallback: true } : undefined);
     } catch (e) { vlog('Beimischung ' + alt.id + ': ' + e.message); RUN.summary.push('Kurs ' + alt.short + ' nicht aktualisiert (' + e.message.slice(0, 60) + ')'); }
   }
 }
@@ -517,45 +539,47 @@ async function liveTick() {
   out.prices.eurusd = fx;
   try {
     const q = await firstOk('Live Bitcoin', [
-      async function coinbase() { const u = await F.coinbaseSpot('BTC-USD'), e = await F.coinbaseSpot('BTC-EUR'); return { usd: u.price, eur: e.price, src: u.src }; },
-      async function kraken() { const u = await F.krakenTicker('XBTUSD'), e = await F.krakenTicker('XBTEUR'); return { usd: u.price, eur: e.price, src: u.src }; }
+      async function coinbase() { const u = await F.coinbaseSpot('BTC-USD'), e = await F.coinbaseSpot('BTC-EUR'); return { usd: u.price, eur: e.price, src: u.src, srcEur: e.src }; },
+      async function kraken() { const u = await F.krakenTicker('XBTUSD'), e = await F.krakenTicker('XBTEUR'); return { usd: u.price, eur: e.price, src: u.src, srcEur: e.src, fallback: true }; }
     ]);
-    out.prices.btc = { usd: round(q.usd, 2), eur: round(q.eur, 2), src: q.src, t: NOW.toISOString() };
+    out.prices.btc = { usd: round(q.usd, 2), eur: round(q.eur, 2), src: q.src, srcEur: q.srcEur, t: NOW.toISOString() }; if (q.fallback) out.prices.btc.fallback = true;
   } catch (e) { fail('Live Bitcoin', e.message); if (prev.prices && prev.prices.btc) out.prices.btc = prev.prices.btc; }
   try {
     let g = null; try { g = await F.goldSpot2(); } catch (e) { g = await F.goldSpot1(); }
     const cb = calib('gold');
-    out.prices.gold = { usd: round(g.price, 2), eur: fx && cb ? round(g.price / fx.rate * cb.ratio, 4) : null, src: g.src, t: g.priceTime || NOW.toISOString(), spot: true };
+    out.prices.gold = { usd: round(g.price, 2), eur: !lsCfg('gold') && fx && cb ? round(g.price / fx.rate * cb.ratio, 4) : null, src: g.src, t: g.priceTime || NOW.toISOString(), spot: true };
   } catch (e) {
     fail('Live Gold', e.message);
     if (prev.prices && prev.prices.gold) out.prices.gold = prev.prices.gold;
   }
   for (const alt of ALTS) {
-    try { const e = await firstOk('Live ' + alt.short, [async function coinbase() { return F.coinbaseSpot(alt.eur.sym); }, async function kraken() { return F.krakenTicker(KRAKEN_PAIR[alt.eur.sym] || alt.eur.sym.replace('-', '')); }]); out.prices[alt.id] = { eur: round(e.price, 4), src: e.src, t: NOW.toISOString() }; }
+    try { const e = await firstOk('Live ' + alt.short, [async function coinbase() { return F.coinbaseSpot(alt.eur.sym); }, async function kraken() { return Object.assign({ fallback: true }, await F.krakenTicker(KRAKEN_PAIR[alt.eur.sym] || alt.eur.sym.replace('-', ''))); }]); out.prices[alt.id] = { eur: round(e.price, 4), src: e.src, t: NOW.toISOString() }; if (e.fallback) out.prices[alt.id].fallback = true; }
     catch (e) { if (prev.prices && prev.prices[alt.id]) out.prices[alt.id] = prev.prices[alt.id]; }
   }
   /* FTSE: letzter Tagesschluss aus dem eod-Lauf (Alpha Vantage), sonst aus der Wochenreihe */
+  const Sf = storedSeries('ftse'), jf = Sf.k.length - 1;
   if (prev.prices && prev.prices.ftse && prev.prices.ftse.usd > 0) out.prices.ftse = Object.assign({}, prev.prices.ftse);
-  else { const S = storedSeries('ftse'), i = S.k.length - 1; out.prices.ftse = { usd: S.c[i], d: S.d[i], src: 'Wochenschluss', eod: true }; }
-  if (fx && calib('ftse') && out.prices.ftse.usd > 0 && !(out.prices.ftse.eur > 0)) out.prices.ftse.eur = round(out.prices.ftse.usd / fx.rate * calib('ftse').ratio, 4);
-  /* ETF und Gold-ETC in Euro von Lang & Schwarz (Kurs wie bei Trade Republic); klappt das nicht, bleibt die Schätzung aus USD-Referenz × Kalibrierfaktor */
-  out.ls = {};
+  if (jf >= 0 && (!out.prices.ftse || !out.prices.ftse.d || Sf.d[jf] > out.prices.ftse.d)) out.prices.ftse = { usd: Sf.c[jf], d: Sf.d[jf], src: 'Wochenschluss ' + ds(Sf.d[jf]), eod: true };
+  if (lsCfg('ftse')) delete out.prices.ftse.eur;
+  else if (fx && calib('ftse') && out.prices.ftse.usd > 0 && !(out.prices.ftse.eur > 0)) out.prices.ftse.eur = round(out.prices.ftse.usd / fx.rate * calib('ftse').ratio, 4);
+  /* ETF und Gold-ETC in Euro ausschließlich von Lang & Schwarz (Kurs wie bei Trade Republic); ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs (markiert) */
+  out.ls = {}; const lsOk = {};
   for (const a of ['ftse', 'gold']) {
     if (!lsCfg(a)) continue;
-    try { const q = await lsQuote(a); if (q && q.price > 0) out.ls[a] = { eur: round(q.price, 4), d: q.priceDay, t: q.priceTime || NOW.toISOString(), src: q.src }; }
-    catch (e) { vlog('L&S ' + a + ': ' + e.message); if (prev.ls && prev.ls[a]) out.ls[a] = prev.ls[a]; }
+    try { const q = await lsQuote(a); if (q && q.price > 0) { out.ls[a] = { eur: round(q.price, 4), d: q.priceDay, t: q.priceTime || NOW.toISOString(), src: q.src }; lsOk[a] = true; } }
+    catch (e) { lsStale(a, e.message); if (prev.ls && prev.ls[a]) out.ls[a] = Object.assign({}, prev.ls[a], { stale: NOW.toISOString() }); }
     if (out.ls[a] && out.prices[a]) { out.prices[a].eur = out.ls[a].eur; out.prices[a].eurSrc = out.ls[a].src; out.prices[a].eurT = out.ls[a].t; }
   }
   A.forEach((a) => { const p = out.prices[a]; const r = p && p.usd > 0 ? ruleNow(a, p.usd) : null; if (r) out.rule[a] = r; });
   saveJson('live.json', out);
   /* Depotbewertung mit den aktuellen Kursen (Wochenreihen bleiben unberührt) */
   EUR.latest = EUR.latest || {};
-  if (out.prices.btc && out.prices.btc.eur > 0) EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.src, t: NOW.toISOString(), live: true };
-  if (out.ls.gold) EUR.latest.gold = { d: out.ls.gold.d, p: out.ls.gold.eur, sym: CFG.assets.gold.eur.sym, src: out.ls.gold.src, t: NOW.toISOString(), quoteTime: out.ls.gold.t, live: out.ls.gold.d === TODAY };
-  else if (out.prices.gold && out.prices.gold.eur > 0 && fx) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', t: NOW.toISOString(), estimate: true, live: true };
-  if (out.ls.ftse) { const cur = EUR.latest.ftse; if (!cur || !cur.d || out.ls.ftse.d >= cur.d) EUR.latest.ftse = { d: out.ls.ftse.d, p: out.ls.ftse.eur, sym: CFG.assets.ftse.eur.sym, src: out.ls.ftse.src, t: NOW.toISOString(), quoteTime: out.ls.ftse.t, live: out.ls.ftse.d === TODAY }; }
+  if (out.prices.btc && out.prices.btc.eur > 0) { EUR.latest.btc = { d: TODAY, p: out.prices.btc.eur, sym: CFG.assets.btc.eur.sym, src: out.prices.btc.srcEur || out.prices.btc.src, t: NOW.toISOString(), live: true }; if (out.prices.btc.fallback) EUR.latest.btc.fallback = true; }
+  if (lsOk.gold) EUR.latest.gold = { d: out.ls.gold.d, p: out.ls.gold.eur, sym: CFG.assets.gold.eur.sym, src: out.ls.gold.src, t: NOW.toISOString(), quoteTime: out.ls.gold.t, live: out.ls.gold.d === TODAY };
+  else if (!lsCfg('gold') && out.prices.gold && out.prices.gold.eur > 0 && fx) EUR.latest.gold = { d: TODAY, p: out.prices.gold.eur, sym: CFG.assets.gold.eur.sym, src: 'geschätzt: Spot ' + de(out.prices.gold.usd, 2) + ' $ / EURUSD ' + de(fx.rate, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', t: NOW.toISOString(), estimate: true, live: true };
+  if (lsOk.ftse) { const cur = EUR.latest.ftse; if (!cur || !cur.d || out.ls.ftse.d >= cur.d) EUR.latest.ftse = { d: out.ls.ftse.d, p: out.ls.ftse.eur, sym: CFG.assets.ftse.eur.sym, src: out.ls.ftse.src, t: NOW.toISOString(), quoteTime: out.ls.ftse.t, live: out.ls.ftse.d === TODAY }; }
   if (fx) EUR.latest.eurusd = { d: TODAY, p: fx.rate, sym: CFG.fx.sym, src: fx.src, t: NOW.toISOString(), live: true };
-  ALTS.forEach((alt) => { const p = out.prices[alt.id]; if (p && p.eur > 0) EUR.latest[alt.id] = { d: TODAY, p: p.eur, sym: alt.eur.sym, src: p.src, t: NOW.toISOString(), live: true }; });
+  ALTS.forEach((alt) => { const p = out.prices[alt.id]; if (p && p.eur > 0) { EUR.latest[alt.id] = { d: TODAY, p: p.eur, sym: alt.eur.sym, src: p.src, t: NOW.toISOString(), live: true }; if (p.fallback) EUR.latest[alt.id].fallback = true; } });
   EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
   RUN.changed = true;
   note('Live: ' + A.map((a) => { const p = out.prices[a], r = out.rule[a]; return p ? CFG.assets[a].short + ' ' + usd(a, p.usd) + (r ? ' (' + de(r.dist * 100, 1) + ' % zur Schwelle' + (r.would ? ', würde auslösen' : '') + ')' : '') : CFG.assets[a].short + ' –'; }).join(' · ') + (fx ? ' · EUR/USD ' + de(fx.rate, 4) : '') + (Object.keys(out.ls).length ? ' · L&S ' + Object.keys(out.ls).map((a) => CFG.assets[a].short + ' ' + de(out.ls[a].eur, 2) + ' €').join(', ') : ''));
@@ -563,21 +587,25 @@ async function liveTick() {
 /* Letzter Tagesschluss VWRD (USD) für die Live-Anzeige, einmal am Tag */
 async function ftseEod() {
   try {
-    const r = await F.av('VWRD.LON'); const i = r.dates.length - 1;
-    /* Alpha Vantage hängt oft einen Tag zurück: Ist der gespeicherte Wochenschluss (z. B. von EODHD) neuer, gilt der */
-    let d = r.dates[i], c = r.closes[i], src = r.src;
+    /* Alpha Vantage hängt oft einen Tag zurück oder ist nicht erreichbar: Ist der gespeicherte Wochenschluss (z. B. von EODHD) neuer, gilt der */
+    let d = null, c = null, src = null, avErr = null;
+    try { const r = await F.av('VWRD.LON'), i = r.dates.length - 1; d = r.dates[i]; c = r.closes[i]; src = r.src; } catch (e) { avErr = e; }
     const S = storedSeries('ftse'), j = S.k.length - 1;
-    if (j >= 0 && S.d[j] > d) { d = S.d[j]; c = S.c[j]; src = 'Wochenschluss ' + ds(d) + (WEEKLY.ftse && /EODHD/.test(WEEKLY.ftse.src || '') ? ' (EODHD)' : ''); }
+    if (j >= 0 && (!d || S.d[j] > d)) { d = S.d[j]; c = S.c[j]; src = 'Wochenschluss ' + ds(d) + (WEEKLY.ftse && /EODHD/.test(WEEKLY.ftse.src || '') ? ' (EODHD)' : ''); }
+    if (!d) throw avErr || new Error('keine Daten');
+    if (avErr) vlog('FTSE-Tagesschluss: Alpha Vantage nicht erreichbar (' + avErr.message.slice(0, 60) + '), gespeicherter Schluss ' + ds(d));
     const live = loadJson('live.json', { prices: {}, rule: {} }); live.prices = live.prices || {};
     const have = live.prices.ftse;
     if (have && have.d && have.d > d) { note('FTSE Tagesschluss: Quelle liefert ' + ds(d) + ', Anzeige behält den neueren Stand vom ' + ds(have.d)); return; }
     live.prices.ftse = { usd: round(c, 4), d, src, eod: true, t: NOW.toISOString() };
-    const fx = (live.prices.eurusd && live.prices.eurusd.rate) || (EUR.latest.eurusd && EUR.latest.eurusd.p); if (fx && calib('ftse')) live.prices.ftse.eur = round(c / fx * calib('ftse').ratio, 4);
+    const fx = (live.prices.eurusd && live.prices.eurusd.rate) || (EUR.latest.eurusd && EUR.latest.eurusd.p);
+    if (lsCfg('ftse')) { if (live.ls && live.ls.ftse) live.prices.ftse.eur = live.ls.ftse.eur; }       /* Euro-Kurs nur von L&S, keine Schätzung */
+    else if (fx && calib('ftse')) live.prices.ftse.eur = round(c / fx * calib('ftse').ratio, 4);
     const rr = ruleNow('ftse', c); if (rr) { live.rule = live.rule || {}; live.rule.ftse = rr; }
     saveJson('live.json', live); RUN.changed = true;
     /* Der Xetra-Schluss kommt erst abends: bis dahin den Euro-Kurs des ETF aus dem Londoner Schluss schätzen, damit die Depotbewertung nicht einen Tag hinterherhinkt */
     const cur = EUR.latest && EUR.latest.ftse;
-    if (live.prices.ftse.eur > 0 && (!cur || !cur.d || cur.d < d)) {
+    if (!lsCfg('ftse') && live.prices.ftse.eur > 0 && (!cur || !cur.d || cur.d < d)) {
       setLatest('ftse', d, live.prices.ftse.eur, CFG.assets.ftse.eur.sym, 'geschätzt: VWRD ' + de(c, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (Xetra-Schluss folgt abends)', { estimate: true });
       upsertWeekly('ftse', d, live.prices.ftse.eur, 4); EUR.updated = NOW.toISOString(); saveJson('eur.json', EUR);
     }
@@ -651,26 +679,26 @@ async function main() {
       await liveTick();
     } else if (step === 'sa-close') {
       /* Samstagmorgen: was am Freitag noch fehlte (Alpha Vantage und LBMA liefern spät), dazu die Euro-Schlüsse vom Freitag */
-      for (const a of ['ftse', 'gold']) { if (STATE.assets[a] && (STATE.assets[a].pending || STATE.assets[a].preliminary)) await closeAsset(a); }
+      /* closeAsset prüft selbst, ob die fällige Woche schon endgültig gebucht ist (dann kein Abruf) */
+      for (const a of ['ftse', 'gold']) await closeAsset(a);
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
       await ftseEod();
       await liveTick();
     } else if (step === 'so-warn') {
       try { await warnAsset('btc', await currentPrice('btc')); } catch (e) { fail(name('btc'), 'Vorwarnung: ' + e.message); }
     } else if (step === 'mo-close') {
-      await closeAsset('btc'); await closeAsset('gold');
-      if (STATE.assets.ftse && (STATE.assets.ftse.pending || STATE.assets.ftse.preliminary)) await closeAsset('ftse');
+      await closeAsset('btc'); await closeAsset('gold'); await closeAsset('ftse');
       await goldCross();
       await eurQuotes(['btc', 'eurusd']);
       if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Regel-Depot: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
       flush = false;                                                   /* Nachts nicht pushen, das macht mo-notify */
     } else if (step === 'mo-notify') {
-      for (const a of A) { if (STATE.assets[a] && STATE.assets[a].pending) await closeAsset(a); }
+      for (const a of A) await closeAsset(a);
       weeklySummary();
     } else if (step === 'live') {
       await liveTick(); flush = false;
     } else if (step === 'eod') {
-      for (const a of A) { if (STATE.assets[a] && (STATE.assets[a].pending || STATE.assets[a].preliminary)) await closeAsset(a); }
+      for (const a of A) await closeAsset(a);
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
       await ftseEod();
       await liveTick();

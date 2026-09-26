@@ -75,12 +75,12 @@
   }
   function applyBrowserLiveToEur() {
     if (!D.eur || !D.eur.latest) return;
-    var b = D.browserLive.btc; if (b && b.eur > 0) D.eur.latest.btc = { d: utcToday(), p: b.eur, sym: 'BTC-EUR', src: b.src, t: b.t, live: true, fallback: true };
+    var b = D.browserLive.btc; if (b && b.eur > 0) D.eur.latest.btc = { d: utcToday(), p: b.eur, sym: 'BTC-EUR', src: b.src, t: b.t, live: true };
     var g = D.browserLive.gold, fx = D.browserLive.eurusd && D.browserLive.eurusd.rate, cb = D.eur.calib && D.eur.calib.gold, cg = D.eur.latest.gold;
-    /* Ein echter Kurs von Lang & Schwarz vom heutigen Tag (höchstens 2 Stunden alt) ist genauer als die Schätzung aus dem Spotpreis */
-    var lsFresh = cg && !cg.estimate && cg.d === utcToday() && cg.t && (Date.now() - new Date(cg.t).getTime()) < 2 * 3600e3;
-    if (g && fx > 0 && cb && cb.ratio > 0 && !lsFresh) D.eur.latest.gold = { d: utcToday(), p: g.usd / fx * cb.ratio, sym: 'SGBS.MI', src: 'geschätzt aus Spot ' + de(g.usd, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (live im Browser)', t: g.t, live: true, fallback: true, estimate: true };
-    if (fx > 0) D.eur.latest.eurusd = { d: utcToday(), p: fx, sym: 'EURUSD=X', src: 'Coinbase (live im Browser)', t: D.browserLive.eurusd.t, live: true, fallback: true };
+    /* Gold-ETC: mit Lang & Schwarz als Quelle nie eine Schätzung aus dem Spotpreis (auch nicht am Wochenende). Ohne L&S nur, wenn es seit einer Woche keinen echten Kurs gibt. */
+    var haveReal = cg && !cg.estimate && cg.p > 0 && cg.d && cg.d >= ENG.addDays(utcToday(), -7), goldLs = CFG.assets.gold.eur && CFG.assets.gold.eur.src === 'ls';
+    if (!goldLs && g && fx > 0 && cb && cb.ratio > 0 && !haveReal) D.eur.latest.gold = { d: utcToday(), p: g.usd / fx * cb.ratio, sym: 'SGBS.MI', src: 'geschätzt aus Spot ' + de(g.usd, 2) + ' $ / EURUSD ' + de(fx, 4) + ' × Kalibrierfaktor (live im Browser)', t: g.t, live: true, fallback: true, estimate: true };
+    if (fx > 0) D.eur.latest.eurusd = { d: utcToday(), p: fx, sym: 'EURUSD=X', src: 'Coinbase (live im Browser)', t: D.browserLive.eurusd.t, live: true };
     ALTS.forEach(function (x) { var v = D.browserLive[x.id]; if (v && v.eur > 0) D.eur.latest[x.id] = { d: utcToday(), p: v.eur, sym: x.eur.sym, src: v.src, t: v.t, live: true }; });
   }
 
@@ -97,6 +97,9 @@
     return cfg;
   }
   function pxOf(a) { var p = D.eur && D.eur.latest && D.eur.latest[a]; return p && p.p > 0 ? p : null; }
+  /* Dollar-Schwelle der Regel als Euro-Kurs des gehaltenen Wertpapiers: Bitcoin direkt über EUR/USD; ETF und Gold-ETC zusätzlich mit dem
+     Kalibrierfaktor (Verhältnis L&S-Kurs zur Dollar-Referenz VWRD bzw. LBMA), sonst passt die Größenordnung nicht */
+  function thrEur(a, thr) { var fx = D.eur && D.eur.latest && D.eur.latest.eurusd && D.eur.latest.eurusd.p; if (!(fx > 0) || !(thr > 0)) return null; if (a === 'btc') return thr / fx; var cb = D.eur && D.eur.calib && D.eur.calib[a]; return cb && cb.ratio > 0 ? thr / fx * cb.ratio : null; }
   function model() {
     var dep = STORE.load(), B = ENG.book(dep.tx), cfg = taxCfg(), ty = ENG.taxYear(cfg, B.real, cfg.year), pos = {};
     A.forEach(function (a) { var lots = B.pos[a] || [], u = ENG.units(lots), cost = ENG.cost(lots), p = pxOf(a); pos[a] = { lots: lots, u: u, cost: cost, px: p ? p.p : null, pxd: p ? p.d : null, val: p ? u * p.p : (u > 0 ? null : 0), cash: dep.cash[a] || 0 }; });
@@ -145,7 +148,7 @@
     }
     var val = P.val ? ' (ca. ' + eur(P.val) + ')' : '';
     if (L.changed && fresh) return { cls: 'sell', title: 'Verkaufen', text: 'Verkaufssignal: alle ' + holdingText(a, P) + val + ' verkaufen ' + dueText(due) + '.', tax: saleTax(a, Mo), todo: true };
-    var fx = D.eur && D.eur.latest && D.eur.latest.eurusd && D.eur.latest.eurusd.p, pxThr = (fi.can && fx && P.px) ? Math.min(P.px, fi.thr / fx) : null;
+    var te = fi.can ? thrEur(a, fi.thr) : null, pxThr = (te && P.px) ? Math.min(P.px, te) : null;
     return { cls: 'sell', title: 'Verkaufen', text: 'Laut Regel' + (ls ? ' seit ' + dDE(ls.d) : '') + ' nicht investiert, du hältst noch ' + holdingText(a, P) + val + '.', todo: true,
       next: fi.can ? 'Verkaufen zur Eröffnung am Montag, ' + dShort(due2) + ' – außer der Wochenschluss am ' + dShort(nc) + ' liegt über ' + usd(a, fi.thr) + ', dann gibt es ein Kaufsignal und du behältst die Position.' : 'Verkaufen, sobald es passt.',
       tax: saleTax(a, Mo, pxThr) };
@@ -313,7 +316,7 @@
     var tb = el('tbody');
     A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
       var st = C[a].E.last.st; var c1 = el('td'); c1.appendChild(el('span', 'tag ' + (st === 1 ? 'ok' : ''), st === 1 ? 'investiert' : 'Cash')); r.appendChild(c1);
-      var bc = el('td', 'n', P.u > 0 ? units(a, P.uBtc != null ? P.uBtc : P.u) : '–'); if (a === 'btc' && P.alts && P.alts.some(function (x) { return x.u > 1e-12; })) bc.appendChild(el('span', 'sub', '+ Beimischung (unten)')); r.appendChild(bc); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } r.appendChild(pxc); r.appendChild(el('td', 'n', eur(P.val || 0))); r.appendChild(el('td', 'n', eur(P.cash)));
+      var bc = el('td', 'n', P.u > 0 ? units(a, P.uBtc != null ? P.uBtc : P.u) : '–'); if (a === 'btc' && P.alts && P.alts.some(function (x) { return x.u > 1e-12; })) bc.appendChild(el('span', 'sub', '+ Beimischung (unten)')); r.appendChild(bc); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.stale) { var sg = el('span', 'tag', 'Stand ' + dShort(pxo.d)); sg.title = 'Lang & Schwarz war beim letzten Lauf nicht erreichbar; das ist der letzte L&S-Kurs'; pxc.appendChild(sg); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } r.appendChild(pxc); r.appendChild(el('td', 'n', eur(P.val || 0))); r.appendChild(el('td', 'n', eur(P.cash)));
       var sum = (P.val || 0) + P.cash; r.appendChild(el('td', 'n', eur(sum))); r.appendChild(el('td', 'n', tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', sgnEur(sum - tot * CFG.assets[a].w))); tb.appendChild(r);
       if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(el('span', 'sw')); a0.appendChild(document.createTextNode('↳ ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
         ar.appendChild(el('td', 'n', units(x.id, x.u))); var apx = el('td', 'n', x.px ? eur(x.px, 2) + ' ' : 'Kurs fehlt noch'); if (x.px && x.live) apx.appendChild(el('span', 'tag', 'live')); ar.appendChild(apx); ar.appendChild(el('td', 'n', x.val != null ? eur(x.val) : '–')); ar.appendChild(el('td', 'n', '')); ar.appendChild(el('td', 'n', x.val != null ? eur(x.val) : '–')); ar.appendChild(el('td', 'n', tot > 0 && x.val != null ? pctPlain(x.val / tot, 1) : '')); ar.appendChild(el('td', 'n', '')); ar.appendChild(el('td', 'n', '')); tb.appendChild(ar); }); });
@@ -596,7 +599,7 @@
     if (!cfg.pbKnown) { var b = el('div', 'banner'); b.appendChild(el('b', null, 'Pauschbetrag noch ohne Angabe von Trade Republic')); b.appendChild(el('span', null, 'Gerechnet wird, als wären die vollen 1.000 € frei, abzüglich der geschätzten Zinsen. Trag den genutzten Betrag unter Einstellungen ein.')); ban.appendChild(b); }
     var st = {}, px = {}, pos = {}, cash = {}, ty = { pbFree: Mo.ty.pbFree, s23Before: Mo.ty.s23Before }, open = [], noPx = [];
     A.forEach(function (a) { st[a] = C[a].E.last.st; px[a] = Mo.pos[a].px || 0; cash[a] = Mo.cash[a] || 0; pos[a] = Mo.pos[a].lots.map(function (l) { return { d: l.d, units: l.units, cpu: l.cpu }; }); if (Mo.pos[a].u > 0 && !(px[a] > 0)) noPx.push(CFG.assets[a].name);
-      if (st[a] === 0 && Mo.pos[a].u > 1e-9 && px[a] > 0) { var fi = flipInfo(a), fx = D.eur && D.eur.latest && D.eur.latest.eurusd && D.eur.latest.eurusd.p, ps = (fi.can && fx) ? Math.min(px[a], fi.thr / fx) : px[a];
+      if (st[a] === 0 && Mo.pos[a].u > 1e-9 && px[a] > 0) { var fi = flipInfo(a), te = fi.can ? thrEur(a, fi.thr) : null, ps = te ? Math.min(px[a], te) : px[a];
         var sm = ENG.simSell(pos[a], Mo.pos[a].u * ps, ps, todayISO(), a, cfg); if (a === 'ftse') ty.pbFree -= sm.taxable20; else ty.s23Before += sm.sg; cash[a] += Mo.pos[a].u * ps; pos[a] = []; open.push(a); } });
     if (noPx.length) { var nb = el('div', 'banner'); nb.appendChild(el('b', null, 'Euro-Kurs fehlt für ' + noPx.join(', '))); nb.appendChild(el('span', null, 'Die Vorschau ist erst vollständig, wenn der nächste Lauf die Euro-Kurse geliefert hat.')); ban.appendChild(nb); }
     if (open.length) { var ob = el('div', 'banner info'); ob.appendChild(el('b', null, 'Offene Regel-Aktion: ' + open.map(function (a) { return CFG.assets[a].name + ' verkaufen'; }).join(', '))); ob.appendChild(el('span', null, 'Die Vorschau geht davon aus, dass du das vorher erledigst (siehe Status); der Gewinn daraus ist in Freigrenze und Pauschbetrag schon eingerechnet.')); ban.appendChild(ob); }
@@ -722,7 +725,7 @@
     var sn = $('srcNotes'); sn.textContent = '';
     function note(t) { sn.appendChild(el('p', null, t)); }
     note('SMA50 = einfacher Durchschnitt der letzten 50 Wochenschlüsse einschließlich der aktuellen Woche. Nur abgeschlossene Wochen zählen. Feiertage: Der letzte Handelstag der Woche ist der Wochenschluss.');
-    note('Kurse: FTSE von Alpha Vantage (VWRD.LON, Ausschüttungen wieder angelegt; seit 2014 unter 0,01 % Abweichung zu Yahoo), der Freitagsschluss zuerst von EODHD (VWRD.LSE, geprüft: identisch mit Alpha Vantage), Bitcoin von Coinbase (BTC-USD; im Mittel 0,05 % Abweichung zu Yahoo), Gold vom LBMA-Nachmittagsfixing. Euro-Kurse: ETF und Gold-ETC von Lang & Schwarz (dieselben Kurse wie bei Trade Republic, Tagesschluss 23 Uhr; Ersatz Xetra-Schluss von Alpha Vantage), Coinbase (Bitcoin, ETH, SOL), EZB (EUR/USD). Fällt eine Quelle aus, springen Kraken, Yahoo Finance oder eine Schätzung ein, und die Seite kennzeichnet das.');
+    note('Signale (US-Dollar): FTSE aus VWRD London mit wieder angelegten Ausschüttungen von Alpha Vantage, der Freitagsschluss zuerst von EODHD (geprüft: identisch); Bitcoin BTC-USD von Coinbase (Tageskerzen, Wochenschluss Sonntag 24 Uhr UTC); Gold LBMA-Nachmittagsfixing. Fällt eine Quelle aus, springen in den Wiederholungsläufen Kraken, Yahoo Finance oder Alpha Vantage ein, gekennzeichnet als Ersatzquelle.'); note('Depotbewertung (Euro): ETF und Gold-ETC ausschließlich mit Lang-&-Schwarz-Kursen (dieselben wie bei Trade Republic; tagsüber stündlich, Tagesschluss 23 Uhr). Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs mit Datum stehen, es gibt keine Ersatzkurse. Bitcoin, ETH und SOL mit Coinbase in Euro (stündlich und live beim Öffnen der Seite, Tagesschluss 24 Uhr UTC), Ersatz Kraken, gekennzeichnet. EUR/USD von der EZB nur für Umrechnungen.');
     note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold, ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und Gold, mit Wiederholungen bis 0:07 Uhr und Samstag 9:23 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen. Der FTSE-Schluss kommt meist schon um 18:47 Uhr von EODHD; fehlt er noch, gilt ein vorläufiger Schluss aus dem aktuellen Kurs, der später bestätigt oder korrigiert wird. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag 2:07 Uhr Wochenschluss Bitcoin, Push-Nachrichten dazu um 7:53 Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Zeiten in Berliner Sommerzeit, im Winter eine Stunde früher (der Londoner Schluss verschiebt sich mit).');
     note('Die Läufe laufen als GitHub Actions in diesem Repo. Sie führen keine Käufe oder Verkäufe aus und kennen deine Depotdaten nicht; die liegen nur in deinem Browser.');
     $('footSrc').textContent = 'Wochenhistorie ab ' + dDE(C.ftse.S.d[0]) + ' (FTSE), ' + dDE(C.btc.S.d[0]) + ' (Bitcoin), ' + dDE(C.gold.S.d[0]) + ' (Gold). Letzte Aktualisierung der Kursdaten: ' + (D.state && D.state.updated ? dtDE(D.state.updated) : '–') + '.';

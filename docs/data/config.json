@@ -27,7 +27,7 @@
         "src": "ls",
         "ls": { "id": 1045625, "label": "VWCE", "isin": "IE00BK5BQT80" },
         "sym": "VWCE.DEX",
-        "label": "VWCE bei Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); Ersatz: Xetra-Tagesschluss von Alpha Vantage (VWCE.DEX)"
+        "label": "VWCE ausschließlich von Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs. sym (Xetra) nur für Konfigurationen ohne L&S."
       },
       "week": "fri",
       "dec": 2,
@@ -83,7 +83,7 @@
         "src": "ls",
         "ls": { "id": 1372782, "label": "Gold-ETC", "isin": "JE00B588CD74" },
         "sym": "GZUR.DEX",
-        "label": "WisdomTree Physical Swiss Gold bei Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); Ersatz: Xetra-Tagesschluss von Alpha Vantage (GZUR.DEX), untertägig geschätzt aus dem Spotpreis"
+        "label": "WisdomTree Physical Swiss Gold ausschließlich von Lang & Schwarz (Kurs wie bei Trade Republic, Tagesschluss 23 Uhr); ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs. sym (Xetra) nur für Konfigurationen ohne L&S."
       },
       "week": "fri",
       "dec": 2,
