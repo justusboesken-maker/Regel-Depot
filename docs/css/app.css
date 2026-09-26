@@ -193,6 +193,11 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
 .chart svg text{font-family:var(--sans);font-variant-numeric:tabular-nums}
 .chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:6px}
+/* Skala der Signalcharts umschalten (Justus 26.09.2026): kleine Aufschrift oben links im Chart */
+.rc-plot{position:relative}
+.scalebtn{position:absolute;z-index:1;font:inherit;font-size:11px;line-height:1.35;padding:1px 8px;border-radius:999px;border:1px solid var(--rule-strong);background:var(--surface);color:var(--muted);cursor:pointer;white-space:nowrap}
+.scalebtn:hover{color:var(--ink);border-color:var(--ink-2)}
+.scalebtn:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .chart.loading{opacity:.55}
 .splitcharts{display:grid;gap:10px}
 .splitbox .subhd{margin:0 0 2px}
