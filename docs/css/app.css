@@ -351,6 +351,8 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .bigfacts .k{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .bigfacts .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
 .bigfacts .bf.hot .v{color:var(--warn)}
+.bigfacts .bf.good .v{color:var(--good)}
+.bigfacts .bf.bad .v{color:var(--bad)}
 .bigchart{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px 12px 8px}
 .modalbox .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .modalbox .act b{font-size:15.5px}

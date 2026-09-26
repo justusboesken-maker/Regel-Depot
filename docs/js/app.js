@@ -204,6 +204,17 @@
       tax: saleTax(a, Mo, pxThr) };
   }
   function streakText(L) { if (L.up > 0) return L.up + '× über SMA50'; if (L.dn > 0) return L.dn + '× unter SMA50'; return 'auf dem SMA50'; }
+  /* Performance seit dem letzten Regel-Signal (Justus 26.09.2026): Kursveränderung des Signalkurses in $ vom Schluss der Signalwoche bis zum
+     aktuellen Kurs wie bei „Aktuell“ (ohne aktuellen Kurs der letzte Wochenschluss). Aus Sicht der Regel gefärbt: nach einem Kauf Gewinn grün,
+     Verlust rot; nach einem Verkauf fallender Kurs grün („Verlust vermieden“), steigender rot („Anstieg verpasst“). Unter 0,05 % neutral. */
+  function perfSince(a, lp) {
+    var L = C[a].E.last, ls = L && L.lastSwitch; if (!ls || !(ls.c > 0)) return null;
+    var now = lp && lp.usd > 0 ? lp.usd : L.c; if (!(now > 0)) return null;
+    var r = now / ls.c - 1; if (Math.abs(r) < 0.0005) r = 0;
+    var good = r === 0 ? null : ls.to === 1 ? r > 0 : r < 0;
+    return { label: 'Performance seit ' + (ls.to === 1 ? 'Kauf ' : 'Verkauf ') + dDE(ls.d), r: r, from: ls.c, to: now,
+      text: pct(r, 1) + (ls.to === 1 || r === 0 ? '' : r < 0 ? ' · Verlust vermieden' : ' · Anstieg verpasst'), cls: good == null ? '' : good ? 'good' : 'bad' };
+  }
   function thresholdInfo(a) {
     var E = C[a].E, L = E.last, r = CFG.assets[a].rule, nx = E.next, t = {}, edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
     if (r.type === 'band') {
@@ -332,7 +343,9 @@
     var facts = el('div', 'bigfacts');
     function fact(l, v, cls) { var f = el('div', 'bf ' + (cls || '')); f.appendChild(el('span', 'k', l)); f.appendChild(el('b', 'v', v)); facts.appendChild(f); }
     fact('Wochenschluss ' + dShort(L.d), usd(a, L.c)); fact('SMA50', usd(a, L.m)); fact('Abstand', pct(L.dist, 1)); fact('Serie', streakText(L));
-    var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null; if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? 'hot' : '');
+    var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, pf = perfSince(a, lp);
+    if (pf) fact(pf.label, pf.text, 'perf ' + pf.cls);
+    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? 'hot' : '');
     tools.appendChild(facts);
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Zeitraum');
     [[52, '1 J'], [156, '3 J'], [260, '5 J'], [520, '10 J'], [0, 'Max']].forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(BIG.range === r[0])); b.addEventListener('click', function () { BIG.range = r[0]; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBig(a); }); seg.appendChild(b); });
