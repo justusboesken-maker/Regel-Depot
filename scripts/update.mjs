@@ -55,10 +55,38 @@ const WEEKLY = {}; A.concat(['goldf']).forEach((a) => { WEEKLY[a] = loadJson('we
 const iso = ENG.iso, addDays = ENG.addDays, mondayOf = ENG.mondayOf;
 const TODAY = iso(NOW.getTime()), THIS_MON = mondayOf(TODAY), DOW = (NOW.getUTCDay() + 6) % 7, HOUR = NOW.getUTCHours() + NOW.getUTCMinutes() / 60;
 const NEXT_MON = addDays(THIS_MON, 7);
-const isHolidayFriday = (d) => (CFG.holidays && CFG.holidays.fridays || []).includes(d);
+/* ---------- Handelskalender ----------
+   Börse London und LBMA: keine Kurse am Wochenende und an englischen Bankfeiertagen (berechnet mit ENG.ukHolidays), dazu einmalige Sondertage
+   (config holidays.extra, auch die ältere Liste holidays.fridays). Gold zusätzlich: am letzten Geschäftstag vor Weihnachten und vor Neujahr gibt es
+   kein Nachmittagsfixing (isEve; weitere Tage in holidays.lbmaNoPm). Die Londoner Börse handelt an diesen Tagen verkürzt bis 12:30 Uhr. */
+const HOLI = {};
+function isUkHoliday(d) {
+  const y = +d.slice(0, 4), H = CFG.holidays || {};
+  if (!HOLI[y]) HOLI[y] = new Set(ENG.ukHolidays(y));
+  if ((H.notHolidays || []).includes(d)) return false;
+  return HOLI[y].has(d) || (H.extra || []).includes(d) || (H.fridays || []).includes(d);
+}
+function lseDay(d) { const w = (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7; return w < 5 && !isUkHoliday(d); }
+/* Letzter Londoner Geschäftstag vor Weihnachten und vor Neujahr: kein LBMA-Nachmittagsfixing, Börse bis 12:30 Uhr. Meist 24.12./31.12.; fallen
+   die aufs Wochenende, ist es der Freitag davor (weekly/gold.json: 2011, 2016, 2017, 2022 und 2023 enden diese Wochen donnerstags). */
+const EVE = {};
+function lastBizBefore(d) { let x = addDays(d, -1); while (!lseDay(x)) x = addDays(x, -1); return x; }
+function isEve(d) { const y = +d.slice(0, 4); if (!EVE[y]) EVE[y] = new Set([lastBizBefore(y + '-12-25'), lastBizBefore((y + 1) + '-01-01')]); return EVE[y].has(d); }
+function isTradingDay(a, d) {
+  if (!lseDay(d)) return false;
+  if (a === 'gold' && (isEve(d) || ((CFG.holidays && CFG.holidays.lbmaNoPm) || []).some((x) => x === d || x === d.slice(5)))) return false;
+  return true;
+}
+/* Letzter Handelstag der Woche (Montag k): Freitag, bei Feiertag der Tag davor usw. */
+function lastTradingDay(a, k) { for (let i = 4; i >= 0; i--) { const d = addDays(k, i); if (isTradingDay(a, d)) return d; } return null; }
+function prevTradingDay(a, d, k) { for (let x = addDays(d, -1); x >= k; x = addDays(x, -1)) if (isTradingDay(a, x)) return x; return k; }
+const halfDay = (d) => isEve(d);   /* Londoner Börse schließt um 12:30 Uhr */
 /* Londoner Ortszeit (Sommer-/Winterzeit): die Börse schließt 16:30, die Schlussauktion endet 16:35 */
 function localParts(tz) { const parts = {}; new Intl.DateTimeFormat('en-GB', { timeZone: tz, weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(NOW).forEach((x) => { parts[x.type] = x.value; }); return { dow: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(parts.weekday), hour: ((+parts.hour) % 24) + (+parts.minute) / 60 }; }
 const LONDON = localParts('Europe/London'), LONDON_HOUR = LONDON.hour, LONDON_DOW = LONDON.dow;
+/* Berliner Ortszeit: Die Push-Zeit am Montag hat Justus in Berliner Zeit festgelegt (config push.mondayAt, 7:53 Uhr) */
+const BERLIN = localParts('Europe/Berlin');
+const MON_PUSH = (() => { const m = /^(\d{1,2}):(\d{2})$/.exec((CFG.push && CFG.push.mondayAt) || '07:53'); return m ? +m[1] + (+m[2]) / 60 : 7 + 53 / 60; })();
 /* Freitag nach dem Londoner Schluss ist die laufende Woche fällig. Im Sommer ist es in London zwischen 23 und 24 Uhr UTC schon Samstag,
    während UTC noch Freitag zeigt: auch dann gilt die Woche als geschlossen (sonst würde ein offener Wochenschluss verworfen). */
 const FRI_CLOSED = DOW === 4 && (LONDON_DOW !== 4 || LONDON_HOUR >= 16.67);
@@ -93,6 +121,9 @@ function subscriptions() {
   return out;
 }
 async function flushQueue() {
+  /* Nachrichten, die seit einer Woche nicht zugestellt werden konnten, verfallen (sonst würden sie ewig wiederholt) */
+  const old = (STATE.queue || []).filter((p) => p.ts && Date.parse(p.ts) < NOW.getTime() - 7 * 864e5);
+  if (old.length) { STATE.queue = STATE.queue.filter((p) => !old.includes(p)); RUN.changed = true; note('Push: ' + old.length + ' Nachricht(en) älter als 7 Tage verworfen (' + old.map((p) => p.title).join(' | ').slice(0, 120) + ')'); }
   const q = STATE.queue || [];
   if (!q.length) return;
   if (OPT.dry) { note('Push (Probelauf): ' + q.map((p) => p.title).join(' | ')); STATE.queue = []; RUN.changed = true; return; }
@@ -150,7 +181,7 @@ const KRAKEN_PAIR = { 'BTC-USD': 'XBTUSD', 'BTC-EUR': 'XBTEUR', 'ETH-EUR': 'ETHE
 /* Hauptquellen laut config (Alpha Vantage für den FTSE, Coinbase für Bitcoin, LBMA für Gold). Weitere Quellen (Kraken, Yahoo, Alpha-Vantage-Krypto)
    erst im zweiten Anlauf; geprüft: Alpha Vantage weicht von Yahoo seit 2014 unter 0,01 % ab, Coinbase von Yahoo im Mittel 0,05 %. */
 const STEP0 = OPT.step;
-const ALLOW_FB = OPT.final || OPT.fallback || ['mo-notify', 'eod', 'all'].includes(STEP0);
+let ALLOW_FB = OPT.final || OPT.fallback || ['mo-notify', 'eod', 'all'].includes(STEP0);   /* der Ticker setzt es beim Nachholen von mo-notify */
 async function firstOk(label, tries) {
   const errs = [];
   for (const t of tries) { try { const r = await t(); if (r) return r; } catch (e) { errs.push((t.name || '?') + ': ' + e.message); vlog(label + ' · ' + errs[errs.length - 1]); } }
@@ -176,28 +207,28 @@ function londonAt(t) {
   const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(new Date(t)).forEach((x) => { p[x.type] = x.value; });
   return { d: p.year + '-' + p.month + '-' + p.day, dow: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(p.weekday), m: ((+p.hour) % 24) * 60 + (+p.minute) };
 }
-/* Liegt ein Kurszeitpunkt nach der Londoner Schlussauktion (16:35 Uhr Ortszeit) des Freitags fri? Im Winter ist der um 15–20 Minuten
-   verzögerte EODHD-Kurs beim ersten Freitagslauf (16:47 UTC = 16:47 London) noch von vor der Auktion und taugt nicht als Schluss. */
-function afterAuction(t, fri) { if (!t) return false; const L = londonAt(t); return L.d > fri || (L.d === fri && L.m >= 16 * 60 + 35); }
-/* Freitagsschluss der fälligen Woche ergänzen, wenn die Wochenreihe r ihn noch nicht hat (nur nach dem Londoner Schluss, nur mit Datum
-   des Freitags): EODHD-Tagesschluss (endgültig), EODHD-Live-Kurs nach der Schlussauktion (vorläufig), Alpha-Vantage-Quote ab 17 Uhr
-   London (vorläufig). scale: Faktor, mit dem Rohkurse auf die Basis der Reihe gebracht werden (EODHD-Ersatzreihe). */
+/* Liegt ein Kurszeitpunkt nach der Londoner Schlussauktion des Tages day (16:35 Uhr Ortszeit, am 24.12./31.12. 12:35 Uhr)? Im Winter ist der
+   um 15–20 Minuten verzögerte EODHD-Kurs kurz nach dem Schluss noch von vor der Auktion und taugt nicht als Schluss. */
+function afterAuction(t, day) { if (!t) return false; const L = londonAt(t), end = halfDay(day) ? 12 * 60 + 35 : 16 * 60 + 35; return L.d > day || (L.d === day && L.m >= end); }
+/* Schluss vom letzten Handelstag der fälligen Woche ergänzen, wenn die Wochenreihe r ihn noch nicht hat (nur nach dem Londoner Schluss).
+   Kurse zählen nur mit genau diesem Datum (ein Montagskurs ist kein Freitagsschluss): EODHD-Tagesschluss (endgültig), EODHD-Live-Kurs nach der
+   Schlussauktion (vorläufig), Alpha-Vantage-Quote ab 17 Uhr London (vorläufig; das Quote trägt keine Uhrzeit).
+   scale: Faktor, mit dem Rohkurse auf die Basis der Reihe gebracht werden (EODHD-Ersatzreihe). */
 async function addFridayClose(r, opts) {
   opts = opts || {};
-  const dueK = addDays(dueCutoff('ftse'), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || FRI_CLOSED, scale = opts.scale || 1;
-  if (!afterClose || (i >= 0 && r.dates[i] >= fri)) return r;
+  const dueK = addDays(dueCutoff('ftse'), -7), day = lastTradingDay('ftse', dueK), i = r.dates.length - 1, afterClose = TODAY > addDays(dueK, 4) || FRI_CLOSED, scale = opts.scale || 1;
+  if (!day || !afterClose || (i >= 0 && r.dates[i] >= day)) return r;
   const put = (d, p, label, prelim) => { if (i >= 0 && mondayOf(r.dates[i]) === dueK) { r.dates[i] = d; r.closes[i] = p * scale; } else { r.dates.push(d); r.closes.push(p * scale); } r.src += ' + Schlusskurs ' + d + ' ' + label; r.preliminary = prelim ? d : null; r.prelimLabel = prelim ? label.replace(/^(aus dem|von) /, '').replace(/ \(vorläufig\)$/, '') : null; vlog('FTSE: Wochenschluss ' + d + ' ' + label + ': ' + p); };
   let done = false;
   if (EODKEY || OPT.mock) {
     /* EODHD veröffentlicht den Londoner Tagesschluss meist ein bis zwei Stunden nach Handelsschluss: endgültiger Kurs */
-    if (!opts.skipEod) { try { const e = await F.eodhd('VWRD.LSE', dueK); const k = e.dates.indexOf(fri); if (k >= 0 && e.closes[k] > 0) { put(fri, e.closes[k], 'von EODHD (Tagesschluss)', false); done = true; } else vlog('FTSE: EODHD hat den ' + fri + ' noch nicht (letzter Tag ' + e.dates[e.dates.length - 1] + ')'); } catch (e) { vlog('EODHD: ' + e.message); } }
-    if (!done) { try { const l = await F.eodhdLive('VWRD.LSE'), ld = l.priceTime.slice(0, 10); if (ld >= fri && l.price > 0 && afterAuction(l.priceTime, fri)) { put(ld, l.price, 'aus dem EODHD-Live-Kurs (vorläufig)', true); done = true; } else vlog('FTSE: EODHD-Live-Kurs ' + l.priceTime + ' noch nicht nach der Schlussauktion'); } catch (e) { vlog('EODHD live: ' + e.message); } }
+    if (!opts.skipEod) { try { const e = await F.eodhd('VWRD.LSE', dueK); const k = e.dates.indexOf(day); if (k >= 0 && e.closes[k] > 0) { put(day, e.closes[k], 'von EODHD (Tagesschluss)', false); done = true; } else vlog('FTSE: EODHD hat den ' + day + ' noch nicht (letzter Tag ' + e.dates[e.dates.length - 1] + ')'); } catch (e) { vlog('EODHD: ' + e.message); } }
+    if (!done) { try { const l = await F.eodhdLive('VWRD.LSE'), ld = l.priceTime.slice(0, 10); if (ld === day && l.price > 0 && afterAuction(l.priceTime, day)) { put(ld, l.price, 'aus dem EODHD-Live-Kurs (vorläufig)', true); done = true; } else vlog('FTSE: EODHD-Live-Kurs vom ' + l.priceTime + ' passt nicht (nötig: ' + day + ' nach der Schlussauktion)'); } catch (e) { vlog('EODHD live: ' + e.message); } }
   }
   if (!done && !opts.noQuote) {
-    /* Das Quote trägt keine Uhrzeit: erst ab 17 Uhr London verwenden, damit es sicher nach der Schlussauktion liegt */
-    const Ln = londonAt(NOW), quoteOk = Ln.d > fri || (Ln.d === fri && Ln.m >= 17 * 60);
-    if (quoteOk) { try { const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null; if (qd && qd >= fri && q.price > 0) put(qd, q.price, 'aus dem Alpha-Vantage-Quote (vorläufig)', true); else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt'); } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); } }
-    else vlog('FTSE: Quote erst ab 17 Uhr London');
+    const Ln = londonAt(NOW), quoteOk = Ln.d > day || (Ln.d === day && Ln.m >= (halfDay(day) ? 13 : 17) * 60);
+    if (quoteOk) { try { const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null; if (qd === day && q.price > 0) put(qd, q.price, 'aus dem Alpha-Vantage-Quote (vorläufig)', true); else vlog('FTSE: Quote vom ' + qd + ', nötig ' + day); } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); } }
+    else vlog('FTSE: Quote erst ab ' + (halfDay(day) ? 13 : 17) + ' Uhr London');
   }
   return r;
 }
@@ -268,25 +299,29 @@ function dueCutoff(a) {
   if (DOW >= 5 || FRI_CLOSED) return NEXT_MON;                          /* Freitag nach dem Londoner Schluss gilt die laufende Woche als fällig */
   return THIS_MON;
 }
-/* Ist die fällige Woche (Montag k) in den Tagesdaten vollständig? */
+/* Ist die fällige Woche (Montag k) in den Tagesdaten vollständig? Maßgeblich ist der letzte Handelstag der Woche laut Kalender. */
 function weekComplete(a, k, lastD) {
-  const c = CFG.assets[a], fri = addDays(k, 4), sun = addDays(k, 6), weekOver = TODAY >= addDays(k, 7);
+  const c = CFG.assets[a], sun = addDays(k, 6), weekOver = TODAY >= addDays(k, 7);
   if (!lastD || lastD < k) return { ok: false, reason: 'noch kein Kurs der Woche' };
   if (c.week === 'sun') return lastD >= sun ? { ok: true } : { ok: false, reason: 'Sonntagsschluss fehlt noch' };
-  if (lastD >= fri) return { ok: true };
-  if (isHolidayFriday(fri) && lastD >= addDays(k, 3)) return { ok: true, holiday: true };
-  /* Ohne Freitagskurs erst dann mit dem letzten Kurs der Woche abschließen, wenn er sicher nicht mehr kommt: Yahoo ab Montag, LBMA (Nachlieferungen) erst ab Mittwoch */
+  const ltd = lastTradingDay(a, k), fri = addDays(k, 4);
+  if (!ltd) return { ok: true, holiday: true };
+  if (lastD >= ltd) return ltd < fri ? { ok: true, holiday: true } : { ok: true };
+  /* Ohne Kurs vom letzten Handelstag erst dann mit dem letzten Kurs der Woche abschließen, wenn er sicher nicht mehr kommt: ab Montag,
+     bei der LBMA (Nachlieferungen) erst ab Mittwoch 12 Uhr UTC */
   const graceOver = c.signal.src === 'lbma' ? (NOW.getTime() >= new Date(addDays(k, 9) + 'T12:00:00Z').getTime()) : weekOver;
-  if (graceOver && lastD >= addDays(k, 3)) return { ok: true, partial: true };
-  return { ok: false, reason: 'Freitagsschluss (' + ds(fri) + ') fehlt noch' };
+  if (graceOver && lastD >= prevTradingDay(a, ltd, k)) return { ok: true, partial: true };
+  return { ok: false, reason: (ltd === fri ? 'Freitagsschluss (' + ds(fri) + ')' : 'Wochenschluss vom ' + ds(ltd)) + ' fehlt noch' };
 }
 
 function storedSeries(a) { const j = WEEKLY[a]; return j && j.w ? ENG.fromRows(j.w) : { k: [], d: [], c: [] }; }
 function switchText(a, s, pre) {
   const r = CFG.assets[a].rule, buy = s.to === 1, mon = addDays(s.k, 7);
+  /* Schwelle wie in Vorwarnung und Statuskarte: aus den 49 Schlüssen davor (engine.js thresholds), nicht (1±p)·SMA50 mit dem Schluss */
+  const thr = s.thr > 0 ? s.thr : (r.type === 'band' ? s.m * (buy ? 1 + r.p : 1 - r.p) : s.m);
   const why = r.type === 'band'
-    ? 'Schluss ' + usd(a, s.c) + ' liegt mehr als ' + de(r.p * 100, 0) + ' % ' + (buy ? 'über' : 'unter') + ' dem SMA50 (Schwelle ' + usd(a, s.m * (buy ? 1 + r.p : 1 - r.p)) + ')'
-    : r.n + '. Wochenschluss in Folge ' + (buy ? 'über' : 'unter') + ' dem SMA50 (' + usd(a, s.c) + ' gegen ' + usd(a, s.m) + ')';
+    ? 'Schluss ' + usd(a, s.c) + ' liegt ' + (buy ? 'über der Kaufschwelle ' : 'unter der Verkaufsschwelle ') + usd(a, thr) + ' (' + de(r.p * 100, 0) + ' % ' + (buy ? 'über' : 'unter') + ' dem SMA50)'
+    : r.n + '. Wochenschluss in Folge ' + (buy ? 'über' : 'unter') + ' dem SMA50 (Schluss ' + usd(a, s.c) + ', Schwelle ' + usd(a, thr) + ')';
   /* Vorläufiger Schluss (FTSE aus dem Live-Kurs oder Quote, Gold aus dem Spotpreis): in Titel und Text kennzeichnen */
   const pv = pre ? ' Vorläufiger Wochenschluss (' + pre + '); der endgültige folgt, eine Änderung der Regel wird gemeldet.' : '';
   return { title: name(a) + ': ' + (buy ? 'Kaufsignal' : 'Verkaufssignal') + (pre ? ' (vorläufig)' : ''), body: 'Wochenschluss ' + ds(s.d) + ': ' + why + '. Laut Regel ' + (buy ? 'kaufen' : 'verkaufen') + ' zur Eröffnung am Montag, ' + ds(mon) + pv };
@@ -523,7 +558,13 @@ function calib(a) { return EUR.calib && EUR.calib[a] && EUR.calib[a].ratio > 0 ?
    echten Xetra-Schlüssen nachkalibriert (eur.json: calib). */
 /* Lang & Schwarz als Euro-Quelle für ETF und Gold-ETC (config: assets.<a>.eur = {src:'ls', ls:{id,label}, sym:<Alpha-Vantage-Ersatz>}) */
 function lsCfg(a) { const e = CFG.assets[a] && CFG.assets[a].eur; return e && e.src === 'ls' && e.ls && e.ls.id ? e.ls : null; }
-async function lsQuote(a) { const l = lsCfg(a); if (!l) return null; return F.ls(l.id, l.label || CFG.assets[a].short); }
+/* Lang & Schwarz: ISIN der Antwort gegen die Konfiguration prüfen, damit nie die Kurse eines anderen Wertpapiers übernommen werden */
+async function lsQuote(a) {
+  const l = lsCfg(a); if (!l) return null;
+  const r = await F.ls(l.id, l.label || CFG.assets[a].short);
+  if (r && r.isin && l.isin && r.isin !== l.isin) throw new Error('L&S liefert ISIN ' + r.isin + ' statt ' + l.isin + ' (Instrument ' + l.id + ')');
+  return r;
+}
 function cryptoDaily(product, days) {
   return firstOk(product, [async function coinbase() { return F.coinbaseDays(product, days); }, async function kraken() { return Object.assign({ fallback: true }, await F.kraken(KRAKEN_PAIR[product] || product.replace('-', ''), days)); }]);
 }
@@ -658,12 +699,13 @@ function ruleNow(a, price) {
   const E = ENG.evalRule(S, c.rule), ft = ENG.flipThreshold(E, c.rule), E2 = ENG.whatIf(S, c.rule, addDays(openK, c.week === 'sun' ? 6 : 4), price);
   return { thr: round(ft.thr, 4), dist: round(price / ft.thr - 1, 6), can: ft.can, need: ft.need || null, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, sma: round(E.last.m, 4), up: E2.last.up, dn: E2.last.dn, week: openK, closePending: openK < dueCutoff(a) };
 }
-/* Gold: den ersten Spotpreis nach dem LBMA-Nachmittagsfixing (Freitag 15 Uhr London) festhalten; er dient als vorläufiger Wochenschluss,
-   falls das Fixing am Montagmorgen noch fehlt (spotFallback). Nur Kurse aus dem Fenster 15:02 bis 17:00 Uhr London, damit er nah am Fixing liegt. */
+/* Gold: den ersten Spotpreis nach dem LBMA-Nachmittagsfixing am letzten Fixing-Tag der Woche (meist Freitag, vor Feiertagen früher; 15 Uhr London)
+   festhalten; er dient als vorläufiger Wochenschluss, falls das Fixing am Montagmorgen noch fehlt (spotFallback). Nur Kurse aus dem Fenster
+   15:02 bis 17:00 Uhr London, damit er nah am Fixing liegt. Der stündliche Ticker läuft jeden Tag, das Fenster wird also auch mittwochs getroffen. */
 function recordGoldSnap(g) {
   if (!CFG.assets.gold.signal.spotFallback || !g || !(g.price > 0)) return;
   const t = g.priceTime || NOW.toISOString(), L = londonAt(t);
-  if (L.dow !== 4 || isHolidayFriday(L.d) || L.m < 15 * 60 + 2 || L.m > 17 * 60) return;
+  if (L.d !== lastTradingDay('gold', mondayOf(L.d)) || L.m < 15 * 60 + 2 || L.m > 17 * 60) return;   /* nur am letzten Fixing-Tag der Woche */
   if (londonAt(NOW).d !== L.d) return;                                   /* nur ein frischer Kurs vom selben Tag */
   const k = mondayOf(L.d), cur = STATE.goldSnap;
   if (cur && cur.k === k) return;                                        /* der erste Kurs nach dem Fixing zählt */
@@ -758,7 +800,8 @@ async function ftseEod() {
 async function goldCross() {
   const c = CFG.assets.gold;
   try {
-    const g = await F.yahoo(c.cross.sym, { start: '2023-06-01' });
+    /* Yahoo weist GitHub-Runner fast immer ab (HTTP 429): nur ein Versuch, damit der Lauf nicht 40 Sekunden wartet */
+    const g = await F.yahoo(c.cross.sym, { start: '2023-06-01', once: true });
     const cutoff = (DOW >= 5 || FRI_CLOSED) ? NEXT_MON : THIS_MON;
     const W = ENG.weeklyFromDaily(g.dates, g.closes, cutoff);
     const merged = ENG.mergeWeekly(storedSeries('goldf'), W, false);
@@ -790,6 +833,18 @@ function weeklySummary() {
   queuePush({ id, title: 'Regel-Depot · Wochenstart ' + ds(THIS_MON), body, tag: 'week', url: './#status', ts: NOW.toISOString() });
 }
 
+/* ---------- Aufbewahrung ----------
+   Laufprotokoll: fehlerfreie Ticker-Läufe (stündlich) nur 36 Stunden, alle anderen Läufe bis zu 150 Einträge (vorher 60 insgesamt, das reichte
+   nur für etwa drei Tage). Ereignisse: bis zu 600; zuerst fallen alte Info-Einträge und Vorwarnungen weg, Signale, Korrekturen und Fehler bleiben. */
+function pruneRuns(list) { const cut = NOW.getTime() - 36 * 3600e3; return list.filter((r, i) => i === 0 || !(r.step === 'live' && r.ok && Date.parse(r.t) < cut)).slice(0, 150); }
+function pruneEvents(list, max) {
+  if (list.length <= max) return list;
+  let drop = list.length - max; const out = [];
+  for (const e of list) { if (drop > 0 && (e.kind === 'info' || e.kind === 'vorwarnung')) { drop--; continue; } out.push(e); }
+  while (out.length > max) out.shift();
+  return out;
+}
+
 /* ---------- Schritt bestimmen ---------- */
 function autoStep() {
   if (DOW === 4 && !FRI_CLOSED) return 'fr-warn';
@@ -814,7 +869,11 @@ async function main() {
       A.forEach((a) => { const S = storedSeries(a); const E = ENG.evalRule(S, CFG.assets[a].rule); STATE.assets[a] = summarizeAsset(a, E, { src: (WEEKLY[a] && WEEKLY[a].src) || '', fallback: false, pending: null }); note(name(a) + ': ' + ds(E.last.d) + ' ' + usd(a, E.last.c) + ' ' + (E.last.st ? 'investiert' : 'Cash')); });
       RUN.changed = true; flush = false;
     } else if (step === 'fr-warn') {
-      for (const a of ['ftse', 'gold']) { try { await warnAsset(a, await currentPrice(a)); } catch (e) { fail(name(a), 'Vorwarnung: ' + e.message); } }
+      for (const a of ['ftse', 'gold']) {
+        const ltd = lastTradingDay(a, THIS_MON);
+        if (ltd && ltd < TODAY) { note(name(a) + ': keine Vorwarnung, die Woche schloss schon am ' + ds(ltd) + ' (Feiertag)'); continue; }
+        try { await warnAsset(a, await currentPrice(a)); } catch (e) { fail(name(a), 'Vorwarnung: ' + e.message); }
+      }
     } else if (step === 'fr-close') {
       /* Freitag nach dem Londoner Schluss: FTSE und Gold (LBMA-PM-Fixing, falls schon veröffentlicht). Wiederholungen (--fallback) sparen die Euro-Kurse aus. */
       await closeAsset('ftse'); await closeAsset('gold');
@@ -839,7 +898,12 @@ async function main() {
       for (const a of A) await closeAsset(a);
       weeklySummary();
     } else if (step === 'live') {
-      await liveTick(); flush = false;
+      await liveTick();
+      /* Montag: Die Nachrichten vom Wochenende gehen um 7:53 Uhr (Berlin) mit mo-notify hinaus. Fällt dieser Lauf aus oder verdrängt GitHub ihn,
+         holt der nächste Ticker-Lauf das nach (Wochenschlüsse, Wochenübersicht, Warteschlange). Sonst verschickt der Ticker, was noch wartet. */
+      const monHold = BERLIN.dow === 0 && BERLIN.hour < MON_PUSH;
+      if (BERLIN.dow === 0 && !monHold && CFG.push.weeklySummary && !EVENTS.some((e) => e.id === 'week-' + THIS_MON)) { note('Montag: Wochenübersicht fehlt noch, der Ticker holt mo-notify nach'); ALLOW_FB = true; for (const a of A) await closeAsset(a); weeklySummary(); }
+      flush = !monHold;
     } else if (step === 'eod') {
       for (const a of A) await closeAsset(a);
       await eurQuotes(['ftse', 'gold', 'btc', 'eurusd']);
@@ -908,10 +972,9 @@ async function main() {
   STATE.updated = NOW.toISOString(); STATE.step = step; STATE.version = 1;
   STATE.pendingQueue = (STATE.queue || []).length;
   saveJson('state.json', STATE, true);
-  while (EVENTS.length > 400) EVENTS.shift();
-  saveJson('events.json', EVENTS);
+  saveJson('events.json', pruneEvents(EVENTS, 600));
   RUNS.unshift({ t: RUN.t, step, ok: RUN.ok, summary: RUN.summary.join(' | '), errors: RUN.errors, notified: RUN.notified, final: OPT.final });
-  while (RUNS.length > 60) RUNS.pop();
+  const keptRuns = pruneRuns(RUNS); RUNS.length = 0; keptRuns.forEach((r) => RUNS.push(r));
   saveJson('runs.json', RUNS);
   if (SRC.yahooStatus && SRC.yahooStatus.calls) { RUN.yahoo = { calls: SRC.yahooStatus.calls, failures: SRC.yahooStatus.failures, blocked: SRC.yahooStatus.blocked }; RUNS[0].yahoo = RUN.yahoo; saveJson('runs.json', RUNS); }
   log((RUN.ok ? 'OK' : 'MIT FEHLERN') + ' · ' + RUN.summary.length + ' Punkte · ' + RUN.errors.length + ' Fehler' + (RUN.yahoo ? ' · Yahoo ' + RUN.yahoo.calls + ' Abrufe, ' + RUN.yahoo.failures + ' Fehler' + (RUN.yahoo.blocked ? ', gesperrt' : '') : ''));

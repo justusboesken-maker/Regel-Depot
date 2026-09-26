@@ -39,9 +39,9 @@ async function yahooAuth(host) {
   yahooSession = { cookie, crumb };
   return yahooSession;
 }
-async function yahooJson(pathAndQuery) {
+async function yahooJson(pathAndQuery, once) {
   if (yahooStatus.blocked) throw new Error('Yahoo in diesem Lauf gesperrt (' + yahooStatus.lastError + ')');
-  const waits = [0, 12000, 30000];
+  const waits = once ? [0] : [0, 12000, 30000];
   let lastErr = null;
   for (let i = 0; i < waits.length; i++) {
     if (waits[i]) await sleep(waits[i]);
@@ -68,7 +68,7 @@ export async function yahooDaily(sym, opts = {}) {
   const q = new URLSearchParams({ interval: '1d', includeAdjustedClose: 'true', events: 'div,splits' });
   if (opts.start) { q.set('period1', String(Math.floor(new Date(opts.start + 'T00:00:00Z').getTime() / 1000))); q.set('period2', String(Math.floor(Date.now() / 1000) + 86400)); }
   else q.set('range', opts.range || '3mo');
-  const j = await yahooJson('/v8/finance/chart/' + encodeURIComponent(sym) + '?' + q.toString());
+  const j = await yahooJson('/v8/finance/chart/' + encodeURIComponent(sym) + '?' + q.toString(), !!opts.once);
   const r = j && j.chart && j.chart.result && j.chart.result[0];
   if (!r || !r.timestamp || !r.timestamp.length) throw new Error('Yahoo ' + sym + ': keine Daten' + (j && j.chart && j.chart.error ? ' (' + JSON.stringify(j.chart.error).slice(0, 120) + ')' : ''));
   /* Devisen tragen den Zeitstempel 23:00 UTC des Vortags -> mit gmtoffset auf den Handelstag schieben */

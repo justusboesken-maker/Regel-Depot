@@ -4,18 +4,22 @@
    tx.hist: nur nachgetragen (die Bewegung ist im heutigen Cash schon enthalten). */
 (function (root) {
   'use strict';
-  var KEY = 'regelDepot.v1';
+  var KEY = 'regelDepot.v1', BKEY = KEY + '.backups', CKEY = KEY + '.corrupt';
   var EMPTY = { version: 1, tx: [], cash: { ftse: 0, btc: 0, gold: 0 }, cashDate: '', tax: {}, meta: {} };
   var TYPES = ['kauf', 'verkauf', 'einzahlung', 'auszahlung'];
   var TAX_NUM = ['pbUsed', 'interestRest', 'lossOther', 's23Other', 'rate', 'headroom', 'buffer', 'minOrder', 'cashRate'];
   var ASSETS = null; /* bekannte Positionen laut Konfiguration (setAssets), für die Prüfung beim Import */
   var listeners = [];
   var mem = null; /* Fallback, wenn localStorage nicht geht */
+  var corrupt = null; /* {raw, error, at, kept, downloaded}: gespeicherter Stand nicht lesbar (wird nie still als leer überschrieben) */
+  var exported = null; /* Rohtext des Stands, der zuletzt als Datei gesichert wurde */
+  var lastBackup = null; /* Ergebnis der letzten Sicherung vor Import/Löschen/Wiederherstellen: 'ok', 'file', 'none' */
 
   function clone(o) { return JSON.parse(JSON.stringify(o)); }
   function safeGet() { try { return localStorage.getItem(KEY); } catch (e) { return null; } }
   function safeSet(v) { try { localStorage.setItem(KEY, v); return true; } catch (e) { return false; } }
   function E() { return root.ENG; }
+  function todayLocal() { var t = new Date(); return t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'); }
   function dfmt(d) { return d && d.length >= 10 ? d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4) : String(d); }
   function show(v) { return v == null ? '(leer)' : '„' + String(v).slice(0, 24) + '“'; }
   /* Zahl aus Datei oder Speicher: Zahlen direkt, Text auch mit Komma („0,5“, „2.708,00“). null = leer, NaN = unlesbar */
@@ -29,6 +33,7 @@
     if (d) where += ' vom ' + dfmt(d);
     if (TYPES.indexOf(type) < 0) return { err: where + ': Art ' + show(t.type) + ' unbekannt (erlaubt: Kauf, Verkauf, Einzahlung, Auszahlung)' };
     if (!d) return { err: where + ': Datum ' + show(t.d) + ' ungültig (erwartet JJJJ-MM-TT oder TT.MM.JJJJ)' };
+    if (strict && d > todayLocal()) return { err: where + ': Datum liegt in der Zukunft' };
     if (!a || (strict && ASSETS && ASSETS.indexOf(a) < 0)) return { err: where + ': Position ' + show(t.a) + ' unbekannt' + (ASSETS ? ' (erlaubt: ' + ASSETS.join(', ') + ')' : '') };
     var cashMove = type === 'einzahlung' || type === 'auszahlung';
     var out = { id: String(t.id || ('tx' + Date.now() + '-' + i)), d: d, a: a, type: type, units: 0, price: 0, amount: 0, fee: 0, est: !!t.est, note: t.note ? String(t.note).slice(0, 300) : '', ts: +t.ts || 0 };
@@ -65,32 +70,101 @@
     }
     return d;
   }
+  /* Beschädigter Speicher: Den Rohinhalt vor jedem Überschreiben unter eigenem Schlüssel aufheben (Download über die Seite). Klappt das nicht,
+     wird nicht gespeichert, damit nichts verloren geht. */
+  function corruptList() { try { var c = JSON.parse(localStorage.getItem(CKEY) || '[]'); return Array.isArray(c) ? c.filter(function (x) { return x && x.raw; }) : []; } catch (e) { return []; } }
+  function markCorrupt(raw, e) {
+    if (corrupt && corrupt.raw === raw) return;
+    corrupt = { raw: raw, error: e && e.message ? e.message : String(e), at: new Date().toISOString(), kept: false };
+    try {
+      var list = corruptList();
+      if (!list.some(function (x) { return x.raw === raw; })) { list.unshift({ raw: raw, error: corrupt.error, at: corrupt.at }); while (list.length > 3) list.pop(); localStorage.setItem(CKEY, JSON.stringify(list)); }
+      corrupt.kept = corruptList().some(function (x) { return x.raw === raw; });
+    } catch (x) { corrupt.kept = false; }
+  }
+  function readRaw(raw) { var o = JSON.parse(raw); if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('kein Depot-Objekt'); return normalize(o); }
   function load() {
     if (mem) return clone(mem);
     var raw = safeGet();
     if (!raw) return clone(EMPTY);
-    try { return normalize(JSON.parse(raw)); } catch (e) { return clone(EMPTY); }
+    try { return readRaw(raw); } catch (e) { markCorrupt(raw, e); return clone(EMPTY); }
   }
+  /* Vor jedem Überschreiben prüfen, ob der gespeicherte Stand lesbar ist (sonst erst aufheben) */
+  function check() { if (corrupt || mem) return; var raw = safeGet(); if (!raw) return; try { readRaw(raw); } catch (e) { markCorrupt(raw, e); } }
   function save(d) {
+    check();
+    if (corrupt && !corrupt.kept && !corrupt.downloaded) throw new Error('Die gespeicherten Depotdaten sind beschädigt und konnten nicht gesichert werden. Lade zuerst die Rohdaten herunter (Hinweis oben).');
     var n = normalize(d); ['ftse', 'btc', 'gold'].forEach(function (a) { n.cash[a] = Math.round(n.cash[a] * 100) / 100; }); n.meta = n.meta || {}; n.meta.saved = new Date().toISOString();
-    if (!safeSet(JSON.stringify(n))) mem = n;
+    mem = safeSet(JSON.stringify(n)) ? null : n;   /* nur solange der Browser-Speicher nicht schreibbar ist */
     listeners.forEach(function (fn) { try { fn(n); } catch (e) { /* still */ } });
     return n;
   }
   function has() { var d = load(); return d.tx.length > 0 || Object.keys(d.tax).length > 0 || (d.cash.ftse + d.cash.btc + d.cash.gold) > 0; }
   function update(fn) { var d = load(); fn(d); return save(d); }
-  function reset() { try { localStorage.removeItem(KEY); } catch (e) { /* still */ } mem = null; listeners.forEach(function (fn) { fn(clone(EMPTY)); }); }
-  function exportJson() { var d = load(); d.meta = d.meta || {}; d.meta.exported = new Date().toISOString(); return JSON.stringify(d, null, 1); }
+  /* Sicherungen im Browser: vor Import, „Alles löschen“ und Wiederherstellen bleibt der alte Stand erhalten (die letzten 3) */
+  function backups() { try { var b = JSON.parse(localStorage.getItem(BKEY) || '[]'); return Array.isArray(b) ? b.filter(function (x) { return x && x.raw; }) : []; } catch (e) { return []; } }
+  /* Ergebnis: 'ok' abgelegt, 'none' nichts abzulegen (leer, unlesbar und schon unter .corrupt aufgehoben, oder der Browser speichert gar nichts
+     dauerhaft), 'file' kein Platz im Browser, aber genau dieser Stand wurde gerade als Datei gesichert; false: nicht gesichert. Dann bricht der
+     Aufrufer ab, statt den Stand ungesichert zu ersetzen. */
+  function backup(reason) {
+    if (mem) return 'none';
+    var raw = safeGet(); if (!raw) return 'none';
+    try { readRaw(raw); } catch (e) { return 'none'; }
+    var list = backups(); if (list.length && list[0].raw === raw) return 'ok';
+    list.unshift({ t: new Date().toISOString(), reason: reason, raw: raw });
+    for (var n = Math.min(list.length, 3); n >= 1; n--) { try { localStorage.setItem(BKEY, JSON.stringify(list.slice(0, n))); return 'ok'; } catch (e) { /* ältere weglassen und nochmal */ } }
+    return exported === raw ? 'file' : false;
+  }
+  var NOBACKUP = 'Der bisherige Stand ließ sich im Browser nicht als früherer Stand ablegen (Speicher voll?). Sichere ihn mit „Als Datei sichern“ und wiederhole den Vorgang; bis dahin wurde nichts geändert.';
+  function guard(reason) { var r = backup(reason); if (r === false) throw new Error(NOBACKUP); lastBackup = r; return r; }
+  function backupList() {
+    return backups().map(function (b, i) { var n = null; try { n = readRaw(b.raw); } catch (e) { /* unlesbar */ } return { i: i, t: b.t, reason: b.reason, tx: n ? n.tx.length : null, cash: n ? n.cash.ftse + n.cash.btc + n.cash.gold : null, ok: !!n }; });
+  }
+  function restore(i) {
+    var b = backups()[i]; if (!b) throw new Error('Diesen Stand gibt es nicht mehr');
+    check();
+    if (corrupt && !corrupt.kept && !corrupt.downloaded) throw new Error('Lade zuerst die Rohdaten herunter (Hinweis oben), sonst gehen sie verloren.');
+    var n; try { n = readRaw(b.raw); } catch (e) { throw new Error('Dieser Stand ist nicht lesbar'); }
+    guard('vor dem Wiederherstellen');
+    mem = safeSet(b.raw) ? null : n;
+    corrupt = null;
+    listeners.forEach(function (fn) { try { fn(n); } catch (e) { /* still */ } });
+    return n;
+  }
+  function reset() {
+    check();
+    if (corrupt && !corrupt.kept && !corrupt.downloaded) throw new Error('Lade zuerst die Rohdaten herunter (Hinweis oben), sonst gehen sie verloren.');
+    guard('vor dem Löschen');
+    try { localStorage.removeItem(KEY); } catch (e) { /* still */ } mem = null; listeners.forEach(function (fn) { fn(clone(EMPTY)); });
+  }
+  /* Beschädigte Stände: Hinweis bleibt, bis Justus die Rohdaten ausdrücklich verwirft (auch nach Neuladen) */
+  function corruptInfo() {
+    check();
+    if (corrupt) return { raw: corrupt.raw, error: corrupt.error, at: corrupt.at, kept: corrupt.kept, downloaded: !!corrupt.downloaded, count: Math.max(1, corruptList().length) };
+    var list = corruptList(); if (!list.length) return null;
+    return { raw: list[0].raw, error: list[0].error, at: list[0].at, kept: true, count: list.length, all: list };
+  }
+  function corruptRaw() { var list = corruptList(); if (corrupt && !list.some(function (x) { return x.raw === corrupt.raw; })) list.unshift({ raw: corrupt.raw, error: corrupt.error, at: corrupt.at }); return list; }
+  function rawSaved() { if (corrupt) corrupt.downloaded = true; }
+  function dropCorrupt() {
+    try { localStorage.removeItem(CKEY); } catch (e) { /* still */ }
+    var raw = safeGet(); if (raw) { try { readRaw(raw); } catch (e) { try { localStorage.removeItem(KEY); } catch (x) { /* still */ } } }
+    corrupt = null; mem = null;
+    listeners.forEach(function (fn) { try { fn(load()); } catch (e) { /* still */ } });
+  }
+  function exportJson() { var d = load(); d.meta = d.meta || {}; d.meta.exported = new Date().toISOString(); exported = mem ? null : safeGet(); return JSON.stringify(d, null, 1); }
   function importJson(text) {
     var o;
     try { o = JSON.parse(text); } catch (e) { throw new Error('Das ist kein gültiges JSON (' + e.message + ')'); }
     if (!o || typeof o !== 'object' || Array.isArray(o)) throw new Error('Kein gültiges Depot-JSON');
     if (!Array.isArray(o.tx) && !o.cash && !o.tax) throw new Error('Die Datei enthält keine Depotdaten (tx, cash, tax)');
     var n = normalize(o, true); n.meta = n.meta || {}; n.meta.imported = new Date().toISOString();
+    guard('vor dem Import');
     return save(n);
   }
   function setAssets(list) { ASSETS = (list || []).map(function (x) { return String(x).toLowerCase(); }); }
   function onChange(fn) { listeners.push(fn); }
 
-  root.STORE = { load: load, save: save, update: update, reset: reset, has: has, exportJson: exportJson, importJson: importJson, setAssets: setAssets, onChange: onChange, KEY: KEY };
+  root.STORE = { load: load, save: save, update: update, reset: reset, has: has, exportJson: exportJson, importJson: importJson, setAssets: setAssets, onChange: onChange, backupList: backupList, restore: restore, corruptInfo: corruptInfo, corruptRaw: corruptRaw, rawSaved: rawSaved, dropCorrupt: dropCorrupt,
+    lastBackup: function () { return lastBackup; }, memOnly: function () { return !!mem; }, KEY: KEY };
 })(window);

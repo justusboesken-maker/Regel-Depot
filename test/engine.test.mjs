@@ -12,8 +12,10 @@ const require = createRequire(import.meta.url);
 const ENG = require('../docs/js/engine.js');
 
 const RULES = { ftse: { type: 'confirm', n: 2 }, btc: { type: 'band', p: 0.03 }, gold: { type: 'confirm', n: 4 } };
+/* Feste Testdaten (Stand der Rechenbeispiele: FTSE und Gold bis 18.09.2026, Bitcoin bis 20.09.2026) statt der Live-Dateien unter docs/data,
+   die jede Woche weiterlaufen (Prüfbericht 26.09.2026, Punkt 20). */
 function series(a, n) {
-  const j = JSON.parse(fs.readFileSync(path.join(here, '..', 'docs', 'data', 'weekly', a + '.json'), 'utf8'));
+  const j = JSON.parse(fs.readFileSync(path.join(here, 'fixtures', 'weekly', a + '.json'), 'utf8'));
   const S = ENG.fromRows(j.w);
   return n ? ENG.slice(S, n) : S;
 }
@@ -268,4 +270,29 @@ test('Zahlen aus Eingaben unabhängig vom Gebietsschema', () => {
   assert.equal(P(''), null); assert.equal(P('   '), null); assert.ok(isNaN(P('abc'))); assert.ok(isNaN(P('1.2.3'))); assert.ok(isNaN(P('1,2,3,4.5,6')));
   assert.equal(ENG.parseDate('01.06.2026'), '2026-06-01'); assert.equal(ENG.parseDate('2026-06-01'), '2026-06-01'); assert.equal(ENG.parseDate('2026-06-01T10:00:00Z'), '2026-06-01');
   assert.equal(ENG.parseDate('31.02.2026'), null); assert.equal(ENG.parseDate('2026-13-01'), null); assert.equal(ENG.parseDate('gestern'), null);
+});
+
+/* ---------- Handelskalender: Ostern und die Feiertage in England (Prüfbericht Punkt 15/16) ---------- */
+test('Ostersonntag', () => {
+  assert.deepEqual([2024, 2025, 2026, 2027, 2028, 2029, 2030].map((y) => ENG.easterSunday(y)), ['2024-03-31', '2025-04-20', '2026-04-05', '2027-03-28', '2028-04-16', '2029-04-01', '2030-04-21']);
+});
+test('Feiertage London (England & Wales) mit Ersatztagen', () => {
+  assert.deepEqual(ENG.ukHolidays(2026), ['2026-01-01', '2026-04-03', '2026-04-06', '2026-05-04', '2026-05-25', '2026-08-31', '2026-12-25', '2026-12-28']);
+  assert.deepEqual(ENG.ukHolidays(2027), ['2027-01-01', '2027-03-26', '2027-03-29', '2027-05-03', '2027-05-31', '2027-08-30', '2027-12-27', '2027-12-28']);
+  assert.deepEqual(ENG.ukHolidays(2021), ['2021-01-01', '2021-04-02', '2021-04-05', '2021-05-03', '2021-05-31', '2021-08-30', '2021-12-27', '2021-12-28']);
+  assert.ok(ENG.ukHolidays(2028).includes('2028-01-03'), 'Neujahr am Samstag: Ersatztag Montag');
+  assert.deepEqual(ENG.ukHolidays(2032).slice(-2), ['2032-12-27', '2032-12-28'], 'Weihnachten am Samstag');
+  assert.deepEqual(ENG.ukHolidays(2033).slice(-2), ['2033-12-26', '2033-12-27'], 'Weihnachten am Sonntag');
+});
+
+/* ---------- Signaltext und Vorwarnung nennen dieselbe Schwelle (Prüfbericht, kleinere Unstimmigkeiten) ---------- */
+test('Schwelle eines Wechsels = Schwelle der Vorwoche für den nächsten Schluss', () => {
+  const S = series('btc'), E0 = ENG.evalRule(S, RULES.btc);
+  const E1 = ENG.evalRule(ENG.append(S, '2026-09-21', '2026-09-27', 84036), RULES.btc), sw = E1.sw[E1.sw.length - 1];
+  assert.equal(sw.d, '2026-09-27'); assert.equal(sw.to, 1);
+  assert.equal(r2(sw.thr), r2(E0.next.bandUp)); assert.equal(r2(sw.thr), 80435.87);
+  assert.ok(sw.c > sw.thr && sw.c > 1.03 * sw.m, 'beide Formen der Regel sind gleichwertig');
+  const G = series('gold'), EG = ENG.evalRule(G, RULES.gold), gs = EG.sw[EG.sw.length - 1];
+  const s49 = G.c.slice(gs.i - 49, gs.i).reduce((x, y) => x + y, 0);
+  assert.equal(r4(gs.thr), r4(s49 / 49));
 });

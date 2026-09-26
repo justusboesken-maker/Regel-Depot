@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260926-0424">
+<link rel="stylesheet" href="css/app.css?v=20260926-1103">
 </head>
 <body>
 
@@ -34,6 +34,7 @@
 <div class="wrap">
 
 <div id="globalBanner"></div>
+<div id="storeBanner"></div>
 
 <section id="status" aria-labelledby="h-status">
   <h2 class="eyebrow sec" id="h-status">Status</h2>
@@ -113,7 +114,7 @@
       <div class="pad cardhead tight topline"><p class="subhd">Letzte Läufe</p><button type="button" class="fold" data-fold="runs" aria-controls="runBody" aria-expanded="false" data-open="0">Ausklappen</button></div>
       <div id="runBody">
         <div class="runlog" id="runlog"></div>
-        <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Läufe laufen automatisch bei GitHub und können sich um einige Minuten verschieben. Freitags wird der Wochenschluss ab 18:47 Uhr mehrfach versucht, bis Alpha Vantage und LBMA die Schlusskurse veröffentlicht haben (meist Freitagabend, spätestens Samstagmorgen); Bitcoin schließt Montag 2:07 Uhr, die Push-Nachrichten vom Wochenende kommen Montagmorgen. Der stündliche Kurs-Ticker erscheint hier nicht.</div>
+        <div class="pad small muted" style="padding-top:10px;border-top:1px solid var(--rule)" id="runNote">Die Läufe laufen automatisch bei GitHub und können sich um einige Minuten verschieben. Freitags wird der Wochenschluss ab 18:47 Uhr mehrfach versucht (zuletzt nachts um 1:37 Uhr und Samstag 9:23 Uhr), bis Alpha Vantage und LBMA die Schlusskurse veröffentlicht haben; Bitcoin schließt Montag kurz nach 0 Uhr UTC, die Push-Nachrichten dazu kommen Montagmorgen. Alle Zeiten Berliner Zeit, im Sommer wie im Winter. Der stündliche Kurs-Ticker erscheint hier nicht.</div>
       </div>
     </div>
   </div>
@@ -144,6 +145,12 @@
       </div>
       <p class="formmsg" id="dMsg" role="status"></p>
       <p class="small muted" id="dataInfo"></p>
+      <div class="restore" id="restoreBox">
+        <p class="subhd">Frühere Stände in diesem Browser</p>
+        <div class="btnrow"><select id="bkSel" aria-label="Früherer Stand"></select><button class="btn ghost" type="button" id="btnRestore">Vorherigen Stand wiederherstellen</button></div>
+        <p class="small muted">Vor jedem Import, vor „Alles löschen“ und vor dem Wiederherstellen legt die Seite den bisherigen Stand hier ab (die letzten drei). Diese Stände liegen im selben Browser-Speicher wie die Depotdaten und ersetzen keine Sicherung als Datei. Jedes Gerät und jeder Browser hat einen eigenen Stand, auch die Seite auf dem Home-Bildschirm; übertragen kannst du ihn mit „Als Datei sichern“ und auf dem anderen Gerät „Datei importieren“.</p>
+        <p class="small muted" id="persistInfo"></p>
+      </div>
     </div>
   </details>
   <details class="box" id="taxBox">
@@ -201,9 +208,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260926-0424"></script>
-<script src="js/store.js?v=20260926-0424"></script>
-<script src="js/charts.js?v=20260926-0424"></script>
-<script src="js/app.js?v=20260926-0424"></script>
+<script src="js/engine.js?v=20260926-1103"></script>
+<script src="js/store.js?v=20260926-1103"></script>
+<script src="js/charts.js?v=20260926-1103"></script>
+<script src="js/app.js?v=20260926-1103"></script>
 </body>
 </html>

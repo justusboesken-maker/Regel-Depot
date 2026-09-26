@@ -3,10 +3,28 @@
 Persönliche Website für ein regelbasiertes Depot bei Trade Republic: 50 % FTSE All-World (VWCE), 30 % Bitcoin, 20 % Gold-ETC.
 Jeder Baustein folgt einer Trendregel auf dem 50-Wochen-Durchschnitt (FTSE 2-Wochen-Regel, Bitcoin 3-%-Band, Gold 4-Wochen-Regel).
 
-- **Website:** `docs/` (GitHub Pages, Quelle: Branch `main`, Ordner `/docs`). Statisch, ohne Framework; Depotdaten liegen nur im Browser (`localStorage`).
-- **Updates:** `.github/workflows/update.yml` startet `scripts/update.mjs` zu den Wochenschlüssen (Alpha Vantage und EODHD für den FTSE, Coinbase für Bitcoin, LBMA für Gold; Euro-Kurse von Lang & Schwarz, Coinbase und EZB; Kraken, Alpha Vantage Xetra und Yahoo Finance als Ersatz), rechnet die Regeln,
-  schreibt `docs/data/*.json` und verschickt Web-Push-Nachrichten (VAPID, ohne Fremdpakete).
-- **Rechenkern:** `docs/js/engine.js` (Browser und Node), Tests in `test/` gegen die Rechenbeispiele des Übergabedokuments: `npm test`.
+- **Website:** `docs/` (GitHub Pages, Quelle: Branch `main`, Ordner `/docs`). Statisch, ohne Framework; Depotdaten liegen nur im Browser (`localStorage`). Vor Import, „Alles löschen“ und Wiederherstellen legt die Seite den bisherigen Stand im Browser ab (die letzten drei, Einstellungen → „Frühere Stände“); ein unlesbarer Stand wird aufgehoben und nicht überschrieben.
+- **Updates:** `.github/workflows/update.yml` startet `scripts/update.mjs` zu den Wochenschlüssen (Alpha Vantage als Hauptquelle und EODHD als Ersatz und für den Freitagsschluss beim FTSE, Coinbase für Bitcoin, LBMA-Nachmittagsfixing für Gold; Euro-Kurse von Lang & Schwarz, Coinbase und EZB; Kraken, Alpha Vantage und Yahoo Finance als weitere Ersatzquellen), rechnet die Regeln,
+  schreibt `docs/data/*.json` und verschickt Web-Push-Nachrichten (VAPID, ohne Fremdpakete). Node 24.
+- **Handelskalender:** Feiertage in London (Ostern, Bank Holidays mit Ersatztagen) rechnet `docs/js/engine.js` selbst aus; kein LBMA-Nachmittagsfixing am letzten Geschäftstag vor Weihnachten und vor Neujahr (meist 24.12. und 31.12., am Wochenende der Freitag davor). Sonderfeiertage (etwa ein zusätzlicher Bank Holiday) kommen in `docs/data/config.json` unter `holidays.extra`, ein gestrichener unter `holidays.notHolidays`.
+- **Rechenkern:** `docs/js/engine.js` (Browser und Node), Tests in `test/` gegen die Rechenbeispiele des Übergabedokuments mit festen Testdaten (`test/fixtures`): `npm test`.
+
+## Zeitplan (Berliner Zeit, im Sommer wie im Winter)
+
+GitHub-Cron kennt nur UTC. Deshalb stehen die meisten Zeiten doppelt im Workflow (Sommer- und Winterzeit); ein kleiner Vorab-Job lässt den Lauf der anderen Jahreszeit aus. GitHub startet geplante Läufe oft einige Minuten später.
+
+| Wann | Schritt |
+|---|---|
+| Fr 15:17 | Vorwarnung FTSE und Gold |
+| Fr 18:47 | Wochenschluss FTSE, Gold (falls das Fixing schon da ist), Euro-Kurse |
+| Fr 20:23, 22:23, Sa 1:37, Sa 9:23 | Wiederholungen für fehlende Schlüsse |
+| So 21:17 | Vorwarnung Bitcoin |
+| Mo 0:07 UTC, 2:23 UTC | Wochenschluss Bitcoin (die Bitcoin-Woche endet So 24 Uhr UTC) |
+| Mo 7:53 | Wochenübersicht und Nachrichten der Nacht zum Montag |
+| Mo–Do 19:37 und 23:37 | Euro-Kurse, FTSE-Tagesschluss |
+| stündlich (7 Minuten nach, 5–21 Uhr UTC) | Kurs-Ticker; montags holt er die Wochenübersicht nach, falls der 7:53-Lauf ausfiel |
+
+Alle anderen Nachrichten (Signale, Korrekturen, Fehler) gehen sofort hinaus, auch nachts.
 
 ## Einrichten
 
@@ -20,10 +38,13 @@ Jeder Baustein folgt einer Trendregel auf dem 50-Wochen-Durchschnitt (FTSE 2-Woc
 |---|---|
 | `VAPID_PRIVATE_KEY` | privater VAPID-Schlüssel (der öffentliche steht in `docs/data/config.json`) |
 | `PUSH_SUB_1` … `PUSH_SUB_5` | Push-Anmeldung je Gerät (JSON, von der Website unter „Signale“ kopiert) |
-| `ALPHAVANTAGE_KEY` | optional, Ersatzquelle für VWRD |
+| `ALPHAVANTAGE_KEY` | Alpha Vantage, Hauptquelle für den FTSE-Wochenschluss (VWRD.LON) |
+| `EODHD_KEY` | EODHD, Ersatzquelle für den FTSE und Freitagsschluss (VWRD.LSE) |
+
+Die Schlüssel stehen nur in den Secrets. Fehlermeldungen der Quellen werden vor dem Speichern maskiert, damit kein Schlüssel in `docs/data` oder in Commit-Nachrichten landet.
 
 ## Manuell starten
 
-Actions → „Regel-Depot Update“ → „Run workflow“ → Schritt wählen (`all` holt alle fälligen Wochenschlüsse, `test-push` schickt eine Testnachricht).
+Actions → „Regel-Depot Update“ → „Run workflow“ → Schritt wählen (`all` holt alle fälligen Wochenschlüsse, `test-sources` prüft alle Quellen, `test-push` schickt eine Testnachricht).
 
 Keine Anlage- oder Steuerberatung. Die Seite führt keine Orders aus und kennt keine Zugangsdaten.

@@ -134,59 +134,6 @@
     return fig;
   }
 
-  /* ---------- Performance-Chart (Wert/Gewinn je Woche in Euro) ----------
-     pts: [{k, d, val, cost, real, gain, parts:{a:v}}], mode: 'gewinn'|'wert', inst: {a:'Name'} */
-  function perfChart(host, leg, cap, pts, mode, inst, estText) {
-    host.textContent = ''; leg.textContent = ''; cap.textContent = '';
-    if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
-    var n = pts.length;
-    var col = { val: css('--ink'), cost: css('--ink-2'), grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface'), pos: css('--pos'), neg: css('--neg') };
-    var items = mode === 'wert' ? [{ t: 'Wert der Positionen', c: col.val }, { t: 'Einstand', c: col.cost, dash: true }, { t: 'im Plus', box: col.pos }, { t: 'im Minus', box: col.neg }] : [{ t: 'Gewinn oder Verlust, inklusive realisierter Gewinne', c: col.val }, { t: 'im Plus', box: col.pos }, { t: 'im Minus', box: col.neg }];
-    items.forEach(function (it) { var s = el('span'), i = el('i'); if (it.box) { i.className = 'box'; i.style.background = it.box; i.style.opacity = '0.35'; } else { if (it.dash) i.className = 'dash'; i.style.borderTopColor = it.c; } s.appendChild(i); s.appendChild(document.createTextNode(it.t)); leg.appendChild(s); });
-    var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = narrow ? 220 : 280;
-    var m = { t: 14, r: narrow ? 70 : 88, b: 30, l: narrow ? 66 : 78 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
-    var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
-    var A1 = pts.map(function (q) { return mode === 'wert' ? q.val : q.gain; }), A2 = pts.map(function (q) { return mode === 'wert' ? q.cost : 0; });
-    var all = A1.concat(A2), lo = Math.min.apply(null, all), hi = Math.max.apply(null, all);
-    if (mode === 'gewinn') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); }
-    var pad = (hi - lo) * 0.08 || Math.max(10, Math.abs(hi) * 0.05); lo -= pad; hi += pad;
-    function X(i) { return m.l + (n <= 1 ? 0 : i / (n - 1)) * iw; }
-    function Y(v) { return m.t + (1 - (v - lo) / (hi - lo)) * ih; }
-    function money(v) { return (v < -0.5 ? '−' : (mode === 'gewinn' && v > 0.5 ? '+' : '')) + de(Math.abs(v), 0) + ' €'; }
-    var g = mk('g', {}, svg);
-    linTicks(lo, hi, 4).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l - 8, y: y + 4, 'text-anchor': 'end', 'font-size': 11, fill: col.muted }, g); tx.textContent = money(t); });
-    mk('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1 }, g);
-    var prevM = null, tks = [];
-    pts.forEach(function (q, i) { var d4 = ENG.addDays(q.k, 4), ymd = d4.slice(0, 7); if (prevM !== null && ymd !== prevM) tks.push({ i: i, l: MON[+ymd.slice(5) - 1] + (ymd.slice(5) === '01' ? ' ' + ymd.slice(2, 4) : '') }); prevM = ymd; });
-    if (tks.length > 8) { var st = Math.ceil(tks.length / 7); tks = tks.filter(function (t, k) { return k % st === 0; }); }
-    tks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: m.t + ih, y2: m.t + ih + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: m.t + ih + 18, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
-    function poly(P, c) { mk('path', { d: 'M' + P.map(function (q) { return q[0].toFixed(1) + ',' + q[1].toFixed(1); }).join('L') + 'Z', fill: c, 'fill-opacity': 0.16, stroke: 'none' }, svg); }
-    for (var i = 0; i < n - 1; i++) { var x0 = X(i), x1 = X(i + 1), a0 = A1[i], a1 = A1[i + 1], b0 = A2[i], b1 = A2[i + 1], d0 = a0 - b0, d1 = a1 - b1;
-      if (d0 * d1 >= 0) poly([[x0, Y(a0)], [x1, Y(a1)], [x1, Y(b1)], [x0, Y(b0)]], (d0 + d1) >= 0 ? col.pos : col.neg);
-      else { var tt = d0 / (d0 - d1), xc = x0 + (x1 - x0) * tt, yc = Y(a0 + (a1 - a0) * tt); poly([[x0, Y(a0)], [xc, yc], [x0, Y(b0)]], d0 >= 0 ? col.pos : col.neg); poly([[xc, yc], [x1, Y(a1)], [x1, Y(b1)]], d1 >= 0 ? col.pos : col.neg); } }
-    function line(arr, color, w, dash) { var d = ''; arr.forEach(function (v, k2) { d += (k2 ? 'L' : 'M') + X(k2).toFixed(1) + ',' + Y(v).toFixed(1); }); mk('path', { d: d, fill: 'none', stroke: color, 'stroke-width': w, 'stroke-dasharray': dash || null, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg); }
-    if (mode === 'wert') { line(A2, col.cost, 1.5, '5 4'); line(A1, col.val, 2); }
-    else { mk('line', { x1: m.l, x2: m.l + iw, y1: Y(0), y2: Y(0), stroke: col.axis, 'stroke-width': 1 }, svg); line(A1, col.val, 2); }
-    var ly = Y(A1[n - 1]); mk('circle', { cx: X(n - 1), cy: ly, r: 4, fill: col.val, stroke: col.surface, 'stroke-width': 2 }, svg);
-    var et = mk('text', { x: m.l + iw + 8, y: ly + 4, 'font-size': 11.5, fill: col.ink, 'font-weight': 600 }, svg); et.textContent = money(A1[n - 1]);
-    if (mode === 'wert') { var cy2 = Y(A2[n - 1]); if (Math.abs(cy2 - ly) >= 14) { var ct = mk('text', { x: m.l + iw + 8, y: cy2 + 4, 'font-size': 11, fill: col.muted }, svg); ct.textContent = money(A2[n - 1]); } }
-    var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
-    var dot = mk('circle', { r: 4, fill: col.val, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
-    var tip = el('div', 'tip'); tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
-    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1;
-    function show(i) { if (i < 0 || i >= n) return; cur = i; var q = pts[i], x = X(i); cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible'); dot.setAttribute('cx', x); dot.setAttribute('cy', Y(A1[i])); dot.setAttribute('visibility', 'visible');
-      tip.textContent = ''; tip.appendChild(el('div', 'd', (i === n - 1 ? 'Stand ' : 'Wochenschluss ') + dDE(q.d)));
-      tipRow(tip, col.val, eur(q.val), 'Wert'); tipRow(tip, 'dash', eur(q.cost), 'Einstand'); tipRow(tip, null, sgnEur(q.gain) + (q.cost > 0 ? ' (' + pct((q.val - q.cost) / q.cost, 1) + ')' : ''), 'Gewinn'); if (Math.abs(q.real) > 0.5) tipRow(tip, null, sgnEur(q.real), 'davon realisiert');
-      var sEl = el('div', 's'); sEl.textContent = Object.keys(q.parts).map(function (a) { return inst[a] + ' ' + eur(q.parts[a]); }).join(' · '); tip.appendChild(sEl);
-      placeTip(tip, host, W, x, m.t); }
-    function hide() { cross.setAttribute('visibility', 'hidden'); dot.setAttribute('visibility', 'hidden'); tip.style.opacity = '0'; }
-    function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / Math.max(1, n - 1))))); }
-    hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
-    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); }; host.onfocus = function () { show(cur); }; host.onblur = hide;
-    host.setAttribute('aria-label', mode === 'wert' ? 'Wert der Positionen und Einstand je Woche, zuletzt ' + eur(pts[n - 1].val) + ' bei ' + eur(pts[n - 1].cost) + ' Einstand' : 'Gewinn oder Verlust je Woche, zuletzt ' + sgnEur(pts[n - 1].gain));
-    cap.textContent = 'Wochenschlüsse in Euro (VWCE an der Xetra, Bitcoin in Euro, Gold-ETC in Mailand), der letzte Punkt mit dem aktuellen Kurs. Ohne Cash.' + (estText ? ' ' + estText : '');
-  }
-
   /* ---------- Portfolio-Chart: Gesamtdepot und Bausteine je Woche ----------
      pts: [{k, d, total, gainTotal, parts:{a:{val, cash, interest, gain, cost}}}], mode 'wert'|'gewinn',
      series: [{key:'total'|a, label, colorVar}] */
@@ -267,6 +214,6 @@
     if (leg) series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : css('--ink'); if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
     if (cap) cap.textContent = capText || '';
   }
-  root.CH = { ruleChart: ruleChart, donut: donut, perfChart: perfChart, portfolioChart: portfolioChart, portfolioSplit: portfolioSplit, mk: mk, el: el, css: css };
+  root.CH = { ruleChart: ruleChart, donut: donut, portfolioChart: portfolioChart, portfolioSplit: portfolioSplit, mk: mk, el: el, css: css };
   root.FMT = { de: de, eur: eur, sgnEur: sgnEur, pct: pct, pctPlain: pctPlain, dDE: dDE, dShort: dShort, dtDE: dtDE, MON: MON };
 })(window);

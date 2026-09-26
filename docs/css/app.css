@@ -1,11 +1,12 @@
 /* Regel-Depot 50/30/20 – Stylesheet
-   Farben: Datenreihen nach fester Zuordnung (FTSE blau, Bitcoin orange, Gold gelb, Cash grau), Status-Farben nur für Zustände. */
+   Farben: Datenreihen nach fester Zuordnung (FTSE blau, Bitcoin orange, Gold gelb, Cash grau), Status-Farben nur für Zustände.
+   Kontrast: Linien mindestens 3:1 zum Hintergrund (Gold hell #b98300), Text auf Rot hell weiß, dunkel fast schwarz (--bad-ink). */
 :root{
   color-scheme:light;
   --bg:#F3F5F8; --surface:#FFFFFF; --surface-2:#EDF0F4; --surface-3:#DDE2E9; --ink:#0F1724; --ink-2:#3F4A5A; --muted:#667085;
   --rule:#D8DEE6; --rule-strong:#B9C2CE; --accent:#1B3A6B; --accent-soft:#E4EBF6; --accent-ink:#FFFFFF;
-  --good:#0B6B37; --good-bg:#DFF1E6; --warn:#7A5000; --warn-bg:#FAEFD2; --bad:#A8231B; --bad-bg:#FBE4E1;
-  --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#eda100; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
+  --good:#0B6B37; --good-bg:#DFF1E6; --warn:#7A5000; --warn-bg:#FAEFD2; --bad:#A8231B; --bad-bg:#FBE4E1; --bad-ink:#FFFFFF;
+  --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#b98300; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
@@ -17,7 +18,7 @@
     color-scheme:dark;
     --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
     --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
-    --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917;
+    --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
@@ -27,7 +28,7 @@
   color-scheme:dark;
   --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
   --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
-  --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917;
+  --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
@@ -75,7 +76,7 @@ nav.toc .in{max-width:1400px;margin:0 auto;padding-inline:16px;display:flex;gap:
 @media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(24px,2.5vw,48px) - 10px)}}
 nav.toc a{flex:0 0 auto;padding:10px 10px;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
 nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-bottom-color:var(--rule-strong);outline:none}
-nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:#fff;font-size:11px;font-weight:700;text-align:center;line-height:18px}
+nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:var(--bad-ink);font-size:11px;font-weight:700;text-align:center;line-height:18px}
 
 section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
 section>*{min-width:0}
@@ -84,7 +85,6 @@ h2.eyebrow.sec{font-size:13px;letter-spacing:.1em;color:var(--ink-2);margin:0;pa
 h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:8px}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);min-width:0}
 .pad{padding:16px 18px}
-.grid3{display:grid;grid-template-columns:repeat(auto-fit,minmax(290px,1fr));gap:14px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
 
 /* Chips, Zustände */
@@ -105,17 +105,6 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .tag.ok{background:var(--good-bg);color:var(--good)}
 .tag.bad{background:var(--bad-bg);color:var(--bad)}
 .tag.acc{background:var(--accent-soft);color:var(--accent)}
-
-/* Zu-tun-Leiste */
-.todo{display:grid;gap:8px}
-.todo .it{display:grid;grid-template-columns:auto 1fr;gap:10px 12px;align-items:start;padding:12px 16px;border-radius:10px;border:1px solid var(--rule);background:var(--surface)}
-.todo .it.buy{border-color:color-mix(in srgb,var(--good) 40%,var(--rule));background:color-mix(in srgb,var(--good-bg) 55%,var(--surface))}
-.todo .it.sell{border-color:color-mix(in srgb,var(--bad) 40%,var(--rule));background:color-mix(in srgb,var(--bad-bg) 55%,var(--surface))}
-.todo .it.warn{border-color:color-mix(in srgb,var(--warn) 40%,var(--rule));background:color-mix(in srgb,var(--warn-bg) 55%,var(--surface))}
-.todo .it b{font-size:15px}
-.todo .it p{font-size:13.5px;color:var(--ink-2)}
-.todo .it .ic{width:22px;height:22px;border-radius:50%;display:grid;place-items:center;color:#fff;font-size:12px;font-weight:700;margin-top:2px}
-.todo .it.buy .ic{background:var(--sig-buy)} .todo .it.sell .ic{background:var(--sig-sell)} .todo .it.warn .ic{background:#b98300} .todo .it.info .ic{background:var(--cash)}
 
 /* Live-Block auf den Status-Karten */
 .scard .live{border-radius:8px;padding:9px 12px;background:var(--surface-2);display:grid;gap:3px}
@@ -241,13 +230,6 @@ td .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:
 tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0}
 .up{color:var(--good)} .down{color:var(--bad)}
 
-/* Kennzahlen */
-.kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(190px,1fr));gap:14px}
-.kpi{padding:14px 16px;display:grid;gap:4px;align-content:start}
-.kpi .k{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
-.kpi .v{font-size:25px;font-weight:600;line-height:1.15}
-.kpi .d{font-size:13px;color:var(--ink-2)}
-
 /* Aufteilung */
 .alloc{display:grid;gap:12px}
 .donuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;align-items:start}
@@ -295,13 +277,16 @@ textarea{font-family:var(--mono);font-size:12px;min-height:88px;resize:vertical}
 input:focus-visible,select:focus-visible,textarea:focus-visible{outline:2px solid var(--accent);outline-offset:0;border-color:var(--accent)}
 .btn{font:inherit;font-size:14px;font-weight:600;border:1px solid var(--accent);background:var(--accent);color:var(--accent-ink);padding:8px 14px;border-radius:7px;cursor:pointer;white-space:nowrap}
 .btn.ghost{background:transparent;color:var(--accent)}
-.btn.danger{border-color:var(--bad);background:var(--bad);color:#fff}
+.btn.danger{border-color:var(--bad);background:var(--bad);color:var(--bad-ink)}
 .btn.sm{font-size:12.5px;padding:4px 9px}
 .btn[disabled]{opacity:.5;cursor:not-allowed}
 button.link{font:inherit;background:none;border:0;color:var(--accent);text-decoration:underline;cursor:pointer;padding:0}
 .formmsg{font-size:13px;color:var(--ink-2);min-height:1.2em}
 .formmsg.err{color:var(--bad)}
 .btnrow{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.restore{display:grid;gap:8px;border-top:1px solid var(--rule);padding-top:12px}
+.restore select{width:auto;flex:1 1 260px;max-width:100%}
+#storeBanner:not(:empty){display:grid;gap:10px;margin-top:16px}
 
 /* Rebalancing */
 .rv{display:grid;gap:0;align-content:start}

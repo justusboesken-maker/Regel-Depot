@@ -140,45 +140,99 @@
     "vapidPublicKey": "BMtaohF2Hx8p0b7SkhYNZu5ZD2ivmQw2e1Gc8fM0qlJsQ0avsNMXH9ivBYI0ChInvZY4mFu-JUgfe2vV46nlX1I",
     "subject": "https://justusboesken-maker.github.io/Regel-Depot/",
     "weeklySummary": true,
-    "maxSubscriptions": 5
+    "maxSubscriptions": 5,
+    "mondayAt": "07:53",
+    "note": "Wochenübersicht und die Nachrichten der Nacht zum Montag um mondayAt (Berliner Zeit); alle anderen Nachrichten sofort (Justus 26.09.2026)."
   },
   "schedule": [
     {
       "id": "fr-warn",
       "cron": "17 13 * * 5",
+      "season": "summer",
+      "label": "Vorwarnung FTSE All-World und Gold"
+    },
+    {
+      "id": "fr-warn",
+      "cron": "17 14 * * 5",
+      "season": "winter",
       "label": "Vorwarnung FTSE All-World und Gold"
     },
     {
       "id": "fr-close",
       "cron": "47 16 * * 5",
+      "season": "summer",
+      "label": "Wochenschluss FTSE All-World (nach Londoner Schluss), Gold falls schon veröffentlicht, Euro-Kurse"
+    },
+    {
+      "id": "fr-close",
+      "cron": "47 17 * * 5",
+      "season": "winter",
       "label": "Wochenschluss FTSE All-World (nach Londoner Schluss), Gold falls schon veröffentlicht, Euro-Kurse"
     },
     {
       "id": "fr-close",
       "cron": "23 18 * * 5",
+      "season": "summer",
+      "label": "Wiederholung, falls ein Schluss noch fehlte",
+      "retry": true
+    },
+    {
+      "id": "fr-close",
+      "cron": "23 19 * * 5",
+      "season": "winter",
       "label": "Wiederholung, falls ein Schluss noch fehlte",
       "retry": true
     },
     {
       "id": "fr-close",
       "cron": "23 20 * * 5",
+      "season": "summer",
       "label": "Wiederholung",
       "retry": true
     },
     {
       "id": "fr-close",
-      "cron": "7 22 * * 5",
-      "label": "Letzte Wiederholung am Freitag",
+      "cron": "23 21 * * 5",
+      "season": "winter",
+      "label": "Wiederholung",
+      "retry": true
+    },
+    {
+      "id": "fr-close",
+      "cron": "37 23 * * 5",
+      "season": "summer",
+      "label": "Letzte Wiederholung, nach der üblichen LBMA-Veröffentlichung",
+      "retry": true
+    },
+    {
+      "id": "fr-close",
+      "cron": "37 0 * * 6",
+      "season": "winter",
+      "label": "Letzte Wiederholung, nach der üblichen LBMA-Veröffentlichung",
       "retry": true
     },
     {
       "id": "sa-close",
       "cron": "23 7 * * 6",
+      "season": "summer",
+      "label": "Samstag: fehlende Schlüsse (FTSE, Gold) und Euro-Schlüsse vom Freitag"
+    },
+    {
+      "id": "sa-close",
+      "cron": "23 8 * * 6",
+      "season": "winter",
       "label": "Samstag: fehlende Schlüsse (FTSE, Gold) und Euro-Schlüsse vom Freitag"
     },
     {
       "id": "so-warn",
       "cron": "17 19 * * 0",
+      "season": "summer",
+      "label": "Vorwarnung Bitcoin"
+    },
+    {
+      "id": "so-warn",
+      "cron": "17 20 * * 0",
+      "season": "winter",
       "label": "Vorwarnung Bitcoin"
     },
     {
@@ -195,28 +249,53 @@
     {
       "id": "mo-notify",
       "cron": "53 5 * * 1",
+      "season": "summer",
+      "label": "Benachrichtigungen vom Wochenende"
+    },
+    {
+      "id": "mo-notify",
+      "cron": "53 6 * * 1",
+      "season": "winter",
       "label": "Benachrichtigungen vom Wochenende"
     },
     {
       "id": "eod",
       "cron": "37 17 * * 1-4",
+      "season": "summer",
+      "label": "Euro-Kurse für die Depotbewertung"
+    },
+    {
+      "id": "eod",
+      "cron": "37 18 * * 1-4",
+      "season": "winter",
       "label": "Euro-Kurse für die Depotbewertung"
     },
     {
       "id": "eod",
       "cron": "37 21 * * 1-4",
-      "label": "Euro-Schlüsse des Tages (Xetra liefert abends)",
+      "season": "summer",
+      "label": "Euro-Schlüsse des Tages (Lang & Schwarz schließt 23 Uhr)",
+      "quiet": true
+    },
+    {
+      "id": "eod",
+      "cron": "37 22 * * 1-4",
+      "season": "winter",
+      "label": "Euro-Schlüsse des Tages (Lang & Schwarz schließt 23 Uhr)",
       "quiet": true
     },
     {
       "id": "live",
       "cron": "7 5-21 * * *",
-      "label": "Kurs-Ticker (stündlich, Bitcoin, Gold, EUR/USD, ETH, SOL)",
+      "label": "Kurs-Ticker (Bitcoin, Gold, EUR/USD, ETH, SOL, Lang & Schwarz)",
       "quiet": true
     }
   ],
   "holidays": {
-    "note": "Tage ohne Handel in London bzw. ohne LBMA-Fixing, die auf einen Freitag fallen (dann ist der Donnerstag der Wochenschluss)",
+    "note": "Handelskalender London: englische Bankfeiertage berechnet das Update-Skript selbst (Neujahr, Karfreitag, Ostermontag, Mai, August, Weihnachten, Boxing Day mit Ersatztagen). Hier nur Sondertage (extra, z. B. Krönung) und verlegte Feiertage (notHolidays). Kein LBMA-Nachmittagsfixing am letzten Geschäftstag vor Weihnachten und vor Neujahr (meist 24.12. und 31.12., am Wochenende der Freitag davor) rechnet das Skript ebenfalls selbst; Gold schließt die Woche dann mit dem Fixing des Vortags. lbmaNoPm: weitere Tage ohne Nachmittagsfixing (JJJJ-MM-TT). fridays: ältere Liste, bleibt gültig.",
+    "extra": [],
+    "notHolidays": [],
+    "lbmaNoPm": [],
     "fridays": [
       "2026-12-25",
       "2027-01-01",
@@ -241,7 +320,7 @@
     "note": "Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Handel zur Eröffnung der Folgewoche, Montag ab 7:30 Uhr; Bitcoin jederzeit."
   },
   "taxLaw": {
-    "note": "Rechtsstand September 2026, keine persönlichen Angaben. Persönliche Steuerdaten liegen nur im Browser (Einstellungen).",
+    "note": "Rechtsstand September 2026, keine persönlichen Angaben. Persönliche Steuerdaten liegen nur im Browser (Einstellungen). Das Steuerjahr ist das Kalenderjahr; Basiszins und VWCE-Kurs zu Jahresbeginn stehen je Jahr unter years (jeden Januar ergänzen). Rebalancing jedes Jahr am rebalDay.",
     "year": 2026,
     "pb": 1000,
     "abg": 0.26375,
@@ -253,6 +332,15 @@
     "fee": 1,
     "minOrder": 25,
     "rebalDate": "2026-12-30",
-    "krypto": "Referentenentwurf des BMF (September 2026): Bitcoin-Käufe ab 01.01.2027 sollen unter die Abgeltungsteuer fallen, Bestände bis 31.12.2026 behalten die Haltefrist. Noch kein Gesetz."
-  }
+    "krypto": "Stand 10.09.2026: Referentenentwurf des BMF in der regierungsinternen Abstimmung, nicht im Kabinett: Kryptowerte, die nach dem 31.12.2026 angeschafft werden, sollen unter die Abgeltungsteuer fallen; ältere Bestände behalten die Haltefrist. Noch kein Gesetz; die Seite rechnet mit dem geltenden Recht (von Justus am 26.09.2026 so festgelegt).",
+    "years": {
+      "2026": {
+        "basiszins": 0.032,
+        "vwceStart": 145.14,
+        "note": "Basiszins BMF 13.01.2026; VWCE-Schluss 02.01.2026"
+      }
+    },
+    "rebalDay": "12-30"
+  },
+  "scheduleNote": "Cron-Zeiten in UTC; season: summer = Berliner Sommerzeit (UTC+2), winter = Winterzeit (UTC+1). Der Workflow lässt Läufe der anderen Jahreszeit aus, damit die Berliner Uhrzeit das ganze Jahr gleich bleibt."
 }

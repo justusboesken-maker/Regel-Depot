@@ -61,9 +61,14 @@
   /* ---------- Regel über die ganze Serie ----------
      rule: {type:'confirm', n} (FTSE n=2, Gold n=4) oder {type:'band', p} (Bitcoin p=0,03)
      Gleichstand setzt beide Zähler zurück (A-6). Startzustand beim ersten SMA50: investiert, wenn Schluss darüber (A-7). */
+  /* Schwellen für einen Wochenschluss aus der Summe der 49 Schlüsse davor (s49): Der Schluss selbst geht in den SMA50 ein, deshalb
+     Schluss > SMA50 ⇔ Schluss > s49/49 und Schluss > (1+p)·SMA50 ⇔ Schluss > (1+p)·s49/(49−p). Dieselben Zahlen nennen Vorwarnung,
+     Statuskarte und Signaltext. */
+  function thresholds(s49, p) { return { above: s49 / 49, bandUp: (1 + p) * s49 / (49 - p), bandDown: (1 - p) * s49 / (49 + p) }; }
   function evalRule(S, rule) {
-    var n = S.c.length, sma = new Array(n), st = new Array(n), up = new Array(n), dn = new Array(n), sum = 0, i;
-    for (i = 0; i < n; i++) { sum += S.c[i]; if (i >= 50) sum -= S.c[i - 50]; sma[i] = i >= 49 ? sum / 50 : null; }
+    var n = S.c.length, sma = new Array(n), s49 = new Array(n), st = new Array(n), up = new Array(n), dn = new Array(n), sum = 0, i;
+    for (i = 0; i < n; i++) { sum += S.c[i]; if (i >= 50) sum -= S.c[i - 50]; sma[i] = i >= 49 ? sum / 50 : null; s49[i] = i >= 49 ? sum - S.c[i] : null; }
+    var p = rule.type === 'band' ? rule.p : 0.03;
     var s = null, u = 0, dw = 0, sw = [];
     for (i = 0; i < n; i++) {
       if (sma[i] == null) { st[i] = null; up[i] = 0; dn[i] = 0; continue; }
@@ -73,17 +78,16 @@
       if (rule.type === 'band') { if (s === null) s = c > M ? 1 : 0; else if (s === 0 && c > M * (1 + rule.p)) s = 1; else if (s === 1 && c < M * (1 - rule.p)) s = 0; }
       else { if (s === null) s = c > M ? 1 : 0; else if (s === 0 && u >= rule.n) s = 1; else if (s === 1 && dw >= rule.n) s = 0; }
       st[i] = s; up[i] = u; dn[i] = dw;
-      if (prev !== null && prev !== s) sw.push({ i: i, k: S.k[i], d: S.d[i], to: s, c: c, m: M });
+      if (prev !== null && prev !== s) { var T = thresholds(s49[i], p); sw.push({ i: i, k: S.k[i], d: S.d[i], to: s, c: c, m: M, thr: rule.type === 'band' ? (s === 1 ? T.bandUp : T.bandDown) : T.above }); }
     }
     var L = n - 1, S49 = 0; for (i = Math.max(0, n - 49); i < n; i++) S49 += S.c[i];
-    var p = rule.type === 'band' ? rule.p : 0.03;
     var lastSw = sw.length ? sw[sw.length - 1] : null;
     var last = n ? {
       i: L, k: S.k[L], d: S.d[L], c: S.c[L], m: sma[L], dist: sma[L] ? S.c[L] / sma[L] - 1 : null, st: st[L], up: up[L], dn: dn[L],
       changed: L > 0 && st[L - 1] != null && st[L - 1] !== st[L], lastSwitch: lastSw
     } : null;
     /* Schwellen für den nächsten Wochenschluss (Abschnitt 8.2) */
-    return { sma: sma, st: st, up: up, dn: dn, sw: sw, last: last, next: { above: S49 / 49, bandUp: (1 + p) * S49 / (49 - p), bandDown: (1 - p) * S49 / (49 + p) } };
+    return { sma: sma, st: st, up: up, dn: dn, sw: sw, last: last, next: thresholds(S49, p) };
   }
   /* Die Schwelle, an der die Regel beim nächsten Schluss kippt (nur wenn ein einzelner Schluss reicht), sonst die SMA-Grenze */
   function flipThreshold(E, rule) {
@@ -252,6 +256,30 @@
     return vp;
   }
 
+  /* ---------- Handelskalender London ----------
+     Englische Bankfeiertage (Börse London geschlossen, kein LBMA-Fixing): Neujahr, Karfreitag, Ostermontag, erster und letzter Montag im Mai,
+     letzter Montag im August, Weihnachten und Boxing Day, jeweils mit Ersatztag, wenn sie aufs Wochenende fallen. Einmalige Sondertage
+     (etwa eine Krönung) stehen in der Konfiguration. */
+  function easterSunday(y) {
+    var a = y % 19, b = Math.floor(y / 100), c = y % 100, d = Math.floor(b / 4), e = b % 4, f = Math.floor((b + 8) / 25), g = Math.floor((b - f + 1) / 3);
+    var h = (19 * a + b - d - g + 15) % 30, i = Math.floor(c / 4), k = c % 4, l = (32 + 2 * e + 2 * i - h - k) % 7, m = Math.floor((a + 11 * h + 22 * l) / 451);
+    var month = Math.floor((h + l - 7 * m + 114) / 31), day = ((h + l - 7 * m + 114) % 31) + 1;
+    return iso(Date.UTC(y, month - 1, day));
+  }
+  function dow0(d) { return (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7; }
+  function firstMonday(y, m) { var d = iso(Date.UTC(y, m - 1, 1)); while (dow0(d) !== 0) d = addDays(d, 1); return d; }
+  function lastMonday(y, m) { var d = iso(Date.UTC(y, m, 0)); while (dow0(d) !== 0) d = addDays(d, -1); return d; }
+  function ukHolidays(y) {
+    var out = [], E = easterSunday(y), ny = y + '-01-01', w = dow0(ny), x = y + '-12-25', wx = dow0(x);
+    out.push(w === 5 ? addDays(ny, 2) : w === 6 ? addDays(ny, 1) : ny);
+    out.push(addDays(E, -2), addDays(E, 1), firstMonday(y, 5), lastMonday(y, 5), lastMonday(y, 8));
+    if (wx <= 3) out.push(x, addDays(x, 1));                 /* Mo–Do: 25. und 26. */
+    else if (wx === 4) out.push(x, addDays(x, 3));           /* Fr: Boxing Day am Samstag -> Montag */
+    else if (wx === 5) out.push(addDays(x, 2), addDays(x, 3)); /* Sa: Montag und Dienstag */
+    else out.push(addDays(x, 1), addDays(x, 2));             /* So: Montag (Boxing Day) und Dienstag */
+    return out.sort();
+  }
+
   /* ---------- Eingaben ----------
      Zahl aus einem Eingabefeld, unabhängig vom Gebietsschema des Browsers. Deutsch zuerst: „2.708,00“ = 2708, „0,5“ = 0,5, „1.234.567“ = 1234567.
      Punkt und Komma zusammen: das letzte Zeichen trennt die Nachkommastellen („2,708.00“ = 2708). Genau ein Punkt mit drei Ziffern danach
@@ -297,7 +325,7 @@
   }
 
   var ENG = {
-    parseNum: parseNum, parseDate: parseDate,
+    parseNum: parseNum, parseDate: parseDate, easterSunday: easterSunday, ukHolidays: ukHolidays,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf,

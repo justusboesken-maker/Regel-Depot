@@ -81,7 +81,10 @@ export async function sendPush(subscription, payload, vapid, opts = {}) {
     'Urgency': opts.urgency || 'high'
   };
   if (opts.topic) headers.Topic = opts.topic;
-  const res = await fetch(sub.endpoint, { method: 'POST', headers, body });
+  /* Ohne Zeitlimit könnte ein hängender Push-Dienst den ganzen Lauf bis zum Workflow-Timeout blockieren */
+  const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), opts.timeout || 20000);
+  let res;
+  try { res = await fetch(sub.endpoint, { method: 'POST', headers, body, signal: ctl.signal }); } finally { clearTimeout(timer); }
   const text = await res.text().catch(() => '');
   return { ok: res.status >= 200 && res.status < 300, status: res.status, gone: res.status === 404 || res.status === 410, text: text.slice(0, 200) };
 }
