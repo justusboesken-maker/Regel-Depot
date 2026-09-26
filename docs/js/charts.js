@@ -20,40 +20,46 @@
   function dtDE(iso) { if (!iso) return '–'; var d = new Date(iso); if (isNaN(d)) return '–'; return d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }); }
   var MON = ['Jan', 'Feb', 'Mär', 'Apr', 'Mai', 'Jun', 'Jul', 'Aug', 'Sep', 'Okt', 'Nov', 'Dez'];
 
-  /* Tooltip-Helfer */
-  function tipRow(tip, key, val, label) { var r = el('div', 'r'), i = el('i'); if (key === 'dash') { i.className = 'dash'; i.style.borderTopColor = css('--ink-2'); } else if (key) i.style.borderTopColor = key; else i.className = 'none'; r.appendChild(i); r.appendChild(el('span', null, label)); r.appendChild(el('b', null, val)); tip.appendChild(r); }
-  /* Zahl und Einheit in der Anzeige nicht trennen (kein „€“ allein in der nächsten Zeile) */
-  function nb(t) { return String(t).replace(/ (€|%|Prozentpunkte)/g, '\u00a0$1'); }
-  /* Zeile in der Anzeige: {color, dash, strong, label, val} */
-  function lineRow(tip, r) { var d = el('div', 'r' + (r.strong ? ' strong' : '')), i = el('i'); i.style.borderTopColor = r.color; if (r.dash) i.className = 'dash'; if (r.strong) i.style.borderTopWidth = '3px'; d.appendChild(i); d.appendChild(el('span', null, r.label)); d.appendChild(el('b', null, r.val)); tip.appendChild(d); }
-  /* ---------- Untereinanderstehende Charts gemeinsam (Justus 26.09.2026, Entwurf A „eine Anzeige“) ----------
-     Fährt man über einen Chart der Gruppe, zeigen alle Charts denselben Tag (Linie und Punkte), und eine gemeinsame Anzeige listet die Werte
-     aller Charts (Abschnitt je Chart) neben der Linie auf Höhe des Zeigers. box: gemeinsamer Container der Charts. */
+  /* Zahl und Einheit nicht trennen (kein „€“ allein in der nächsten Zeile) */
+  function nb(t) { return String(t).replace(/ (€|%|\$|Prozentpunkte)/g, '\u00a0$1'); }
+  /* ---------- Werte-Zeile über den Charts (Justus 26.09.2026: statt eines Kästchens im Chart, damit nichts verdeckt wird) ----------
+     spec: {head (fett), extra, extraCls, groups: [{title, rows: [{color, dash, strong, label, val}]}], note, noteCls}. Die Werte haben eine
+     feste Mindestbreite, damit die Zeile beim Darüberfahren nicht springt. */
+  function readout(box, spec) {
+    if (!box) return;
+    box.textContent = '';
+    var h = el('div', 'rd-h'); h.appendChild(el('b', null, spec.head)); if (spec.extra) h.appendChild(el('span', 'rd-x' + (spec.extraCls ? ' ' + spec.extraCls : ''), nb(spec.extra))); box.appendChild(h);
+    (spec.groups || []).forEach(function (g) {
+      var row = el('div', 'rd-row'); if (g.title) row.appendChild(el('span', 'rd-t', g.title));
+      g.rows.forEach(function (r) {
+        var it = el('span', 'rd-i'); if (r.color) { var i = el('i'); i.style.borderTopColor = r.color; if (r.dash) i.className = 'dash'; if (r.strong) i.style.borderTopWidth = '3px'; it.appendChild(i); }
+        var lb = el('span', 'rd-l'); if (r.short && r.short !== r.label) { lb.appendChild(el('span', 'rd-long', r.label)); lb.appendChild(el('span', 'rd-short', r.short)); } else lb.textContent = r.label;
+        it.appendChild(lb); it.appendChild(el('b', 'rd-v', nb(r.val))); row.appendChild(it);
+      });
+      box.appendChild(row);
+    });
+    if (spec.note) box.appendChild(el('div', 'rd-n' + (spec.noteCls ? ' ' + spec.noteCls : ''), nb(spec.note)));
+  }
+  /* Untereinanderstehende Charts gemeinsam: Fährt man über einen Chart der Gruppe (oder tippt), zeigen alle denselben Tag (Linie und Punkte),
+     die Werte stehen in der Werte-Zeile box; ohne Zeiger dort der letzte Stand. Ein Chart mit Titel beginnt eine neue Zeile. */
   function syncGroup(box) {
-    Array.prototype.forEach.call(box.querySelectorAll(':scope > .tip.sync'), function (t) { t.remove(); });
-    if (getComputedStyle(box).position === 'static') box.style.position = 'relative';
-    var tip = el('div', 'tip sync'), G = { charts: [], cur: null };
-    tip.setAttribute('aria-hidden', 'true'); box.appendChild(tip);
+    var G = { charts: [], cur: null };
+    if (box) box.classList.add('readout');
+    function spec(i) {
+      var groups = [];
+      G.charts.forEach(function (c) { var rows = c.rows(i); if (!groups.length || c.title) groups.push({ title: c.title || '', rows: rows }); else groups[groups.length - 1].rows = groups[groups.length - 1].rows.concat(rows); });
+      return { head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups };
+    }
     G.add = function (c) { G.charts.push(c); };
-    G.show = function (i, src, clientY) {
-      G.cur = i;
-      G.charts.forEach(function (c) { c.mark(i); });
-      var first = G.charts[0];
-      tip.textContent = ''; tip.appendChild(el('div', 'd', first.head(i)));
-      G.charts.forEach(function (c, k) { var rows = c.rows(i); if (!rows.length) return; if (k > 0) tip.appendChild(el('div', 'g', c.title || '')); rows.forEach(function (r) { lineRow(tip, r); }); });
-      var sub = first.sub(i); if (sub) tip.appendChild(el('div', 's', nb(sub)));
-      var bx = box.getBoundingClientRect(), hb = src.host.getBoundingClientRect(), x = hb.left - bx.left + src.xPx(i), tw = tip.offsetWidth, th = tip.offsetHeight, bw = box.clientWidth;
-      var right = x + 16 + tw <= bw - 4, lft = x - 16 - tw >= 0, py = clientY != null ? clientY - bx.top : hb.top - bx.top + src.topPx() + th / 2;
-      var left = right ? x + 16 : lft ? x - 16 - tw : Math.max(0, Math.min(bw - tw, x - tw / 2));
-      /* Neben der Linie auf Höhe des Zeigers; passt sie nicht daneben (Handy), über oder unter den Finger statt darauf */
-      var top = right || lft ? py - th / 2 : (py < box.clientHeight / 2 ? py + 28 : py - th - 28);
-      top = Math.max(0, Math.min(top, box.clientHeight - th));
-      tip.style.left = left + 'px'; tip.style.top = top + 'px'; tip.style.opacity = '1';
+    G.show = function (i) { G.cur = i; G.charts.forEach(function (c) { c.mark(i); }); readout(box, spec(i)); };
+    G.reset = function () {
+      if (!G.charts.length) return;
+      if (box && !G.w) { G.w = G.charts.reduce(function (w, c) { return Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
+      readout(box, spec(G.charts[0].n - 1));
     };
-    G.hide = function () { G.charts.forEach(function (c) { c.unmark(); }); tip.style.opacity = '0'; };
+    G.hide = function () { G.charts.forEach(function (c) { c.unmark(); }); G.reset(); };
     return G;
   }
-  function placeTip(tip, host, svgW, x, top) { var scale = host.clientWidth / svgW, px = x * scale, tw = tip.offsetWidth, left = px + 14; if (left + tw > host.clientWidth - 4) left = px - 14 - tw; if (left < 0) left = 0; tip.style.left = left + 'px'; tip.style.top = (top * scale) + 'px'; tip.style.opacity = '1'; }
 
   /* ---------- Regel-Chart: Wochenschlüsse, SMA50, Band, investierte Phasen, Signale, Abstandsstreifen ----------
      o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn)} */
@@ -111,30 +117,34 @@
     mk('line', { x1: m.l, x2: m.l + iw, y1: st0 + sh, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1 }, g);
     ticks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: st0 + sh, y2: st0 + sh + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: st0 + sh + 16, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
     host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
-    /* Hover und Tastatur */
+    /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
+       im Chart-Container); ohne Zeiger zeigt sie den letzten Wochenschluss */
+    var rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd');
+    var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
     var cross = mk('line', { y1: m.t, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dotC = mk('circle', { r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var dotS = mk('circle', { r: 3.5, fill: col.sma, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
-    var tip = el('div', 'tip'); tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
     var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: st0 + sh - m.t, fill: 'transparent' }, svg), cur = n - 1;
+    function read(k) {
+      var sw = E.sw.filter(function (s) { return s.i === k; })[0], note, cls = '';
+      if (sw) { note = (sw.to ? '▲ Kaufsignal' : '▼ Verkaufssignal') + ', Handel am ' + dShort(ENG.addDays(S.k[k], 7)); cls = sw.to ? 'sig-buy' : 'sig-sell'; }
+      else note = (E.st[k] === 1 ? 'Regel investiert' : 'Regel in Cash') + ' · ' + (band ? 'Band ' + o.usd(E.sma[k] * (1 - p)).replace(/\s?\$$/, '') + '–' + o.usd(E.sma[k] * (1 + p)) : E.up[k] > 0 ? E.up[k] + '. Schluss über SMA50' : E.dn[k] > 0 ? E.dn[k] + '. Schluss unter SMA50' : 'Schluss auf dem SMA50');
+      readout(rd, { head: 'Wochenschluss ' + dDE(S.d[k]), extra: pct(S.c[k] / E.sma[k] - 1, 1) + ' zum SMA50', groups: [{ rows: [{ color: col.line, label: 'Schluss', val: o.usd(S.c[k]) }, { color: col.sma, dash: true, label: 'SMA50', val: o.usd(E.sma[k]) }] }], note: note, noteCls: cls });
+    }
     function show(k) {
       if (k < i0 || k >= n) return; cur = k; var x = X(k);
       cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');
       dotC.setAttribute('cx', x); dotC.setAttribute('cy', Y(S.c[k])); dotC.setAttribute('visibility', 'visible');
       dotS.setAttribute('cx', x); dotS.setAttribute('cy', Y(E.sma[k])); dotS.setAttribute('visibility', 'visible');
-      tip.textContent = ''; tip.appendChild(el('div', 'd', 'Wochenschluss ' + dDE(S.d[k])));
-      tipRow(tip, col.line, o.usd(S.c[k]), 'Kurs'); tipRow(tip, 'dash', o.usd(E.sma[k]), 'SMA50'); tipRow(tip, null, pct(S.c[k] / E.sma[k] - 1, 1), 'Abstand');
-      if (band) { tipRow(tip, null, o.usd(E.sma[k] * (1 + p)), 'Einstieg über'); tipRow(tip, null, o.usd(E.sma[k] * (1 - p)), 'Ausstieg unter'); }
-      var sEl = el('div', 's'); sEl.textContent = (E.st[k] === 1 ? 'Regel investiert' : 'Regel in Cash') + (rule.type === 'confirm' ? ' · ' + (E.up[k] > 0 ? E.up[k] + '. Schluss über SMA50' : E.dn[k] > 0 ? E.dn[k] + '. Schluss unter SMA50' : 'auf SMA50') : ''); tip.appendChild(sEl);
-      var sw = E.sw.filter(function (s) { return s.i === k; })[0]; if (sw) { var sg = el('div', 's'); sg.style.fontWeight = '600'; sg.style.color = sw.to ? css('--good') : css('--bad'); sg.textContent = (sw.to ? '▲ Kaufsignal' : '▼ Verkaufssignal') + ', Handel am ' + dShort(ENG.addDays(S.k[k], 7)); tip.appendChild(sg); }
-      placeTip(tip, host, W, x, m.t);
+      read(k);
     }
-    function hide() { [cross, dotC, dotS].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); tip.style.opacity = '0'; }
+    function hide() { [cross, dotC, dotS].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); read(n - 1); }
     function idx(evt) { var rc = svg.getBoundingClientRect(), sx = (evt.clientX - rc.left) * (W / rc.width); var t = Math.round((sx - m.l) / iw * (N - 1)); return Math.max(i0, Math.min(n - 1, i0 + t)); }
     hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
     host.tabIndex = 0;
     host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(i0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); };
     host.onfocus = function () { show(cur); }; host.onblur = hide;
+    read(n - 1);
   }
 
   /* ---------- Kreisdiagramm ---------- */
@@ -209,31 +219,28 @@
     ends.sort(function (a, b) { return (a.s.key === 'total' ? -1 : 1) - (b.s.key === 'total' ? -1 : 1); });
     var used = [];
     ends.forEach(function (e) { var y = e.y; if (used.some(function (u) { return Math.abs(u - y) < 14; })) return; used.push(y); var t = mk('text', { x: m.l + iw + 8, y: y + 4, 'font-size': e.s.key === 'total' ? 11.5 : 10.5, fill: e.s.key === 'total' ? col.ink : css('--ink-2'), 'font-weight': e.s.key === 'total' ? 600 : 400 }, svg); t.textContent = money(e.v); });
-    /* Hover und Tastatur; mit opts.sync zeigen alle Charts der Gruppe denselben Tag, die Werte stehen in der gemeinsamen Anzeige */
+    /* Darüberfahren und Tastatur: Linie und Punkte, die Werte stehen in der Werte-Zeile der Gruppe (opts.sync); alle Charts der Gruppe zeigen denselben Tag */
     var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dots = series.map(function (s) { return mk('circle', { r: 3.5, fill: s.colorVar ? css(s.colorVar) : col.ink, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg); });
-    var tip = el('div', 'tip'); tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
-    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1, S = opts.sync || null;
+    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1, S = opts.sync || syncGroup(null);
     function head(i) { return (i === n - 1 ? 'Stand ' : daily ? 'Tag ' : 'Wochenschluss ') + dDE(pts[i].d); }
     function mark(i) { var q = pts[i], x = X(i); cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible'); series.forEach(function (s, si) { var v = val(s, q); if (v == null) { dots[si].setAttribute('visibility', 'hidden'); return; } dots[si].setAttribute('cx', x); dots[si].setAttribute('cy', Y(v)); dots[si].setAttribute('visibility', 'visible'); }); }
     function unmark() { cross.setAttribute('visibility', 'hidden'); dots.forEach(function (d) { d.setAttribute('visibility', 'hidden'); }); }
-    function rows(i) { var q = pts[i]; return series.map(function (s) { var v = val(s, q); return v == null ? null : { color: s.colorVar ? css(s.colorVar) : col.ink, label: s.label, val: mode === 'gewinn' ? sgnEur(v) : eur(v), strong: s.key === 'total' }; }).filter(Boolean); }
+    function fmt(v) { return v == null ? '–' : mode === 'gewinn' ? sgnEur(v) : eur(v); }
+    function rows(i) { var q = pts[i]; return series.map(function (s) { return { color: s.colorVar ? css(s.colorVar) : col.ink, label: s.label, short: s.short, val: fmt(val(s, q)), strong: s.key === 'total' }; }); }
+    function wmax() { var w = 1; series.forEach(function (s) { pts.forEach(function (q) { var v = val(s, q); if (v != null) w = Math.max(w, fmt(v).length); }); }); return w; }
     function sub(i) {
       var q = pts[i];
       if (series.length === 1 && series[0].key !== 'total') { var pt = q.parts[series[0].key]; return pt ? 'Position ' + eur(pt.val) + ' · Cash ' + eur(pt.cash) + (pt.interest > 0.5 ? ' · davon Zinsen ' + eur(pt.interest) : '') + (mode === 'wert' ? ' · Gewinn ' + sgnEur(pt.gain) : ' · Wert ' + eur(pt.val + pt.cash)) : ''; }
       var cashT = 0, intT = 0, valT = 0; Object.keys(q.parts).forEach(function (a) { cashT += q.parts[a].cash; intT += q.parts[a].interest; valT += q.parts[a].val; });
       return 'Positionen ' + eur(valT) + ' · Cash ' + eur(cashT) + (intT > 0.5 ? ' · davon Zinsen ' + eur(intT) : '') + (mode === 'wert' ? ' · Gewinn ' + sgnEur(q.gainTotal) : ' · Wert ' + eur(q.total));
     }
-    function show(i) { if (i < 0 || i >= n) return; cur = i; mark(i); tip.textContent = ''; tip.appendChild(el('div', 'd', head(i))); rows(i).forEach(function (r) { lineRow(tip, r); }); var t = sub(i); if (t) tip.appendChild(el('div', 's', nb(t))); placeTip(tip, host, W, X(i), m.t); }
-    function hide() { unmark(); tip.style.opacity = '0'; }
-    var api = { host: host, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, xPx: function (i) { return X(i) * host.clientWidth / W; }, topPx: function () { return m.t * host.clientWidth / W; } };
-    if (S) S.add(api);
-    function go(i, y) { if (i < 0 || i >= n) return; cur = i; if (S) S.show(i, api, y); else show(i); }
-    function stop() { if (S) S.hide(); else hide(); }
-    function at() { return S && S.cur != null ? S.cur : cur; }
+    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax });
+    function go(i) { if (i < 0 || i >= n) return; cur = i; S.show(i); }
+    function at() { return S.cur != null ? S.cur : cur; }
     function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / Math.max(1, n - 1))))); }
-    hit.addEventListener('pointermove', function (e) { go(idx(e), e.clientY); }); hit.addEventListener('pointerdown', function (e) { go(idx(e), e.clientY); }); hit.addEventListener('pointerleave', stop);
-    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { go(Math.min(n - 1, at() + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { go(Math.max(0, at() - 1)); e.preventDefault(); } else if (e.key === 'Escape') stop(); }; host.onfocus = function () { go(at()); }; host.onblur = stop;
+    hit.addEventListener('pointermove', function (e) { go(idx(e)); }); hit.addEventListener('pointerdown', function (e) { go(idx(e)); }); hit.addEventListener('pointerleave', function () { S.hide(); });
+    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { go(Math.min(n - 1, at() + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { go(Math.max(0, at() - 1)); e.preventDefault(); } else if (e.key === 'Escape') S.hide(); }; host.onfocus = function () { go(at()); }; host.onblur = function () { S.hide(); };
     var last = pts[n - 1];
     host.setAttribute('aria-label', (series.length === 1 ? series[0].label : 'Bausteine') + ': ' + (mode === 'wert' ? 'Wert, zuletzt ' + eur(val(series[0], last) || 0) : 'Gewinn, zuletzt ' + sgnEur(val(series[0], last) || 0)));
     if (cap) cap.textContent = capText || '';
@@ -244,12 +251,13 @@
     if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
     var total = series.filter(function (s) { return s.key === 'total'; }), parts = series.filter(function (s) { return s.key !== 'total'; });
     var wrap = el('div', 'splitcharts'); host.appendChild(wrap);
-    var G = syncGroup(wrap);
-    function block(title, ser, height) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, title: title }); }
+    /* Werte-Zeile statt Legende: Namen der Linien mit ihren Werten am gewählten Tag (ohne Zeiger: letzter Stand) */
+    var G = syncGroup(leg);
+    function block(title, ser, height) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G }); }
     var narrow = (host.clientWidth || 700) < 560;
     block('Depot gesamt', total, narrow ? 200 : 230);
     block('Bausteine', parts, narrow ? 220 : 260);
-    if (leg) series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : css('--ink'); if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
+    G.reset();
     if (cap) cap.textContent = capText || '';
   }
   /* ---------- Prozent-Linien über Tagen (Vergleich mit Buy & Hold, Drawdown) ----------
@@ -296,26 +304,22 @@
       ends.reverse(); var used = [];
       ends.forEach(function (e) { var y = e.y; while (used.some(function (u) { return Math.abs(u - y) < 14; })) y += (e.y >= used[0] ? 14 : -14); used.push(y); var t = mk('text', { x: m.l + iw + 8, y: y + 4, 'font-size': 11.5, fill: e.color, 'font-weight': e.L.dash ? 400 : 600 }, svg); t.textContent = pct(e.v, 1); });
     }
-    /* Hover und Tastatur; mit opts.sync zeigen alle Charts der Gruppe denselben Tag, die Werte stehen in der gemeinsamen Anzeige */
+    /* Darüberfahren und Tastatur: Linie und Punkte, die Werte stehen in der Werte-Zeile der Gruppe (opts.sync); alle Charts der Gruppe zeigen denselben Tag */
     var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dots = lines.map(function (L) { return mk('circle', { r: 3.5, fill: css(L.color), stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg); });
-    var tip = el('div', 'tip'); tip.setAttribute('aria-hidden', 'true'); host.appendChild(tip);
-    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1, S = opts.sync || null;
+    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: ih, fill: 'transparent' }, svg), cur = n - 1, S = opts.sync || syncGroup(null);
     function head(k) { return (k === n - 1 ? 'Stand ' : 'Tag ') + dDE(dates[k]); }
     function sub(k) { return opts.sub ? opts.sub(k) : ''; }
     function mark(k) { var x = X(k); cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible'); lines.forEach(function (L, li) { var v = L.vals[k]; if (v == null || !isFinite(v)) { dots[li].setAttribute('visibility', 'hidden'); return; } dots[li].setAttribute('cx', x); dots[li].setAttribute('cy', Y(v)); dots[li].setAttribute('visibility', 'visible'); }); }
     function unmark() { cross.setAttribute('visibility', 'hidden'); dots.forEach(function (d) { d.setAttribute('visibility', 'hidden'); }); }
-    function rows(k) { return lines.map(function (L) { var v = L.vals[k]; return v == null || !isFinite(v) ? null : { color: css(L.color), dash: L.dash, label: L.label, val: pct(v, 1) }; }).filter(Boolean); }
-    function show(k) { if (k < 0 || k >= n) return; cur = k; mark(k); tip.textContent = ''; tip.appendChild(el('div', 'd', head(k))); rows(k).forEach(function (r) { lineRow(tip, r); }); var t = sub(k); if (t) tip.appendChild(el('div', 's', nb(t))); placeTip(tip, host, W, X(k), m.t); }
-    function hide() { unmark(); tip.style.opacity = '0'; }
-    var api = { host: host, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, xPx: function (k) { return X(k) * host.clientWidth / W; }, topPx: function () { return m.t * host.clientWidth / W; } };
-    if (S) S.add(api);
-    function go(k, y) { if (k < 0 || k >= n) return; cur = k; if (S) S.show(k, api, y); else show(k); }
-    function stop() { if (S) S.hide(); else hide(); }
-    function at() { return S && S.cur != null ? S.cur : cur; }
+    function rows(k) { return lines.map(function (L) { var v = L.vals[k]; return { color: css(L.color), dash: L.dash, label: L.label, short: L.short, val: v == null || !isFinite(v) ? '–' : pct(v, 1) }; }); }
+    function wmax() { var w = 1; lines.forEach(function (L) { L.vals.forEach(function (v) { if (v != null && isFinite(v)) w = Math.max(w, pct(v, 1).length); }); }); return w; }
+    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax });
+    function go(k) { if (k < 0 || k >= n) return; cur = k; S.show(k); }
+    function at() { return S.cur != null ? S.cur : cur; }
     function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / (n - 1))))); }
-    hit.addEventListener('pointermove', function (e) { go(idx(e), e.clientY); }); hit.addEventListener('pointerdown', function (e) { go(idx(e), e.clientY); }); hit.addEventListener('pointerleave', stop);
-    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { go(Math.min(n - 1, at() + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { go(Math.max(0, at() - 1)); e.preventDefault(); } else if (e.key === 'Escape') stop(); }; host.onfocus = function () { go(at()); }; host.onblur = stop;
+    hit.addEventListener('pointermove', function (e) { go(idx(e)); }); hit.addEventListener('pointerdown', function (e) { go(idx(e)); }); hit.addEventListener('pointerleave', function () { S.hide(); });
+    host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { go(Math.min(n - 1, at() + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { go(Math.max(0, at() - 1)); e.preventDefault(); } else if (e.key === 'Escape') S.hide(); }; host.onfocus = function () { go(at()); }; host.onblur = function () { S.hide(); };
     if (opts.aria) host.setAttribute('aria-label', opts.aria);
   }
   root.CH = { ruleChart: ruleChart, donut: donut, portfolioChart: portfolioChart, portfolioSplit: portfolioSplit, pctChart: pctChart, syncGroup: syncGroup, mk: mk, el: el, css: css };

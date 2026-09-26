@@ -212,11 +212,26 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .tip .r b{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);text-align:right}
 .tip .r span{color:var(--ink-2)}
 .tip .s{margin-top:5px;padding-top:5px;border-top:1px solid var(--rule);color:var(--ink-2)}
-/* Gemeinsame Anzeige über zwei Charts (Depotentwicklung): Abschnitt je Chart */
-.tip .g{margin:6px 0 2px;padding-top:5px;border-top:1px solid var(--rule);color:var(--muted);font-size:11.5px}
-.tip .g:empty{margin-bottom:0;padding-top:3px}
-.tip .r.strong span{color:var(--ink);font-weight:500}
-.tip.sync{max-width:330px}
+/* Werte-Zeile über den Charts (Justus 26.09.2026): statt eines Kästchens im Chart; feste Mindestbreite der Werte, damit nichts springt */
+.chart-legend.readout{display:grid;gap:3px}
+.readout .rd-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;min-height:1.45em}
+.readout .rd-h b{font-weight:600;color:var(--ink)}
+.readout .rd-x{color:var(--muted)}
+.readout .rd-row{display:flex;flex-wrap:wrap;align-items:center;gap:3px 18px}
+.readout .rd-i{white-space:nowrap}
+.readout .rd-t{color:var(--muted)}
+.readout .rd-v{display:inline-block;min-width:var(--rdw,8ch);text-align:right;font-weight:600;color:var(--ink);font-variant-numeric:tabular-nums}
+.readout .rd-short{display:none}
+.readout .rd-n{color:var(--ink-2)}
+.readout .sig-buy{color:var(--good);font-weight:600}
+.readout .sig-sell{color:var(--bad);font-weight:600}
+/* Signalcharts: genau drei Zeilen, damit die Charts der drei Karten auf gleicher Höhe bleiben */
+.rule-rd{font-size:12.5px;margin-bottom:6px}
+.rule-rd .rd-h,.rule-rd .rd-n{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.rule-rd .rd-h b{margin-right:10px}
+.rule-rd .rd-row{flex-wrap:nowrap;overflow:hidden}
+@media (max-width:980px){.rule-rd .rd-h b{display:block;margin-right:0}.rule-rd .rd-row{flex-wrap:wrap}}
+@media (max-width:560px){#perfLegend.readout .rd-h{min-height:2.9em}.readout .rd-long{display:none}.readout .rd-short{display:inline}}
 .cap{font-size:13px;color:var(--muted)}
 .subhd{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 /* Ein-/ausklappbare Karten */
