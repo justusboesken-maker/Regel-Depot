@@ -190,13 +190,13 @@
     read(n - 1); fitMode();
   }
 
-  /* ---------- Kreisdiagramm ---------- */
+  /* ---------- Kreisdiagramm ---------- start: Anfangswinkel im Bogenmaß (0 = 12 Uhr, Math.PI = 6 Uhr), weiter im Uhrzeigersinn */
   function arcPath(cx, cy, r0, r1, a0, a1) {
     function pt(r, a) { return (cx + r * Math.sin(a)).toFixed(2) + ',' + (cy - r * Math.cos(a)).toFixed(2); }
     var large = (a1 - a0) > Math.PI ? 1 : 0;
     return 'M' + pt(r1, a0) + ' A' + r1 + ',' + r1 + ' 0 ' + large + ' 1 ' + pt(r1, a1) + ' L' + pt(r0, a1) + ' A' + r0 + ',' + r0 + ' 0 ' + large + ' 0 ' + pt(r0, a0) + ' Z';
   }
-  function donut(title, sub, parts, total) {
+  function donut(title, sub, parts, total, start) {
     var fig = el('figure', 'donut'), cx = 110, cy = 110, r1 = 82, r0 = 54;
     var tot = parts.reduce(function (s, q) { return s + q.v; }, 0);
     var shown = parts.filter(function (q) { return tot > 0 && q.v / tot >= 0.0005; });
@@ -207,7 +207,7 @@
     function hideTip() { tip.style.opacity = '0'; }
     var surface = css('--surface');
     if (shown.length === 1) { var q0 = shown[0], ring = mk('circle', { cx: cx, cy: cy, r: (r0 + r1) / 2, fill: 'none', stroke: 'var(' + q0.color + ')', 'stroke-width': r1 - r0 }, svg); ring.addEventListener('pointermove', function (e) { showTip(q0, e); }); ring.addEventListener('pointerleave', hideTip); }
-    else { var a = 0; shown.forEach(function (q) { var da = q.v / tot * 2 * Math.PI, a0 = a, a1 = a + da; a = a1;
+    else { var a = start || 0; shown.forEach(function (q) { var da = q.v / tot * 2 * Math.PI, a0 = a, a1 = a + da; a = a1;
       var path = mk('path', { d: arcPath(cx, cy, r0, r1, a0, a1), fill: 'var(' + q.color + ')', stroke: surface, 'stroke-width': 2, 'stroke-linejoin': 'round' }, svg);
       path.addEventListener('pointermove', function (e) { showTip(q, e); }); path.addEventListener('pointerleave', hideTip);
       if (q.v / tot >= 0.05) { var mid = (a0 + a1) / 2, s = Math.sin(mid), c = Math.cos(mid), rr = r1 + 13, anchor = s > 0.35 ? 'start' : s < -0.35 ? 'end' : 'middle';

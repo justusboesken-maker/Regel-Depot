@@ -2,3 +2,5 @@ node_modules/
 .DS_Store
 *.log
 /depot*.json
+# Bilder, die die Claude-App hier ablegt (nicht veröffentlichen)
+/Claude outputs/

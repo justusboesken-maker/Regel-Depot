@@ -3,7 +3,7 @@
   'use strict';
   var A = ['ftse', 'btc', 'gold'];
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
-  var CAT = [{ k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }];
+  var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in Legende und Ringen */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
   var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
   var F = window.FMT, de = F.de, eur = F.eur, sgnEur = F.sgnEur, pct = F.pct, pctPlain = F.pctPlain, dDE = F.dDE, dShort = F.dShort, dtDE = F.dtDE;
@@ -429,11 +429,24 @@
     A.forEach(function (a) { var w = CFG.assets[a].w * tot; if (C[a].E.last.st === 1) ziel[a] += w; else { ziel.cash += w; outs.push(CFG.assets[a].name); } });
     var withAlts = hasAlts(Mo);
     function parts(o, which) { return CAT.map(function (c) { var note = null; var label = c.k === 'btc' && withAlts ? 'Krypto (Bitcoin + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') + ')' : c.label; if (which === 'ziel' && c.k === 'cash' && outs.length) note = 'Anteil von ' + outs.join(' und ') + ', Regel auf Cash'; if (which === 'ist' && c.k === 'cash') { var bits = A.filter(function (a) { return Mo.pos[a].cash > 0.5; }).map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }); if (bits.length) note = 'davon ' + bits.join(', '); } return { k: c.k, label: label, color: c.color, v: o[c.k], note: note }; }); }
+    /* Ringe nach Bausteinen in fester Reihenfolge ab 6 Uhr im Uhrzeigersinn (FTSE links, dann Bitcoin, Gold), je Baustein erst die Position, dann sein Cash; direkt
+       aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Ist und Ziel immer an derselben Stelle (Justus 27.09.2026). */
+    function ring(which, ps) {
+      var out = [];
+      A.forEach(function (a) {
+        var on = C[a].E.last.st === 1, w = CFG.assets[a].w * tot, cat = ps.filter(function (q) { return q.k === a; })[0];
+        var inv = which === 'ist' ? (Mo.pos[a].val || 0) : (on ? w : 0), cash = which === 'ist' ? (Mo.pos[a].cash || 0) : (on ? 0 : w);
+        if (inv > 0.5) out.push({ k: a, label: cat.label, color: cat.color, v: inv, note: null });
+        if (cash > 0.5) { var last = out[out.length - 1]; if (last && last.k === 'cash') { last.v += cash; last.from.push(a); } else out.push({ k: 'cash', label: 'Cash', color: '--cash', v: cash, from: [a], note: null }); }
+      });
+      out.forEach(function (q) { if (q.k !== 'cash') return; q.note = which === 'ziel' ? 'Anteil von ' + q.from.map(function (a) { return CFG.assets[a].name; }).join(' und ') + ', Regel auf Cash' : 'davon ' + q.from.map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }).join(', '); });
+      return out;
+    }
     var wrap = el('div', 'donuts');
     function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = el('i', 'sw'); sw.style.background = 'var(' + q.color + ')'; it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
-    d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', pi, tot)); d1.appendChild(legend(pi));
-    d2.appendChild(CH.donut('Ziel', 'laut Regeln', pz, tot)); d2.appendChild(legend(pz));
+    d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
+    d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
     wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
     al.appendChild(el('p', 'small muted', 'Ziel 50 / 30 / 20 (FTSE / Bitcoin / Gold). ' + (outs.length ? outs.join(' und ') + (outs.length > 1 ? ' stehen' : ' steht') + ' laut Regel auf Cash, deshalb zählt ' + (outs.length > 1 ? 'ihr Anteil' : 'sein Anteil') + ' im Ziel als Cash. Abweichungen je Position stehen in der Tabelle unten.' : 'Alle drei Regeln sind investiert.')));
