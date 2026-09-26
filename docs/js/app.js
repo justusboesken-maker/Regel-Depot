@@ -567,10 +567,12 @@
     });
     return pts;
   }
-  var PERF_RANGES = [['tage', '1 M · Tage'], ['wochen', '1 J · Wochen'], ['jahr', 'Jahr ' + new Date().getFullYear()], ['alles', 'Alles']];
+  /* [Schlüssel, Beschriftung bei Gewinn/Wert, Beschriftung im Vergleich (dort immer Tagespunkte)] */
+  var PERF_RANGES = [['tage', '1 M · Tage', '1 M'], ['wochen', '1 J · Wochen', '1 J'], ['jahr', 'Jahr ' + new Date().getFullYear(), 'Jahr ' + new Date().getFullYear()], ['alles', 'Alles', 'Alles']];
+  function perfRangeLabels(cmp) { var seg = $('perfRange'); if (!seg) return; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { var r = PERF_RANGES.filter(function (x) { return x[0] === b.getAttribute('data-r'); })[0]; if (r) b.textContent = cmp ? r[2] : r[1]; }); }
   function drawPerf(Mo) {
     var host = $('chPerf'), leg = $('perfLegend'), cap = $('perfCap'), cmp = PERF.mode === 'vergleich';
-    if ($('perfRange')) $('perfRange').hidden = cmp;
+    perfRangeLabels(cmp);
     if (cmp) { drawCompare(Mo); return; }
     if ($('perfDD')) { $('perfDD').hidden = true; $('perfDD').textContent = ''; }
     resetKeys(host);
@@ -641,6 +643,21 @@
     out.mine = mine; out.bh = bh; out.ddMine = ENG.drawdown(mine); out.ddBh = ENG.drawdown(bh.idx);
     return out;
   }
+  /* Zeitraum im Vergleich (Justus 26.09.2026: „Start bei 0 %“): Gerechnet wird immer ab dem Start (Zahlungen, Buy-&-Hold-Stücke,
+     Rebalancing); der gewählte Zeitraum schneidet danach aus, beide Linien beginnen an seinem ersten Tag bei 0 %, und Max DD, Hoch → Tief
+     und aktueller Rückgang gelten nur für diesen Zeitraum. Liegt der Zeitraum-Anfang vor dem Start, ist es derselbe Verlauf wie „Alles“. */
+  function compareWindow(c) {
+    var r = PERF.range, today = todayISO(), ws = null, label = '', n = c.dates.length, k0 = 0;
+    if (r === 'tage') { ws = ENG.addDays(today, -31); label = 'letzter Monat'; }
+    else if (r === 'wochen') { ws = ENG.addDays(today, -364); label = 'letzte 12 Monate'; }
+    else if (r === 'jahr') { ws = today.slice(0, 4) + '-01-01'; label = 'Jahr ' + today.slice(0, 4); }
+    if (ws) while (k0 < n && c.dates[k0] < ws) k0++;
+    function sl(a) { return a.slice(k0); }
+    var mi = sl(c.mine), bi = sl(c.bh.idx), w = { k0: k0, cut: k0 > 0, label: label, dates: sl(c.dates), vals: sl(c.vals), bhVals: sl(c.bh.vals), flows: sl(c.flows), reb: sl(c.reb) };
+    w.pM = mi.map(function (x) { return x / mi[0] - 1; }); w.pB = bi.map(function (x) { return x / bi[0] - 1; });
+    w.ddMine = ENG.drawdown(mi); w.ddBh = ENG.drawdown(bi);
+    return w;
+  }
   /* Tastatur-Bedienung, die der Vergleich auf #chPerf setzt, in den anderen Ansichten wieder entfernen */
   function resetKeys(host) { host.removeAttribute('tabindex'); host.onkeydown = null; host.onfocus = null; host.onblur = null; }
   function drawCompare(Mo) {
@@ -648,37 +665,44 @@
     host.textContent = ''; box.textContent = ''; leg.textContent = ''; cap.textContent = '';
     function legItem(v, dash, text) { var sp = el('span'), i = el('i'); i.style.borderTopColor = 'var(' + v + ')'; i.style.width = '26px'; if (dash) i.className = 'dash'; else i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(text)); leg.appendChild(sp); }
     legItem('--ink', false, 'Dein Depot (regelbasiert)'); legItem('--muted', true, 'Buy & Hold 50/30/20');
-    var c = compareData(Mo), START = c.first || c.start, md = rebalMd(Mo);
-    var capText = 'Beide Linien starten am ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
+    var c = compareData(Mo), START = c.first || c.start, md = rebalMd(Mo), w = c.wait ? null : compareWindow(c);
+    var few = w && w.dates.length < 2;
+    var head = w && w.cut
+      ? 'Zeitraum ' + w.label + ': beide Linien starten am ' + dDE(w.dates[0]) + ' bei 0 %; Max DD, Hoch → Tief und aktueller Rückgang gelten nur für diesen Zeitraum. Gerechnet wird ab dem ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
+      : 'Beide Linien starten am ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. ';
+    var capText = head
       + 'Dein Depot: alle Positionen samt ETH/SOL und Cash (Zinsen ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a., geschätzt), zeitgewichtet gerechnet, also ohne Sprünge durch Ein- und Auszahlungen. '
       + 'Buy & Hold: legt am ' + dDE(START) + ' zum Tagesschluss den Gesamtwert deines Depots' + (c.vals ? ' (' + eur(c.vals[0]) + ')' : '') + ' zu 50 % in VWCE, 30 % in Bitcoin und 20 % in WisdomTree Physical Swiss Gold an, geht jedes Jahr am Rebalancing-Stichtag (' + dShort('2000-' + md) + ') zurück auf 50/30/20 und bekommt dieselben Ein- und Auszahlungen wie dein Depot (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern. '
-      + 'Drawdown: Rückgang vom bisherigen Höchststand der jeweiligen Linie.'
+      + 'Drawdown: Rückgang vom bisherigen Höchststand der jeweiligen Linie' + (w && w.cut ? ' im Zeitraum.' : '.')
       + (c.skipped.length ? ' Ausgelassen, weil für eine gehaltene Position ein Euro-Kurs fehlte: ' + (c.skipped.length === 1 ? 'der ' + dDE(c.skipped[0]) : c.skipped.length + ' Tage vom ' + dDE(c.skipped[0]) + ' bis ' + dDE(c.skipped[c.skipped.length - 1])) + '.' : '');
     cap.textContent = capText;
-    if (c.wait) { box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', c.wait)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + c.wait); return; }
-    var n = c.dates.length, pM = c.mine.map(function (x) { return x - 1; }), pB = c.bh.idx.map(function (x) { return x - 1; }), narrow = (host.clientWidth || 700) < 560;
+    if (c.wait || few) {
+      var why = c.wait || ('Im Zeitraum „' + w.label + '“ gibt es noch keine zwei Tagespunkte. Wähl einen längeren Zeitraum oder „Alles“.');
+      box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', why)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + why); return;
+    }
+    var n = w.dates.length, pM = w.pM, pB = w.pB, narrow = (host.clientWidth || 700) < 560, since = (w.cut ? w.label + ' ab ' : 'seit ') + dDE(w.dates[0]);
     function pp(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' Prozentpunkte'; }
-    CH.pctChart(host, c.dates, [
+    CH.pctChart(host, w.dates, [
       { vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot' },
       { vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
     ], { height: narrow ? 230 : 280, ends: true,
-      sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(c.vals[i]) + ', Buy & Hold ' + eur(c.bh.vals[i]) + (c.flows[i] ? ' · ' + (c.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(c.flows[i])) : '') + (c.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
-      aria: 'Vergleich seit ' + dDE(START) + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
+      sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
+      aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
     var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
-    ddBox.appendChild(el('p', 'subhd', 'Drawdown: Rückgang vom bisherigen Höchststand')); ddBox.appendChild(ddCh); box.appendChild(ddBox);
-    CH.pctChart(ddCh, c.dates, [
-      { vals: c.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
-      { vals: c.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
-    ], { height: narrow ? 140 : 160, dd: true, ends: true, aria: 'Drawdown seit ' + dDE(START) + ': Max DD dein Depot ' + pct(c.ddMine.max.v, 1) + ', Buy & Hold ' + pct(c.ddBh.max.v, 1) });
+    ddBox.appendChild(el('p', 'subhd', 'Drawdown: Rückgang vom bisherigen Höchststand' + (w.cut ? ' im Zeitraum' : ''))); ddBox.appendChild(ddCh); box.appendChild(ddBox);
+    CH.pctChart(ddCh, w.dates, [
+      { vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
+      { vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
+    ], { height: narrow ? 140 : 160, dd: true, ends: true, aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
     /* Kennzahlen */
     var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody');
-    t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich'));
+    t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich, ' + since));
     ['', 'Dein Depot', 'Buy & Hold'].forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; tr.appendChild(x); }); th.appendChild(tr); t.appendChild(th);
-    function span(D) { return D.max.peak < 0 ? 'kein Rückgang' : dDE(c.dates[D.max.peak]) + ' → ' + dDE(c.dates[D.max.trough]); }
+    function span(D) { return D.max.peak < 0 ? 'kein Rückgang' : dDE(w.dates[D.max.peak]) + ' → ' + dDE(w.dates[D.max.trough]); }
     [['Max DD', function (D) { return pct(D.max.v, 1); }, ''], ['Hoch → Tief', span, 'wrap'], ['Aktuell', function (D) { return pct(D.cur, 1); }, '']].forEach(function (row) {
       var r = el('tr'), h = el('th', null, row[0]); h.scope = 'row'; r.appendChild(h);
-      [c.ddMine, c.ddBh].forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
+      [w.ddMine, w.ddBh].forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
     });
     t.appendChild(tb); tw.appendChild(t); box.appendChild(tw);
   }
@@ -1282,7 +1306,7 @@
   try { var r0s = localStorage.getItem('regelDepot.range'), r0 = r0s == null ? NaN : +r0s; if (!isNaN(r0)) { VIEW.range = r0; Array.prototype.forEach.call($('rangeSeg').querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(+x.getAttribute('data-r') === r0)); }); } } catch (e) { /* still */ }
 
   /* Prüf-Zugang für automatische Tests (keine Daten nach außen): Depotverlauf nachrechnen */
-  window.RegelDepot = { perf: function (grid, from) { var Mo = model(); return Mo.ready ? perfSeries(Mo, grid, from) : null; }, compare: function () { return compareData(model()); } };
+  window.RegelDepot = { perf: function (grid, from) { var Mo = model(); return Mo.ready ? perfSeries(Mo, grid, from) : null; }, compare: function () { var c = compareData(model()); if (!c.wait) c.win = compareWindow(c); return c; } };
 
   /* Ladefehler (Daten) und Anzeigefehler (meist eine veraltete Version der Seite im Browser-Speicher) getrennt melden */
   function failBanner(title, text, reload) {
