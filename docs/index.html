@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260926-2245">
+<link rel="stylesheet" href="css/app.css?v=20260926-2300">
 </head>
 <body>
 
@@ -61,7 +61,7 @@
     <div class="tablewrap" id="posTable"></div>
   </div>
   <div class="card">
-    <div class="pad cardhead tight"><p class="subhd">Buchungen und Kauflose</p><div class="row"><button type="button" class="fold plain" id="btnNotes" aria-pressed="false">Notizen</button><button type="button" class="fold" data-fold="tx" aria-controls="txTable" aria-expanded="true">Einklappen</button></div></div>
+    <div class="pad cardhead tight"><p class="subhd">Buchungen und Kauflose</p><div class="row"><button type="button" class="fold plain" id="btnNotes" aria-pressed="false">Notizen</button><button type="button" class="fold" data-fold="tx2" aria-controls="txTable" aria-expanded="false" data-open="0">Ausklappen</button></div></div>
     <div class="tablewrap" id="txTable"></div>
   </div>
   <details class="box" id="accBox">
@@ -100,7 +100,7 @@
   </details>
 </section>
 
-<section id="signale" aria-labelledby="h-signale">
+<section id="signale" class="sfold folded" aria-labelledby="h-signale">
   <h2 class="eyebrow sec" id="h-signale">Signale</h2>
   <div class="grid2">
     <div style="display:grid;gap:14px;min-width:0">
@@ -119,14 +119,14 @@
   </div>
 </section>
 
-<section id="rebalancing" aria-labelledby="h-reb">
+<section id="rebalancing" class="sfold folded" aria-labelledby="h-reb">
   <h2 class="eyebrow sec" id="h-reb">Rebalancing <span id="rebDate">30.12.2026</span></h2>
   <div id="rebBanner"></div>
   <div class="grid2" id="rebCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
 </section>
 
-<section id="einstellungen" aria-labelledby="h-set">
+<section id="einstellungen" class="sfold folded" aria-labelledby="h-set">
   <h2 class="eyebrow sec" id="h-set">Einstellungen</h2>
   <details class="box" id="dataBox" open>
     <summary>Depotdaten sichern, importieren, zurücksetzen</summary>
@@ -194,7 +194,7 @@
   </details>
 </section>
 
-<section id="regeln" aria-labelledby="h-regeln">
+<section id="regeln" class="sfold folded" aria-labelledby="h-regeln">
   <h2 class="eyebrow sec" id="h-regeln">Regeln</h2>
   <div class="rules" id="ruleCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Datenquellen und Ablauf</p><div class="notes" id="srcNotes"></div></div>
@@ -207,9 +207,10 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260926-2245"></script>
-<script src="js/store.js?v=20260926-2245"></script>
-<script src="js/charts.js?v=20260926-2245"></script>
-<script src="js/app.js?v=20260926-2245"></script>
+<script src="js/engine.js?v=20260926-2300"></script>
+<script src="js/store.js?v=20260926-2300"></script>
+<script src="js/charts.js?v=20260926-2300"></script>
+<script src="js/icons.js?v=20260926-2300"></script>
+<script src="js/app.js?v=20260926-2300"></script>
 </body>
 </html>

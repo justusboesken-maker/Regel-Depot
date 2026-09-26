@@ -95,6 +95,14 @@ section>*{min-width:0}
 /* Abschnittstitel: eine kompakte Zeile statt Überschrift plus Einleitung */
 h2.eyebrow.sec{font-size:13px;letter-spacing:.1em;color:var(--ink-2);margin:0;padding-bottom:8px;border-bottom:1px solid var(--rule)}
 h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:8px}
+/* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen, Regeln. Der Titel ist ein Knopf mit Pfeil rechts,
+   eingeklappt bleiben nur Titel und Fußtext sichtbar (app.js wireSections) */
+section.sfold.folded>*:not(h2):not(footer){display:none!important}
+h2.eyebrow.sec .secfold{-webkit-appearance:none;appearance:none;display:block;width:100%;position:relative;margin:0;padding:0 28px 0 0;border:0;border-radius:0;background:none;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;text-align:left;cursor:pointer}
+h2.eyebrow.sec .secfold:hover{color:var(--ink)}
+h2.eyebrow.sec .secfold:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+h2.eyebrow.sec .secfold .chev{position:absolute;right:6px;top:50%;width:8px;height:8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-75%) rotate(45deg);transition:transform .15s}
+section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-45deg)}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);min-width:0}
 .pad{padding:16px 18px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
@@ -141,7 +149,9 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .scard .hd h3{display:flex;align-items:center;gap:8px}
-.scard .hd .sw{width:10px;height:10px;border-radius:2px;background:var(--acol)}
+.aic{display:inline-block;flex:0 0 auto;line-height:0}
+.aic svg{width:100%;height:100%;display:block;overflow:visible}
+.scard .hd .aic{width:20px;height:20px}
 .scard .sub{font-size:12.5px;color:var(--muted)}
 .scard .stbox{display:grid;justify-items:end;gap:4px}
 .scard .since{font-size:12px;color:var(--muted);white-space:nowrap}
@@ -280,7 +290,7 @@ th,td{padding:8px 11px;text-align:left;vertical-align:top;border-bottom:1px soli
 thead th{font-size:11.5px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);border-bottom:1px solid var(--rule-strong);white-space:nowrap}
 tbody tr:last-child td{border-bottom:0}
 td.n,th.n{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
-td .sw{display:inline-block;width:9px;height:9px;border-radius:2px;margin-right:7px;vertical-align:0}
+td .aic{width:16px;height:16px;margin-right:8px;vertical-align:-3px}
 tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0}
 .up{color:var(--good)} .down{color:var(--bad)}
 
@@ -291,7 +301,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .donut svg{width:100%;max-width:300px;height:auto;display:block;overflow:visible}
 .dlegend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin-top:4px}
 .dlegend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.dlegend .sw{display:inline-block;width:9px;height:9px;border-radius:2px}
+.dlegend .aic{width:15px;height:15px}
 .alloc td .sub{display:block;font-size:12px;color:var(--muted)}
 .alloc td .dm{display:none}
 @media (max-width:480px){
@@ -400,7 +410,7 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .bigx:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
 .bighd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;padding-right:34px}
 .bighd h2{display:flex;align-items:center;gap:10px}
-.bighd h2 .sw{width:12px;height:12px;border-radius:3px;background:var(--acol)}
+.bighd h2 .aic{width:26px;height:26px}
 .bighd .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
 .bigfacts{display:flex;flex-wrap:wrap;gap:8px 18px}
 .bigfacts .bf{display:grid;gap:1px}
@@ -449,5 +459,4 @@ td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 #signale .grid2{align-items:start}
 /* Beimischung (ETH, SOL) in der Positionstabelle: leise Unterzeilen */
 tr.altrow td{font-size:12.5px;color:var(--muted);padding-top:4px;padding-bottom:6px}
-tr.altrow td .sw{background:var(--alt)}
 tr.altrow .tag{font-size:10.5px;padding:1px 6px}

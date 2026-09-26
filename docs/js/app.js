@@ -3,6 +3,8 @@
   'use strict';
   var A = ['ftse', 'btc', 'gold'];
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
+  /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable */
+  function aicon(a) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(k) : ''; return s; }
   var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in Legende und Ringen */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
   var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
@@ -274,7 +276,7 @@
       var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch, st = D.state && D.state.assets && D.state.assets[a];
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
-      h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); left.appendChild(el('p', 'sub', m.ruleName + ' · Signal ' + (m.signal.sym || 'LBMA') + ' (USD) · Depot ' + (a === 'btc' ? 'Bitcoin' + (hasAlts(Mo) ? ' + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') : '') : a === 'ftse' ? 'VWCE' : 'WisdomTree Gold'))); hd.appendChild(left);
+      h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); left.appendChild(el('p', 'sub', m.ruleName + ' · Signal ' + (m.signal.sym || 'LBMA') + ' (USD) · Depot ' + (a === 'btc' ? 'Bitcoin' + (hasAlts(Mo) ? ' + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') : '') : a === 'ftse' ? 'VWCE' : 'WisdomTree Gold'))); hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
       hd.appendChild(right);
       top.appendChild(hd);
@@ -352,7 +354,7 @@
     BIG.a = a; BIG.key = !!key; BIG.t0 = performance.now(); if (BIG.range == null) BIG.range = VIEW.range;
     box.textContent = '';
     var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch;
-    var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); tl.appendChild(el('p', 'sub muted', m.ruleName + ' · ' + m.signal.label + ' · ' + pctPlain(m.w, 0) + ' des Depots')); hd.appendChild(tl);
+    var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); tl.appendChild(el('p', 'sub muted', m.ruleName + ' · ' + m.signal.label + ' · ' + pctPlain(m.w, 0) + ' des Depots')); hd.appendChild(tl);
     var right = el('div', 'row'); var stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash' + (ls ? ' seit ' + dDE(ls.d) : ''))); right.appendChild(stp);
     hd.appendChild(right); box.appendChild(hd);
     var cb = el('button', 'bigx'); cb.type = 'button'; cb.setAttribute('aria-label', 'Großansicht schließen'); cb.title = 'Schließen (Esc)'; cb.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>'; cb.addEventListener('click', closeBigClick); box.appendChild(cb);
@@ -409,12 +411,12 @@
     var pt = $('posTable'); pt.textContent = ''; var t = el('table'), th = el('thead'), tr = el('tr');
     ['Position', 'Regel', 'Bestand', 'Kurs', 'Wert', 'Cash', 'Summe', 'Anteil mit Cash', 'Zielgewicht', 'Abweichung'].forEach(function (h, i) { var c = el('th', i > 1 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody');
-    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
+    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = aicon(a); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
       var st = C[a].E.last.st; var c1 = el('td'); c1.appendChild(el('span', 'tag ' + (st === 1 ? 'ok' : ''), st === 1 ? 'investiert' : 'Cash')); r.appendChild(c1);
       var bc = el('td', 'n', P.u > 0 ? units(a, P.uBtc != null ? P.uBtc : P.u) : '–'); var withAlts = a === 'btc' && P.alts && P.alts.some(function (x) { return x.u > 1e-12; }); if (withAlts) bc.appendChild(el('span', 'sub', '+ Beimischung (davon-Zeilen)')); r.appendChild(bc); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.stale) { var sg = el('span', 'tag', 'Stand ' + dShort(pxo.d)); sg.title = 'Lang & Schwarz war beim letzten Lauf nicht erreichbar; das ist der letzte L&S-Kurs'; pxc.appendChild(sg); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } if (P.missing) { pxc.textContent = ''; var mt = el('span', 'tag bad', 'Kurs fehlt'); mt.title = 'Für diese Position liegt noch kein Euro-Kurs vor'; pxc.appendChild(mt); } r.appendChild(pxc); var vc = el('td', 'n', P.val == null ? '–' : eur(P.val)); if (withAlts && P.val != null) vc.appendChild(el('span', 'sub', 'inkl. Beimischung')); r.appendChild(vc); r.appendChild(el('td', 'n', eur(P.cash)));
       var sum = P.val == null ? null : P.val + P.cash; r.appendChild(el('td', 'n', sum == null ? '–' : eur(sum))); r.appendChild(el('td', 'n', full && tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', full ? sgnEur(sum - tot * CFG.assets[a].w) : '–')); tb.appendChild(r);
       /* Beimischung: steckt schon im Wert und in der Summe der Bitcoin-Zeile, deshalb hier nur „davon“ ohne eigene Summe und eigenen Anteil */
-      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(el('span', 'sw')); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
+      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(aicon('alt')); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
         ar.appendChild(el('td', 'n', units(x.id, x.u))); var apx = el('td', 'n', x.px ? eur(x.px, 2) + ' ' : 'Kurs fehlt noch'); if (x.px && x.live) apx.appendChild(el('span', 'tag', 'live')); ar.appendChild(apx); ar.appendChild(el('td', 'n', x.val != null ? 'davon ' + eur(x.val) : '–')); for (var ci = 0; ci < 5; ci++) ar.appendChild(el('td', 'n', '')); tb.appendChild(ar); }); });
     t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td', 'n', full ? eur(inv) : '–')); fr.appendChild(el('td', 'n', eur(cashT))); fr.appendChild(el('td', 'n', full ? eur(tot) : '–')); fr.appendChild(el('td', 'n', full ? '100 %' : '–')); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
     pt.appendChild(t);
@@ -443,7 +445,7 @@
       return out;
     }
     var wrap = el('div', 'donuts');
-    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = el('i', 'sw'); sw.style.background = 'var(' + q.color + ')'; it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
+    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, '')); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
     d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
     d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
@@ -466,7 +468,7 @@
     list.forEach(function (x) {
       var r = el('tr'), a = x.a, P = posOf(Mo, a) || { px: null }, cashMove = x.type === 'einzahlung' || x.type === 'auszahlung';
       r.appendChild(el('td', null, dDE(x.d)));
-      var c1 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + (COLOR[a] || '--alt') + ')'; c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
+      var c1 = el('td'), sw = aicon(a); c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
       if (x.note) { if (SHOW_NOTES) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } else { c1.title = x.note; var ni = el('span', 'noteic', 'i'); ni.setAttribute('aria-label', 'Notiz: ' + x.note); c1.appendChild(ni); } }
       r.appendChild(c1);
       r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : x.type === 'umbuchung' ? 'Umbuchung' : 'Auszahlung'));
@@ -838,6 +840,30 @@
       applyFold(btn);
     })(list[i]); }
   }
+  /* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen und Regeln sind anfangs eingeklappt (Klasse
+     „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
+     (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
+     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. */
+  function setSec(sec, open, save) {
+    sec.classList.toggle('folded', !open);
+    var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
+    if (save) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
+  }
+  function openSecFor(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; if (!sec || !sec.classList.contains('folded')) return false; setSec(sec, true, true); return true; }
+  function wireSections() {
+    var s = foldState();
+    Array.prototype.forEach.call(document.querySelectorAll('section.sfold'), function (sec) {
+      var h = sec.querySelector('h2.sec'); if (!h || h.querySelector('.secfold')) return;
+      var b = document.createElement('button'); b.type = 'button'; b.className = 'secfold';
+      while (h.firstChild) b.appendChild(h.firstChild);
+      var ch = document.createElement('i'); ch.className = 'chev'; ch.setAttribute('aria-hidden', 'true'); b.appendChild(ch); h.appendChild(b);
+      b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
+      setSec(sec, s['sec-' + sec.id] === 1, false);
+    });
+    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : ''; if (id) openSecFor(document.getElementById(id)); }, true);
+    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } }
+    window.addEventListener('hashchange', fromHash); fromHash();
+  }
   function renderRunLog() {
     var host = $('runlog'); host.textContent = '';
     var rows = (D.runs || []).filter(function (r) { return !r.ok || (r.step !== 'live' && r.step !== 'test-sources' && r.step !== 'test-push'); }).slice(0, 6);
@@ -1021,7 +1047,7 @@
     ['Position', 'Order', 'Stück', 'Kurs je Stück (€)', 'Gebühr (€)'].forEach(function (h, i) { var c = el('th', i >= 2 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody'), inputs = [];
     plan.lines.forEach(function (l) {
-      var row = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + (COLOR[l.a] || '--alt') + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(INFO(l.a).short)); row.appendChild(c0);
+      var row = el('tr'), c0 = el('td'), sw = aicon(l.a); c0.appendChild(sw); c0.appendChild(document.createTextNode(INFO(l.a).short)); row.appendChild(c0);
       var ca = el('td', null, (l.label === 'Kaufen' ? 'Kauf' : l.label === 'Verkaufen' ? 'Verkauf' : l.label) + ' '); if (l.optional) ca.appendChild(el('span', 'tag', 'optional')); row.appendChild(ca);
       function inp(val, dec, lab) { var td = el('td', 'n'), x = el('input'); x.type = 'text'; x.setAttribute('inputmode', 'decimal'); x.autocomplete = 'off'; x.spellcheck = false; x.value = deIn(val, dec); x.setAttribute('aria-label', INFO(l.a).short + ', ' + (l.kind === 'verkauf' ? 'Verkauf' : 'Kauf') + ': ' + lab); td.appendChild(x); row.appendChild(td); return x; }
       var ud = l.a === 'btc' ? 8 : 6, uv = l.kind === 'verkauf' ? (l.full ? l.units : Math.floor(l.units * Math.pow(10, ud)) / Math.pow(10, ud)) : l.units;
@@ -1078,7 +1104,7 @@
       hd.appendChild(tot); card.appendChild(hd);
       var tw = el('div', 'tablewrap'), t = el('table'), th = el('thead'), tr = el('tr'); ['Position', 'Aktion', 'Betrag', 'Gewinn', 'Steuerlich'].forEach(function (h, i) { var c = el('th', i === 2 || i === 3 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
       var tb = el('tbody');
-      A.forEach(function (a) { var x = r.rows[a], row = el('tr'), c0 = el('td'), sw = el('span', 'sw'); sw.style.background = 'var(' + COLOR[a] + ')'; c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); row.appendChild(c0);
+      A.forEach(function (a) { var x = r.rows[a], row = el('tr'), c0 = el('td'), sw = aicon(a); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); row.appendChild(c0);
         var act = 'Nichts', amt = '–', gain = '–', note = '–', small = false;
         function qty(q) { return a === 'btc' && withAlts ? pctPlain(Math.min(1, q / (Mo.pos.btc.u || 1)), 0) + ' des Krypto-Bausteins' : units(a, q); }
         if (x.sell > 0.5) { act = x.ruleSale ? 'Regel-Verkauf (alles)' : 'Verkaufen'; amt = eur(x.sell) + ' · ' + (x.ruleSale && a === 'btc' && withAlts ? holdingText('btc', Mo.pos.btc) : qty(x.sellUnits)); var g = a === 'ftse' ? x.g20 : x.sg + x.lg; gain = sgnEur(g); note = a === 'ftse' ? eur(Math.max(0, x.t20)) + ' steuerpflichtig' : (x.anyShort ? 'kurzfristig ' + sgnEur(x.sg) + (x.lg !== 0 ? ', steuerfrei ' + sgnEur(x.lg) : '') : 'Haltefrist vorbei, steuerfrei'); small = !x.ruleSale && x.sell < cfg.minOrder; if (x.capped) note += ' · gedeckelt'; }
@@ -1389,7 +1415,7 @@
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'pushsubscriptionchange' && READY) pushInit().then(schedule); });
 
   /* Formulare und Sichern/Import sofort bedienbar, unabhängig davon, ob die Kursdaten laden */
-  wireData(); wireForms(); wireFolds(); renderOffline();
+  wireData(); wireForms(); wireFolds(); wireSections(); renderOffline();
   var loaded = false;
   loadAll().then(function (N) { applyLoaded(N); loaded = true; READY = true; STORE.setAssets(A.concat(ALTS.map(function (x) { return x.id; }))); return pushInit(); }).then(function () { renderAll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; refreshBrowserLive(); })
     .catch(function (e) {
