@@ -141,11 +141,11 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 #status>.toolbar{justify-content:flex-end}
 /* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
    die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
-.scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 56px}
-.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:14px;scroll-margin-top:60px}
+.scards{--sgap:clamp(56px,calc(10vw - 53px),104px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
+.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:30px;scroll-margin-top:60px}
 .scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
 .card.scard{background:none;border:0;border-radius:0;box-shadow:none}
-.scards .scard+.scard::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
+.scards .scard+.scard::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .scard .hd h3{display:flex;align-items:center;gap:8px}
@@ -157,8 +157,14 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard .since{font-size:12px;color:var(--muted);white-space:nowrap}
 .scard .fig{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
 .scard .fig .fl{font-size:12.5px;color:var(--muted);flex-basis:100%}
-.scard .fig .fv{font-size:26px;font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+.scard .fig .fv{font-size:clamp(26px,calc(1.6vw + 10px),30px);font-weight:600;letter-spacing:-.01em;color:var(--ink)}
+@media (max-width:980px){.scard .fig .fv{font-size:30px}} /* Status-Spalten (Justus 27.09.2026): Abstand ab 1090 px und große Zahl (26 → 30 px bis 1250 px) wachsen mit der Fensterbreite, damit Kurs und „zum SMA50“ in einer Zeile bleiben */
 .scard .fig .fd{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
+/* Kopf der Status-Karte beim Darüberfahren über den Chart (app.js figHover): Wert und Abstand in einer Zeile, der Abstand wird bei
+   Platzmangel mit „…“ gekürzt; die Höhe hält app.js fest, damit Karte und Chart nicht springen */
+.scard .fig.hov{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;row-gap:2px;align-items:baseline;overflow:hidden}
+.scard .fig.hov .fl{grid-column:1/-1}
+.scard .fig.hov .fd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scard .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
 .scard .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .scard .act b{font-size:15.5px}
@@ -255,6 +261,16 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .readout .rd-n{color:var(--ink-2)}
 .readout .sig-buy{color:var(--good);font-weight:600}
 .readout .sig-sell{color:var(--bad);font-weight:600}
+/* Depotentwicklung: große Zahl statt Kopfzeile (Justus 27.09.2026, Entwurf C); Breiten aus charts.js fitHero, damit nichts springt */
+.readout .rd-hero{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}
+.readout .rd-hero .hv{display:inline-block;min-width:var(--hvw,0);font-size:32px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--ink)}
+.readout .rd-hero .hp{min-width:var(--hpw,0);font-size:15px;font-weight:600;color:var(--ink-2)}
+.readout .rd-hero .hp.good{color:var(--good)}
+.readout .rd-hero .hp.bad{color:var(--bad)}
+.readout .rd-hero .hs{font-size:13.5px;color:var(--muted)}
+.readout .rd-chips{gap:3px 16px;font-size:13.5px}
+.readout .rd-chips .rd-v{text-align:left;margin-left:2px}
+@media (max-width:560px){.readout .rd-hero .hv{font-size:28px}}
 /* Signalcharts: feste Zeilen je nach verfügbarer Breite (charts.js fitMode misst mit der Schrift des Geräts), in allen drei Karten gleich,
    damit die Charts auf gleicher Höhe bleiben und nichts abgeschnitten wird. Grundform (schmal): Datum, Abstand, Schluss, SMA50, Regelstand je
    eine Zeile; rd-mid: Schluss und SMA50 nebeneinander; rd-wide: drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand);
@@ -339,6 +355,46 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
    Als margin, damit die Sprungziele im Menü gleich bleiben. */
 #depot{margin-top:clamp(24px,6vw,65px)}
 #depot>#perfCard{margin-top:clamp(16px,5vw,54px)}
+/* Signale, Rebalancing, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
+   der Inhalt bündig mit dem Abschnittstitel. Abstand über „Signale“ wie über „Depot“; nach einem aufgeklappten Abschnitt
+   derselbe Abstand bis zum nächsten Titel, eingeklappt bleiben die Titel dicht beieinander (Titel springen beim Aufklappen nicht) */
+#signale{margin-top:clamp(24px,6vw,65px)}
+#signale:not(.folded),#rebalancing:not(.folded),#einstellungen:not(.folded){padding-bottom:calc(6px + clamp(24px,6vw,65px))}
+#signale .card,#rebalancing .card,#regeln>.card{background:none;border:0;border-radius:0;box-shadow:none}
+/* Signale: zwei offene Spalten mit Linie in der Mitte (bis 980 px untereinander), in einer Spalte die Blöcke durch eine Linie getrennt.
+   gap mit !important, weil die linke Spalte in index.html ein style-Attribut mit gap:14px hat */
+#signale .grid2{grid-template-columns:repeat(2,minmax(0,1fr));gap:0 56px}
+#signale .grid2>*{position:relative;min-width:0}
+#signale .grid2>*+*::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
+#signale .grid2>div{gap:0!important;align-content:start}
+#signale .pushcard{padding:0 0 22px}
+#signale .grid2 .card>.pad{padding-left:0;padding-right:0}
+#signale .grid2>.card>.pad:first-child{padding-top:0}
+#signale .grid2>div>.card+.card{border-top:1px solid var(--rule);padding-top:10px}
+#signale .feed .it,#signale .feed .more,#signale .sched div,#signale .runlog>div{padding-left:0;padding-right:0}
+@media (max-width:980px){#signale .grid2{grid-template-columns:minmax(0,1fr)} #signale .grid2>*+*::before{display:none} #signale .grid2>*+*{border-top:1px solid var(--rule);margin-top:14px;padding-top:10px}}
+/* Rebalancing: Vorschläge ohne Kasten; bei zwei Vorschlägen zwei Spalten mit Linie in der Mitte (bis 980 px untereinander) */
+#rebalancing #rebCards{gap:0 56px}
+#rebalancing #rebCards.one{grid-template-columns:minmax(0,1fr)}
+#rebalancing #rebCards:not(.one){grid-template-columns:repeat(2,minmax(0,1fr))}
+#rebalancing #rebCards>*{position:relative}
+#rebalancing #rebCards>*+*::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
+#rebalancing .rv .hd{padding:0 0 14px}
+#rebalancing .rv .ft,#rebalancing .rv .rebact{padding-left:0;padding-right:0}
+#rebalancing table th:first-child,#rebalancing table td:first-child{padding-left:0}
+#rebalancing table th:last-child,#rebalancing table td:last-child{padding-right:0}
+#rebalancing>.card.pad{padding:20px 0 0;border-top:1px solid var(--rule);margin-top:6px}
+@media (max-width:980px){#rebalancing #rebCards:not(.one){grid-template-columns:minmax(0,1fr)} #rebalancing #rebCards>*+*::before{display:none} #rebalancing #rebCards>*+*{border-top:1px solid var(--rule);margin-top:14px;padding-top:18px}}
+/* Einstellungen: aufklappbare Bereiche als Zeilen zwischen Linien */
+#einstellungen{row-gap:0}
+#einstellungen>details.box{background:none;border:0;border-radius:0;border-top:1px solid var(--rule)}
+#einstellungen>h2+details.box{border-top:0}
+#einstellungen>details.box:last-child{border-bottom:1px solid var(--rule)}
+#einstellungen details.box>summary{padding:15px 0}
+#einstellungen details.box>summary:focus-visible{border-radius:4px}
+#einstellungen details.box .body{padding:4px 0 22px}
+/* Regeln: „Datenquellen und Ablauf“ ohne Kasten, mit Linie darüber */
+#regeln>.card.pad{padding:20px 0 0;border-top:1px solid var(--rule);margin-top:6px}
 
 /* Banner */
 .banner{border-left:3px solid var(--warn);background:var(--warn-bg);padding:11px 14px;border-radius:0 8px 8px 0;color:var(--ink);font-size:14px;display:grid;gap:4px}
@@ -456,7 +512,7 @@ td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 .pushcard{align-content:start}
 .link.del{font-size:12.5px;color:var(--muted);text-decoration:none;white-space:nowrap}
 .link.del:hover,.link.del:focus-visible{color:var(--bad);text-decoration:underline}
-#signale .grid2{align-items:start}
+#signale .grid2{align-items:stretch} /* beide Spalten volle Höhe, damit die Trennlinie durchgeht (offene Spalten, 27.09.2026) */
 /* Beimischung (ETH, SOL) in der Positionstabelle: leise Unterzeilen */
 tr.altrow td{font-size:12.5px;color:var(--muted);padding-top:4px;padding-bottom:6px}
 tr.altrow .tag{font-size:10.5px;padding:1px 6px}

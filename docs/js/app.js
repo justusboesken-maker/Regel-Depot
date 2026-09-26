@@ -280,7 +280,7 @@
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
       hd.appendChild(right);
       top.appendChild(hd);
-      var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
+      var fig = el('div', 'fig'); fig.id = 'fig-' + a; fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
       if (lp && rn) {
         var lv = el('div', 'live' + (rn.would ? ' would' : ''));
@@ -383,7 +383,19 @@
   }
   function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: false }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); }
+  /* Beim Darüberfahren über den kleinen Signalchart zeigt der Kopf der Karte die Woche unter dem Zeiger (Wochenschluss, Kurs, Abstand zum
+     SMA50), ohne Zeiger wieder den letzten Stand (Justus 27.09.2026). Die Höhe bleibt dabei fest (Kommazahl, sonst verrutscht der Chart um
+     Bruchteile eines Pixels), Wert und Abstand stehen dann in einer Zeile (app.css .fig.hov), damit die Karten nicht springen. */
+  function figHover(a, k) {
+    var f = $('fig-' + a); if (!f) return;
+    var fl = f.querySelector('.fl'), fv = f.querySelector('.fv'), fd = f.querySelector('.fd'); if (!fl || !fv || !fd) return;
+    if (k == null) { if (f._keep) { fl.textContent = f._keep[0]; fv.textContent = f._keep[1]; fd.textContent = f._keep[2]; f._keep = null; } f.classList.remove('hov'); f.style.height = ''; return; }
+    var S = C[a].S, E = C[a].E; if (!S || !E || !(S.c[k] > 0) || !(E.sma[k] > 0)) return;
+    if (!f._keep) { f._keep = [fl.textContent, fv.textContent, fd.textContent]; f.style.height = f.getBoundingClientRect().height + 'px'; }
+    fl.textContent = 'Wochenschluss ' + dDE(S.d[k]); fv.textContent = usd(a, S.c[k]); fd.textContent = pct(S.c[k] / E.sma[k] - 1, 1) + ' zum SMA50';
+    f.classList.add('hov');
+  }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: false, onHover: function (k) { figHover(a, k); } }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); }
   /* Status-Karten ohne Werte-Zeile über den Charts (Justus 27.09.2026: „Den Part wegmachen“); die Großansicht behält ihre Werte-Zeile */
 
   /* ---------- Depot ---------- */
@@ -619,12 +631,14 @@
   function perfRangeLabels(cmp) { var seg = $('perfRange'); if (!seg) return; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (b) { var r = PERF_RANGES.filter(function (x) { return x[0] === b.getAttribute('data-r'); })[0]; if (r) b.textContent = cmp ? r[2] : r[1]; }); }
   function drawPerf(Mo) {
     var host = $('chPerf'), leg = $('perfLegend'), cap = $('perfCap'), cmp = PERF.mode === 'vergleich';
+    /* Reste der großen Zahl (Höhe, Breiten) entfernen, bevor eine andere Ansicht die Zeile füllt */
+    if (leg) { leg.style.minHeight = ''; leg.style.removeProperty('--hvw'); leg.style.removeProperty('--hpw'); }
     perfRangeLabels(cmp);
     if (cmp) { drawCompare(Mo); return; }
     if ($('perfDD')) { $('perfDD').hidden = true; $('perfDD').textContent = ''; }
     resetKeys(host);
     host.setAttribute('aria-label', (PERF.mode === 'wert' ? 'Wert' : 'Gewinn oder Verlust') + ' des Depots und der Bausteine');
-    var series = [{ key: 'total', label: 'Depot gesamt', short: 'Depot' }, { key: 'ftse', label: 'FTSE-Baustein', short: 'FTSE', colorVar: '--ftse' }, { key: 'btc', label: 'Bitcoin-Baustein', short: 'Bitcoin', colorVar: '--btc' }, { key: 'gold', label: 'Gold-Baustein', short: 'Gold', colorVar: '--gold' }];
+    var series = [{ key: 'total', label: 'Depot gesamt', short: 'Depot', colorVar: '--accent' }, { key: 'ftse', label: 'FTSE-Baustein', short: 'FTSE', colorVar: '--ftse' }, { key: 'btc', label: 'Bitcoin-Baustein', short: 'Bitcoin', colorVar: '--btc' }, { key: 'gold', label: 'Gold-Baustein', short: 'Gold', colorVar: '--gold' }];
     var est = Mo.dep.tx.filter(function (t) { return t.est; }).map(function (t) { return (({ btc: 'Bitcoin', ftse: 'VWCE', gold: 'Gold-ETC' })[t.a] || INFO(t.a).short) + ' ' + dDE(t.d); });
     var r = PERF.range, today = todayISO(), grid = 'woche', from = null, note = '';
     if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }

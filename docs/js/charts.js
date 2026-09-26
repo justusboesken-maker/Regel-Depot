@@ -2,6 +2,7 @@
 (function (root) {
   'use strict';
   var NS = 'http://www.w3.org/2000/svg';
+  var GRAD_N = 0; /* fortlaufende Nummer für Farbverläufe (eindeutige ids) */
   function mk(tag, attrs, parent) { var e = document.createElementNS(NS, tag); for (var k in attrs) { if (attrs[k] != null) e.setAttribute(k, attrs[k]); } if (parent) parent.appendChild(e); return e; }
   function el(tag, cls, text) { var e = document.createElement(tag); if (cls) e.className = cls; if (text != null) e.textContent = text; return e; }
   function css(v) { return getComputedStyle(document.documentElement).getPropertyValue(v).trim(); }
@@ -22,12 +23,38 @@
 
   /* Zahl und Einheit nicht trennen (kein „€“ allein in der nächsten Zeile) */
   function nb(t) { return String(t).replace(/ (€|%|\$|Prozentpunkte)/g, '\u00a0$1'); }
+  /* Glatte Linie durch alle Punkte, monoton kubisch (Fritsch–Carlson): schwingt nicht über die Werte hinaus. P = [[x, y], …] */
+  function smoothPath(P) {
+    var n = P.length, i; if (!n) return '';
+    if (n < 3) return 'M' + P.map(function (p) { return p[0].toFixed(1) + ',' + p[1].toFixed(1); }).join('L');
+    var dx = [], s = [], t = [];
+    for (i = 0; i < n - 1; i++) { dx[i] = P[i + 1][0] - P[i][0]; s[i] = dx[i] ? (P[i + 1][1] - P[i][1]) / dx[i] : 0; }
+    t[0] = s[0]; t[n - 1] = s[n - 2];
+    for (i = 1; i < n - 1; i++) t[i] = s[i - 1] * s[i] <= 0 ? 0 : (s[i - 1] + s[i]) / 2;
+    for (i = 0; i < n - 1; i++) { if (s[i] === 0) { t[i] = 0; t[i + 1] = 0; continue; } var a = t[i] / s[i], b = t[i + 1] / s[i], q = a * a + b * b; if (q > 9) { var k = 3 / Math.sqrt(q); t[i] = k * a * s[i]; t[i + 1] = k * b * s[i]; } }
+    var d = 'M' + P[0][0].toFixed(1) + ',' + P[0][1].toFixed(1);
+    for (i = 0; i < n - 1; i++) { var h = dx[i] / 3; d += 'C' + (P[i][0] + h).toFixed(1) + ',' + (P[i][1] + t[i] * h).toFixed(1) + ' ' + (P[i + 1][0] - h).toFixed(1) + ',' + (P[i + 1][1] - t[i + 1] * h).toFixed(1) + ' ' + P[i + 1][0].toFixed(1) + ',' + P[i + 1][1].toFixed(1); }
+    return d;
+  }
+  /* Depotentwicklung (Justus 27.09.2026, Entwurf C): große Zahl mit Prozent und Stand, darunter die Bausteine als Chips und Positionen/Cash/Wert */
+  function heroReadout(box, spec) {
+    var H = spec.hero, h = el('div', 'rd-hero');
+    h.appendChild(el('b', 'hv', nb(H.v)));
+    if (H.p) { var p = el('span', 'hp' + (H.cls ? ' ' + H.cls : ''), nb(H.p)); if (H.pTitle) p.title = H.pTitle; h.appendChild(p); }
+    h.appendChild(el('span', 'hs', H.label + ' · ' + spec.head));
+    box.appendChild(h);
+    var row = el('div', 'rd-row rd-chips');
+    (spec.groups || []).forEach(function (g) { g.rows.forEach(function (r) { var it = el('span', 'rd-i'); if (r.color) { var i = el('i'); i.style.borderTopColor = r.color; it.appendChild(i); } it.appendChild(el('span', 'rd-l', r.short || r.label)); it.appendChild(el('b', 'rd-v', nb(r.val))); row.appendChild(it); }); });
+    if (spec.extra) row.appendChild(el('span', 'rd-x', nb(spec.extra)));
+    box.appendChild(row);
+  }
   /* ---------- Werte-Zeile über den Charts (Justus 26.09.2026: statt eines Kästchens im Chart, damit nichts verdeckt wird) ----------
      spec: {head (fett), extra, extraCls, groups: [{title, rows: [{color, dash, strong, label, val}]}], note, noteCls}. Die Werte haben eine
      feste Mindestbreite, damit die Zeile beim Darüberfahren nicht springt. */
   function readout(box, spec) {
     if (!box) return;
     box.textContent = '';
+    if (spec.hero) { heroReadout(box, spec); return; }
     var h = el('div', 'rd-h'); h.appendChild(el('b', null, spec.head)); if (spec.extra) h.appendChild(el('span', 'rd-x' + (spec.extraCls ? ' ' + spec.extraCls : ''), nb(spec.extra))); box.appendChild(h);
     (spec.groups || []).forEach(function (g) {
       var row = el('div', 'rd-row'); if (g.title) row.appendChild(el('span', 'rd-t', g.title));
@@ -44,9 +71,11 @@
      die Werte stehen in der Werte-Zeile box; ohne Zeiger dort der letzte Stand. Ein Chart mit Titel beginnt eine neue Zeile. */
   function syncGroup(box) {
     var G = { charts: [], cur: null };
-    if (box) box.classList.add('readout');
+    if (box) { box.classList.add('readout'); box.style.minHeight = ''; box.style.removeProperty('--hvw'); box.style.removeProperty('--hpw'); }
     function spec(i) {
       var groups = [];
+      /* Erster Chart mit großer Zahl (Depotentwicklung): die übrigen Charts liefern die Chips darunter */
+      if (G.charts[0].hero) { G.charts.slice(1).forEach(function (c) { groups.push({ title: '', rows: c.rows(i) }); }); return { hero: G.charts[0].hero(i), head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups }; }
       G.charts.forEach(function (c) { var rows = c.rows(i); if (!groups.length || c.title) groups.push({ title: c.title || '', rows: rows }); else groups[groups.length - 1].rows = groups[groups.length - 1].rows.concat(rows); });
       return { head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups };
     }
@@ -71,10 +100,27 @@
       pick.forEach(function (k) { readout(box, spec(k)); var h = box.querySelector('.rd-h'); if (h) mx = Math.max(mx, h.getBoundingClientRect().height); });
       if (mx > 0) box.style.setProperty('--rdh', Math.ceil(mx) + 'px'); else box.style.removeProperty('--rdh');
     }
+    /* Große Zahl: Breite der Zahl und der Prozentangabe nach dem breitesten Wert (Canvas), Höhe nach der höchsten Fassung – so springen beim
+       Darüberfahren weder die Beschriftung daneben noch die Charts darunter */
+    function fitHero() {
+      var c0 = G.charts[0], n = c0.n, i, cx = null, mx = 0, pick = [];
+      box.style.minHeight = ''; box.style.removeProperty('--hvw'); box.style.removeProperty('--hpw');
+      readout(box, spec(n - 1));
+      var hv = box.querySelector('.hv'), hp = box.querySelector('.hp');
+      try { cx = document.createElement('canvas').getContext('2d'); } catch (e) { cx = null; }
+      if (cx && hv) {
+        var fv = getComputedStyle(hv), fp = hp ? getComputedStyle(hp) : null, wv = 0, wp = 0;
+        for (i = 0; i < n; i++) { var H = c0.hero(i); cx.font = fv.fontWeight + ' ' + fv.fontSize + ' ' + fv.fontFamily; wv = Math.max(wv, cx.measureText(nb(H.v)).width); if (fp && H.p) { cx.font = fp.fontWeight + ' ' + fp.fontSize + ' ' + fp.fontFamily; wp = Math.max(wp, cx.measureText(nb(H.p)).width); } }
+        box.style.setProperty('--hvw', Math.ceil(wv + 2) + 'px'); if (wp) box.style.setProperty('--hpw', Math.ceil(wp + 2) + 'px');
+      }
+      if (n <= 160) { for (i = 0; i < n; i++) pick.push(i); } else { var st = Math.ceil(n / 160); for (i = 0; i < n; i += st) pick.push(i); pick.push(n - 1); }
+      pick.forEach(function (k) { readout(box, spec(k)); mx = Math.max(mx, box.getBoundingClientRect().height); });
+      if (mx > 0) box.style.minHeight = Math.ceil(mx) + 'px';
+    }
     G.reset = function () {
       if (!G.charts.length) return;
-      if (box && !G.w) { G.w = G.charts.reduce(function (w, c) { return Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
-      if (box && !G.fit) { G.fit = true; fitHead(); }
+      if (box && !G.w) { G.w = G.charts.reduce(function (w, c, k) { return k === 0 && c.hero ? w : Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
+      if (box && !G.fit) { G.fit = true; if (G.charts[0].hero) fitHero(); else fitHead(); }
       readout(box, spec(G.charts[0].n - 1));
     };
     G.hide = function () { G.charts.forEach(function (c) { c.unmark(); }); G.reset(); };
@@ -139,7 +185,8 @@
     host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
     /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
        im Chart-Container); ohne Zeiger zeigt sie den letzten Wochenschluss */
-    /* o.readout === false: keine Werte-Zeile (Status-Karten seit 27.09.2026, Wunsch Justus); Linie und Punkte beim Darüberfahren bleiben */
+    /* o.readout === false: keine Werte-Zeile (Status-Karten seit 27.09.2026, Wunsch Justus); Linie und Punkte beim Darüberfahren bleiben.
+       o.onHover(k): meldet beim Darüberfahren die Woche k, ohne Zeiger null (Kopf der Status-Karte, app.js figHover) */
     var rd = null; if (o.readout !== false) { rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd'); }
     var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); if (rd) rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
     var cross = mk('line', { y1: m.t, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
@@ -181,9 +228,9 @@
       cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible');
       dotC.setAttribute('cx', x); dotC.setAttribute('cy', Y(S.c[k])); dotC.setAttribute('visibility', 'visible');
       dotS.setAttribute('cx', x); dotS.setAttribute('cy', Y(E.sma[k])); dotS.setAttribute('visibility', 'visible');
-      read(k);
+      read(k); if (o.onHover) o.onHover(k);
     }
-    function hide() { [cross, dotC, dotS].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); read(n - 1); }
+    function hide() { [cross, dotC, dotS].forEach(function (e) { e.setAttribute('visibility', 'hidden'); }); read(n - 1); if (o.onHover) o.onHover(null); }
     function idx(evt) { var rc = svg.getBoundingClientRect(), sx = (evt.clientX - rc.left) * (W / rc.width); var t = Math.round((sx - m.l) / iw * (N - 1)); return Math.max(i0, Math.min(n - 1, i0 + t)); }
     hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
     host.tabIndex = 0;
@@ -234,7 +281,7 @@
     function val(s, q) { if (s.key === 'total') return mode === 'wert' ? q.total : q.gainTotal; var pt = q.parts[s.key]; if (!pt) return null; return mode === 'wert' ? pt.val + pt.cash : pt.gain; }
     if (leg && opts.legend !== false) series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : col.ink; if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
     var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = opts.height || (narrow ? 240 : 300);
-    var m = { t: 14, r: narrow ? 74 : 92, b: 30, l: narrow ? 66 : 80 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    var m = { t: 14, r: narrow ? 74 : 132, b: 30, l: narrow ? 66 : 80 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
     pts.forEach(function (q) { series.forEach(function (s) { var v = val(s, q); if (v == null) return; if (v < lo) lo = v; if (v > hi) hi = v; }); });
@@ -251,19 +298,26 @@
     if (daily) { var step = Math.max(1, Math.ceil(n / Math.max(3, Math.floor(iw / 70)))); pts.forEach(function (q, i) { if ((n - 1 - i) % step === 0) tks.push({ i: i, l: dShort(q.d) }); }); }
     else { pts.forEach(function (q, i) { var ymd = ENG.addDays(q.k, 4).slice(0, 7); if (prevM !== null && ymd !== prevM) tks.push({ i: i, l: MON[+ymd.slice(5) - 1] + (ymd.slice(5) === '01' ? ' ' + ymd.slice(2, 4) : '') }); prevM = ymd; }); if (tks.length > 8) { var st = Math.ceil(tks.length / 7); tks = tks.filter(function (t, k) { return k % st === 0; }); } }
     tks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: m.t + ih, y2: m.t + ih + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: m.t + ih + 18, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
-    var ends = [];
-    /* Gesamtlinie zuerst zeichnen (liegt unten), damit ein Baustein sichtbar bleibt, wo er allein das Depot ausmacht */
+    var ends = [], yb = Y(Math.max(lo, Math.min(hi, mode === 'gewinn' ? 0 : lo)));
+    /* Gesamtlinie zuerst zeichnen (liegt unten), damit ein Baustein sichtbar bleibt, wo er allein das Depot ausmacht.
+       Seit 27.09.2026 (Justus, Entwurf A): Linien geglättet (ohne Überschwingen); das Depot allein bekommt eine Fläche im Farbverlauf
+       (30 % an der Linie, 0 % an der Null-Linie) und einen Hof am Endpunkt */
     series.slice().sort(function (a, b) { return (a.key === 'total' ? 0 : 1) - (b.key === 'total' ? 0 : 1); }).forEach(function (s) {
-      var d = '', started = false, last = null, color = s.colorVar ? css(s.colorVar) : col.ink;
-      pts.forEach(function (q, i) { var v = val(s, q); if (v == null) { started = false; return; } d += (started ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1); started = true; last = { i: i, v: v }; });
-      if (!d) return;
-      mk('path', { d: d, fill: 'none', stroke: color, 'stroke-width': s.key === 'total' ? 2.5 : 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round', opacity: s.key === 'total' ? 1 : 0.95 }, svg);
-      if (last) { mk('circle', { cx: X(last.i), cy: Y(last.v), r: s.key === 'total' ? 4.5 : 3.5, fill: color, stroke: col.surface, 'stroke-width': 2 }, svg); ends.push({ y: Y(last.v), v: last.v, s: s, color: color }); }
+      var segs = [], seg = null, last = null, color = s.colorVar ? css(s.colorVar) : col.ink, tot = s.key === 'total';
+      pts.forEach(function (q, i) { var v = val(s, q); if (v == null) { seg = null; return; } if (!seg) { seg = []; segs.push(seg); } seg.push([X(i), Y(v)]); last = { i: i, v: v }; });
+      if (!segs.length) return;
+      if (tot && series.length === 1) {
+        var gid = 'pfg' + (++GRAD_N), lg = mk('linearGradient', { id: gid, x1: 0, x2: 0, y1: Y(hi).toFixed(1), y2: yb.toFixed(1), gradientUnits: 'userSpaceOnUse' }, mk('defs', {}, svg));
+        mk('stop', { offset: 0, 'stop-color': color, 'stop-opacity': 0.3 }, lg); mk('stop', { offset: 1, 'stop-color': color, 'stop-opacity': 0 }, lg);
+        segs.forEach(function (P) { if (P.length < 2) return; mk('path', { d: smoothPath(P) + 'L' + P[P.length - 1][0].toFixed(1) + ',' + yb.toFixed(1) + 'L' + P[0][0].toFixed(1) + ',' + yb.toFixed(1) + 'Z', fill: 'url(#' + gid + ')', stroke: 'none' }, svg); });
+      }
+      segs.forEach(function (P) { mk('path', { d: smoothPath(P), fill: 'none', stroke: color, 'stroke-width': tot ? 2.25 : 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg); });
+      if (last) { if (tot) mk('circle', { cx: X(last.i), cy: Y(last.v), r: 10, fill: color, 'fill-opacity': 0.16 }, svg); mk('circle', { cx: X(last.i), cy: Y(last.v), r: tot ? 4.5 : 3.5, fill: color, stroke: col.surface, 'stroke-width': 2 }, svg); ends.push({ y: Y(last.v), v: last.v, s: s, color: color }); }
     });
-    /* Endwerte beschriften, ohne Überlappung (mindestens 14 px Abstand, Gesamt zuerst) */
-    ends.sort(function (a, b) { return (a.s.key === 'total' ? -1 : 1) - (b.s.key === 'total' ? -1 : 1); });
-    var used = [];
-    ends.forEach(function (e) { var y = e.y; if (used.some(function (u) { return Math.abs(u - y) < 14; })) return; used.push(y); var t = mk('text', { x: m.l + iw + 8, y: y + 4, 'font-size': e.s.key === 'total' ? 11.5 : 10.5, fill: e.s.key === 'total' ? col.ink : css('--ink-2'), 'font-weight': e.s.key === 'total' ? 600 : 400 }, svg); t.textContent = money(e.v); });
+    /* Endwerte beschriften: bei mehreren Linien mit Namen (auf schmalen Bildschirmen nur der Wert); zu nahe Beschriftungen rücken nach unten */
+    ends.sort(function (a, b) { return a.y - b.y; });
+    var prevY = -1e9, multi = series.length > 1;
+    ends.forEach(function (e) { var tot = e.s.key === 'total', y = Math.max(e.y, prevY + 15); prevY = y; var t = mk('text', { x: m.l + iw + (tot ? 14 : 10), y: y + 4, 'font-size': tot ? 12.5 : 11, fill: tot ? col.ink : css('--ink-2'), 'font-weight': tot ? 600 : 400 }, svg); t.textContent = (multi && !narrow ? (e.s.short || e.s.label) + ' ' : '') + money(e.v); });
     /* Darüberfahren und Tastatur: Linie und Punkte, die Werte stehen in der Werte-Zeile der Gruppe (opts.sync); alle Charts der Gruppe zeigen denselben Tag */
     var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dots = series.map(function (s) { return mk('circle', { r: 3.5, fill: s.colorVar ? css(s.colorVar) : col.ink, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg); });
@@ -280,7 +334,14 @@
       var cashT = 0, intT = 0, valT = 0; Object.keys(q.parts).forEach(function (a) { cashT += q.parts[a].cash; intT += q.parts[a].interest; valT += q.parts[a].val; });
       return 'Positionen ' + eur(valT) + ' · Cash ' + eur(cashT) + (intT > 0.5 ? ' · davon Zinsen ' + eur(intT) : '') + (mode === 'wert' ? ' · Gewinn ' + sgnEur(q.gainTotal) : ' · Wert ' + eur(q.total));
     }
-    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax });
+    /* große Zahl im Kopf (opts.hero): Gewinn bzw. Depotwert am Tag i, Prozent = Gewinn geteilt durch den Einstand der Positionen an diesem Tag */
+    function hero(i) {
+      var q = pts[i], cost = 0; Object.keys(q.parts).forEach(function (a) { cost += q.parts[a].cost || 0; });
+      var gn = q.gainTotal, p = cost > 0.5 ? gn / cost : null, cls = gn > 0.5 ? 'good' : gn < -0.5 ? 'bad' : '', tip = 'Prozent: Gewinn geteilt durch den Einstand der Positionen an diesem Tag';
+      if (mode === 'wert') return { v: eur(q.total), p: sgnEur(gn) + (p != null ? ' (' + pct(p, 1) + ')' : ''), cls: cls, pTitle: tip, label: 'Depotwert' };
+      return { v: sgnEur(gn), p: p != null ? pct(p, 1) : '', cls: cls, pTitle: tip, label: 'Gewinn seit dem ersten Kauf' };
+    }
+    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax, hero: opts.hero ? hero : null });
     function go(i) { if (i < 0 || i >= n) return; cur = i; S.show(i); }
     function at() { return S.cur != null ? S.cur : cur; }
     function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / Math.max(1, n - 1))))); }
@@ -298,10 +359,10 @@
     var wrap = el('div', 'splitcharts'); host.appendChild(wrap);
     /* Werte-Zeile statt Legende: Namen der Linien mit ihren Werten am gewählten Tag (ohne Zeiger: letzter Stand) */
     var G = syncGroup(leg);
-    function block(title, ser, height) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G }); }
+    function block(title, ser, height, hero) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
     var narrow = (host.clientWidth || 700) < 560;
-    block('Depot gesamt', total, narrow ? 200 : 230);
-    block('Bausteine', parts, narrow ? 220 : 260);
+    block('Depot gesamt', total, narrow ? 210 : 250, true);
+    block('Bausteine', parts, narrow ? 200 : 220);
     G.reset();
     if (cap) cap.textContent = capText || '';
   }
