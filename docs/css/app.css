@@ -324,10 +324,11 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 #depot details.box>summary{padding:15px 0}
 #depot details.box>summary:focus-visible{border-radius:4px}
 #depot details.box .body{padding:4px 0 22px}
-/* Mehr Abstand über „Depot“ und über „Depotentwicklung“ (Justus 27.09.2026, Variante B): am Mac 48 bzw. 32 px zusätzlich,
-   auf schmalen Bildschirmen weniger. Als margin, damit die Sprungziele im Menü gleich bleiben. */
-#depot{margin-top:clamp(24px,4vw,48px)}
-#depot>#perfCard{margin-top:clamp(16px,2.5vw,32px)}
+/* Mehr Abstand über „Depot“ und über „Depotentwicklung“ (Justus 27.09.2026): ab etwa 1100 px Breite 95 px vom Status bis zur
+   Überschrift „Depot“ und 80 px von der Aufteilung bis zur Linie über „Depotentwicklung“, auf schmalen Bildschirmen weniger.
+   Als margin, damit die Sprungziele im Menü gleich bleiben. */
+#depot{margin-top:clamp(24px,6vw,65px)}
+#depot>#perfCard{margin-top:clamp(16px,5vw,54px)}
 
 /* Banner */
 .banner{border-left:3px solid var(--warn);background:var(--warn-bg);padding:11px 14px;border-radius:0 8px 8px 0;color:var(--ink);font-size:14px;display:grid;gap:4px}
