@@ -1,5 +1,5 @@
 /* Investus – Icons der Bausteine statt Farbquadrate (eigene Zeichnung, 24er Raster, Farbe = currentColor).
-   INV_ICON(a): a = ftse (Weltkugel) | btc (₿ im Ring) | gold (Goldbarren) | cash (€ im Ring) | alt (Punkt für ETH/SOL).
+   INV_ICON(a): a = ftse (Weltkugel) | btc (₿ im Ring) | gold (Goldbarren) | cash (Quadrat wie früher) | alt (Punkt für ETH/SOL).
    Weltkugel: Kontinente aus echten Küstenpunkten (orthografisch, 18° W / 10° N), geglättet, als Aussparung. */
 (function (root) {
   'use strict';
@@ -16,7 +16,9 @@
     if (a === 'btc') return SV + '>' + RING + '<path d="' + BTC + '" fill="currentColor" fill-rule="evenodd" transform="translate(.2 0)"/></svg>';
     if (a === 'gold') return SV + '><path d="' + BAR + '" fill="currentColor" stroke="currentColor" stroke-width="' + BAR_W + '" stroke-linejoin="round"/>' +
       '<path d="' + BAR_LIGHT + '" fill="#fff" fill-opacity=".85"/></svg>';
-    if (a === 'cash') return SV + '>' + RING + '<g fill="none" stroke="currentColor"><path d="M16.9 7.7A5.6 5.6 0 1 0 16.9 16.3" stroke-width="2.2"/><path d="M6.4 10.7H13.4M6.4 13.3H13.4" stroke-width="1.8"/></g></svg>';
+    /* Cash bleibt das frühere Farbquadrat (Justus 27.09.2026): 60 % der Box (in der Legende 9 px bei 15 px, Rundung 2 px),
+       rechtsbündig, damit der Abstand zum Text wie beim früheren Quadrat bleibt */
+    if (a === 'cash') return SV + '><rect x="9.6" y="4.8" width="14.4" height="14.4" rx="3.2" fill="currentColor"/></svg>';
     return SV + '><circle cx="12" cy="12" r="5" fill="currentColor"/></svg>';
   }
   root.INV_ICON = icon;
