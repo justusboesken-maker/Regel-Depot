@@ -294,6 +294,13 @@ button.link{font:inherit;background:none;border:0;color:var(--accent);text-decor
 .rv .hd .tot{display:flex;flex-wrap:wrap;gap:6px 16px;font-size:13.5px;color:var(--ink-2)}
 .rv .hd .tot b{color:var(--ink);font-variant-numeric:tabular-nums}
 .rv .ft{padding:12px 18px;border-top:1px solid var(--rule);display:grid;gap:8px}
+.rv .rebact{padding:12px 18px 16px;border-top:1px solid var(--rule);display:grid;gap:8px;justify-items:start;min-width:0}
+.rv .rebact .btn{white-space:normal;text-align:left}
+.rebpanel{display:grid;gap:10px;width:100%;min-width:0}
+.rebpanel table input{width:8.5em;text-align:right;padding:6px 8px;font-size:14px}
+.rebpanel .rebdate{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
+.rebpanel .rebdate input{width:auto}
+.rebprev{font-size:13px;color:var(--ink-2);margin:0}
 .notes{display:grid;gap:7px;font-size:13.5px;color:var(--ink-2)}
 .notes p{padding-left:14px;position:relative}
 .notes p::before{content:"";position:absolute;left:0;top:.62em;width:5px;height:5px;border-radius:50%;background:var(--rule-strong)}

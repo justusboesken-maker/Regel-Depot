@@ -279,6 +279,34 @@
     else out.push(addDays(x, 1), addDays(x, 2));             /* So: Montag (Boxing Day) und Dienstag */
     return out.sort();
   }
+  /* Handelskalender London für FTSE und Gold, gemeinsam für Update-Skript und Seite. cal = config.holidays {extra, notHolidays, fridays, lbmaNoPm}.
+     Am letzten Geschäftstag vor Weihnachten und vor Neujahr (isEve; meist 24.12./31.12., am Wochenende der Freitag davor) gibt es kein
+     LBMA-Nachmittagsfixing, und die Börse schließt um 12:30 Uhr (Schlussauktion bis 12:35). Der Wochenschluss liegt am letzten Handelstag der
+     Woche; closeMin ist die Londoner Uhrzeit (Minuten), ab der er als geschlossen gilt: FTSE 16:40, an Halbtagen 12:40; Gold 16:40. */
+  function calendar(cal) {
+    cal = cal || {};
+    var HOLI = {}, EVE = {};
+    function isUkHoliday(d) {
+      var y = +d.slice(0, 4);
+      if (!HOLI[y]) { HOLI[y] = {}; ukHolidays(y).forEach(function (x) { HOLI[y][x] = 1; }); }
+      if ((cal.notHolidays || []).indexOf(d) >= 0) return false;
+      return !!HOLI[y][d] || (cal.extra || []).indexOf(d) >= 0 || (cal.fridays || []).indexOf(d) >= 0;
+    }
+    function lseDay(d) { return dow0(d) < 5 && !isUkHoliday(d); }
+    function lastBizBefore(d) { var x = addDays(d, -1); while (!lseDay(x)) x = addDays(x, -1); return x; }
+    function isEve(d) { var y = +d.slice(0, 4); if (!EVE[y]) EVE[y] = [lastBizBefore(y + '-12-25'), lastBizBefore((y + 1) + '-01-01')]; return EVE[y].indexOf(d) >= 0; }
+    function isTradingDay(a, d) {
+      if (!lseDay(d)) return false;
+      if (a === 'gold' && (isEve(d) || (cal.lbmaNoPm || []).some(function (x) { return x === d || x === d.slice(5); }))) return false;
+      return true;
+    }
+    function lastTradingDay(a, k) { for (var i = 4; i >= 0; i--) { var d = addDays(k, i); if (isTradingDay(a, d)) return d; } return null; }
+    function prevTradingDay(a, d, k) { for (var x = addDays(d, -1); x >= k; x = addDays(x, -1)) if (isTradingDay(a, x)) return x; return k; }
+    function closeMin(a, d) { return a === 'ftse' && isEve(d) ? 12 * 60 + 40 : 16 * 60 + 40; }
+    /* Endet die Woche (Montag k) früher als am Freitagabend: Feiertag am Freitag (oder davor) oder Halbtag */
+    function earlyClose(a, k) { var d = lastTradingDay(a, k); return !!d && (d < addDays(k, 4) || closeMin(a, d) < 16 * 60 + 40); }
+    return { isUkHoliday: isUkHoliday, lseDay: lseDay, isEve: isEve, halfDay: isEve, isTradingDay: isTradingDay, lastTradingDay: lastTradingDay, prevTradingDay: prevTradingDay, closeMin: closeMin, earlyClose: earlyClose };
+  }
 
   /* ---------- Eingaben ----------
      Zahl aus einem Eingabefeld, unabhängig vom Gebietsschema des Browsers. Deutsch zuerst: „2.708,00“ = 2708, „0,5“ = 0,5, „1.234.567“ = 1234567.
@@ -325,7 +353,7 @@
   }
 
   var ENG = {
-    parseNum: parseNum, parseDate: parseDate, easterSunday: easterSunday, ukHolidays: ukHolidays,
+    parseNum: parseNum, parseDate: parseDate, easterSunday: easterSunday, ukHolidays: ukHolidays, calendar: calendar,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf,

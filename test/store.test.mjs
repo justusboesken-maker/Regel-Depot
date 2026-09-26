@@ -140,3 +140,11 @@ test('Import: Buchungen mit Datum in der Zukunft werden abgelehnt', () => {
   const t = new Date(Date.now() + 3 * 86400000), d = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0');
   assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'z', d, a: 'btc', type: 'kauf', units: 0.01, price: 50000 }] })), /Zukunft/);
 });
+
+test('Umbuchung zwischen Bausteinen: Import prüft von/nach, Rebalancing-Datum bleibt erhalten', () => {
+  const S = freshStore();
+  const n = S.importJson(JSON.stringify({ ...base, tx: [{ id: 'u', d: '2026-09-25', a: 'gold', to: 'FTSE', type: 'Umbuchung', amount: '100,50', reb: '2026-09-25', cash: -100.5 }] }));
+  assert.equal(n.tx[0].type, 'umbuchung'); assert.equal(n.tx[0].to, 'ftse'); assert.equal(n.tx[0].amount, 100.5); assert.equal(n.tx[0].reb, '2026-09-25');
+  assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'x', d: '2026-09-25', a: 'gold', to: 'gold', type: 'umbuchung', amount: 1 }] })), /zwei verschiedene Bausteine/);
+  assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'x', d: '2026-09-25', a: 'eth', to: 'gold', type: 'umbuchung', amount: 1 }] })), /zwei verschiedene Bausteine/);
+});

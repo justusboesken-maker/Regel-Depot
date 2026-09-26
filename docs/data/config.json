@@ -149,13 +149,15 @@
       "id": "fr-warn",
       "cron": "17 13 * * 5",
       "season": "summer",
-      "label": "Vorwarnung FTSE All-World und Gold"
+      "label": "Vorwarnung FTSE All-World und Gold",
+      "when": "normal"
     },
     {
       "id": "fr-warn",
       "cron": "17 14 * * 5",
       "season": "winter",
-      "label": "Vorwarnung FTSE All-World und Gold"
+      "label": "Vorwarnung FTSE All-World und Gold",
+      "when": "normal"
     },
     {
       "id": "fr-close",
@@ -285,6 +287,46 @@
       "quiet": true
     },
     {
+      "id": "early-warn",
+      "cron": "17 13 * * 1-4",
+      "season": "summer",
+      "label": "Vorwarnung: Woche endet heute (vorgezogener Wochenschluss)",
+      "when": "early"
+    },
+    {
+      "id": "early-warn",
+      "cron": "17 14 * * 1-4",
+      "season": "winter",
+      "label": "Vorwarnung: Woche endet heute (vorgezogener Wochenschluss)",
+      "when": "early"
+    },
+    {
+      "id": "early-close",
+      "cron": "47 16 * * 1-4",
+      "season": "summer",
+      "label": "Vorgezogener Wochenschluss (letzter Handelstag der Woche)",
+      "when": "early"
+    },
+    {
+      "id": "early-close",
+      "cron": "47 17 * * 1-4",
+      "season": "winter",
+      "label": "Vorgezogener Wochenschluss (letzter Handelstag der Woche)",
+      "when": "early"
+    },
+    {
+      "id": "early-warn",
+      "cron": "17 10 * 12 1-5",
+      "label": "Vorwarnung FTSE am Halbtag (London schließt 12:30 Uhr)",
+      "when": "half"
+    },
+    {
+      "id": "early-close",
+      "cron": "47 13 * 12 1-5",
+      "label": "Wochenschluss FTSE am Halbtag",
+      "when": "half"
+    },
+    {
       "id": "live",
       "cron": "7 5-21 * * *",
       "label": "Kurs-Ticker (Bitcoin, Gold, EUR/USD, ETH, SOL, Lang & Schwarz)",
@@ -342,5 +384,5 @@
     },
     "rebalDay": "12-30"
   },
-  "scheduleNote": "Cron-Zeiten in UTC; season: summer = Berliner Sommerzeit (UTC+2), winter = Winterzeit (UTC+1). Der Workflow lässt Läufe der anderen Jahreszeit aus, damit die Berliner Uhrzeit das ganze Jahr gleich bleibt."
+  "scheduleNote": "Cron-Zeiten in UTC; season: summer = Berliner Sommerzeit (UTC+2), winter = Winterzeit (UTC+1). Der Workflow lässt Läufe der anderen Jahreszeit aus, damit die Berliner Uhrzeit das ganze Jahr gleich bleibt. when: early = nur am letzten Handelstag einer Woche, die vor dem Freitagabend endet; half = nur an FTSE-Halbtagen; normal = nur freitags mit regulärem Wochenschluss (Anzeige auf der Seite, der Workflow prüft es selbst)."
 }

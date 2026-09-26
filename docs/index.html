@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260926-1103">
+<link rel="stylesheet" href="css/app.css?v=20260926-1237">
 </head>
 <body>
 
@@ -83,12 +83,13 @@
     </div>
   </details>
   <details class="box" id="txBox">
-    <summary>Kauf oder Verkauf eintragen</summary>
+    <summary>Kauf, Verkauf oder Umbuchung eintragen</summary>
     <div class="body">
       <form class="form" id="txForm" novalidate>
         <label>Datum<input type="date" id="fDate" required></label>
-        <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option><option value="eth">Ethereum (Beimischung, Krypto-Baustein)</option><option value="sol">Solana (Beimischung, Krypto-Baustein)</option></select></label>
-        <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option><option value="einzahlung">Einzahlung (Cash des Bausteins)</option><option value="auszahlung">Auszahlung (Cash des Bausteins)</option></select></label>
+        <label><span id="lAssetText">Position</span><select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option><option value="eth">Ethereum (Beimischung, Krypto-Baustein)</option><option value="sol">Solana (Beimischung, Krypto-Baustein)</option></select></label>
+        <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option><option value="einzahlung">Einzahlung (Cash des Bausteins)</option><option value="auszahlung">Auszahlung (Cash des Bausteins)</option><option value="umbuchung">Umbuchung zwischen Bausteinen (Cash)</option></select></label>
+        <label id="lTo" hidden>Nach Baustein<select id="fTo"><option value="ftse">FTSE All-World</option><option value="btc">Bitcoin (Krypto-Baustein)</option><option value="gold">Gold</option></select></label>
         <label id="lUnits">Stück<input type="text" id="fUnits" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="text" id="fPrice" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label id="lFee">Gebühr in €<input type="text" id="fFee" value="1" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
@@ -96,7 +97,7 @@
         <button class="btn" type="submit" id="fSubmit">Eintragen</button>
       </form>
       <p class="formmsg" id="fMsg" role="status"></p>
-      <p class="small muted">Ein Verkauf schreibt den Erlös dem Cash dieser Position gut, ein Kauf zieht den Betrag davon ab; Ein- und Auszahlungen ändern nur das Cash des Bausteins und machen den Depotverlauf genau. Steuern rechnet die Seite nach FIFO, also ältester Kauf zuerst.</p>
+      <p class="small muted">Ein Verkauf schreibt den Erlös dem Cash dieser Position gut, ein Kauf zieht den Betrag davon ab; Ein- und Auszahlungen ändern nur das Cash des Bausteins und machen den Depotverlauf genau; eine Umbuchung verschiebt Cash von einem Baustein zum anderen (etwa beim Rebalancing), die Summe bleibt gleich. Steuern rechnet die Seite nach FIFO, also ältester Kauf zuerst.</p>
     </div>
   </details>
 </section>
@@ -208,9 +209,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260926-1103"></script>
-<script src="js/store.js?v=20260926-1103"></script>
-<script src="js/charts.js?v=20260926-1103"></script>
-<script src="js/app.js?v=20260926-1103"></script>
+<script src="js/engine.js?v=20260926-1237"></script>
+<script src="js/store.js?v=20260926-1237"></script>
+<script src="js/charts.js?v=20260926-1237"></script>
+<script src="js/app.js?v=20260926-1237"></script>
 </body>
 </html>

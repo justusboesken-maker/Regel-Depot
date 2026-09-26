@@ -1,12 +1,15 @@
 /* Regel-Depot – Depotdaten im Browser (localStorage), Import und Export.
    Schema: {version:1, tx:[{id,d,a,type,units,price,amount,fee,est,note,ts,cash?,hist?}], cash:{ftse,btc,gold}, cashDate:'JJJJ-MM-TT' (seit wann das Cash so feststeht), tax:{…}, meta:{…}}
    tx.cash: Betrag, um den die Buchung beim Eintragen das Cash des Bausteins tatsächlich verändert hat (Löschen bucht genau das zurück; fehlt er, z. B. bei importierten Buchungen, ändert Löschen das Cash nicht).
-   tx.hist: nur nachgetragen (die Bewegung ist im heutigen Cash schon enthalten). */
+   tx.hist: nur nachgetragen (die Bewegung ist im heutigen Cash schon enthalten).
+   Umbuchung: {type:'umbuchung', a: von-Baustein, to: nach-Baustein, amount}; tx.cash = −amount (Wirkung auf a), to erhält +amount.
+   tx.reb: Datum des Rebalancings, mit dem die Buchung eingetragen wurde (Knopf „Vorgeschlagenes Rebalancing umgesetzt“). */
 (function (root) {
   'use strict';
   var KEY = 'regelDepot.v1', BKEY = KEY + '.backups', CKEY = KEY + '.corrupt';
   var EMPTY = { version: 1, tx: [], cash: { ftse: 0, btc: 0, gold: 0 }, cashDate: '', tax: {}, meta: {} };
-  var TYPES = ['kauf', 'verkauf', 'einzahlung', 'auszahlung'];
+  var TYPES = ['kauf', 'verkauf', 'einzahlung', 'auszahlung', 'umbuchung'];
+  var BUCKETS = ['ftse', 'btc', 'gold']; /* Bausteine; Umbuchung = Cash von Baustein a nach Baustein to (z. B. beim Rebalancing) */
   var TAX_NUM = ['pbUsed', 'interestRest', 'lossOther', 's23Other', 'rate', 'headroom', 'buffer', 'minOrder', 'cashRate'];
   var ASSETS = null; /* bekannte Positionen laut Konfiguration (setAssets), für die Prüfung beim Import */
   var listeners = [];
@@ -31,12 +34,17 @@
     if (!t || typeof t !== 'object') return { err: where + ': kein Eintrag' };
     var type = String(t.type == null ? '' : t.type).trim().toLowerCase(), d = E().parseDate(t.d), a = String(t.a == null ? '' : t.a).trim().toLowerCase();
     if (d) where += ' vom ' + dfmt(d);
-    if (TYPES.indexOf(type) < 0) return { err: where + ': Art ' + show(t.type) + ' unbekannt (erlaubt: Kauf, Verkauf, Einzahlung, Auszahlung)' };
+    if (TYPES.indexOf(type) < 0) return { err: where + ': Art ' + show(t.type) + ' unbekannt (erlaubt: Kauf, Verkauf, Einzahlung, Auszahlung, Umbuchung)' };
     if (!d) return { err: where + ': Datum ' + show(t.d) + ' ungültig (erwartet JJJJ-MM-TT oder TT.MM.JJJJ)' };
     if (strict && d > todayLocal()) return { err: where + ': Datum liegt in der Zukunft' };
     if (!a || (strict && ASSETS && ASSETS.indexOf(a) < 0)) return { err: where + ': Position ' + show(t.a) + ' unbekannt' + (ASSETS ? ' (erlaubt: ' + ASSETS.join(', ') + ')' : '') };
-    var cashMove = type === 'einzahlung' || type === 'auszahlung';
+    var cashMove = type === 'einzahlung' || type === 'auszahlung' || type === 'umbuchung';
     var out = { id: String(t.id || ('tx' + Date.now() + '-' + i)), d: d, a: a, type: type, units: 0, price: 0, amount: 0, fee: 0, est: !!t.est, note: t.note ? String(t.note).slice(0, 300) : '', ts: +t.ts || 0 };
+    if (type === 'umbuchung') {
+      var to = String(t.to == null ? '' : t.to).trim().toLowerCase();
+      if (BUCKETS.indexOf(a) < 0 || BUCKETS.indexOf(to) < 0 || a === to) return { err: where + ': Umbuchung braucht zwei verschiedene Bausteine (von ' + show(t.a) + ' nach ' + show(t.to) + ')' };
+      out.to = to;
+    }
     if (cashMove) { var am = num(t.amount); if (!(am > 0)) return { err: where + ': Betrag ' + show(t.amount) + ' ungültig' }; out.amount = am; }
     else {
       var u = num(t.units, true), p = num(t.price);
@@ -46,7 +54,8 @@
     }
     var fee = num(t.fee); if (fee != null && !(fee >= 0)) return { err: where + ': Gebühr ' + show(t.fee) + ' ungültig' }; out.fee = fee || 0;
     var ca = num(t.cash); if (ca != null && isFinite(ca)) out.cash = ca;
-    if (t.hist === true || t.hist === 'true' || (cashMove && t.cash == null && /\(nachgetragen[,)]/.test(out.note))) out.hist = true;
+    if (type !== 'umbuchung' && (t.hist === true || t.hist === 'true' || (cashMove && t.cash == null && /\(nachgetragen[,)]/.test(out.note)))) out.hist = true;
+    if (t.reb) { var rb = E().parseDate(t.reb); if (rb) out.reb = rb; }
     return { tx: out };
   }
   /* strict (Import): jeder Fehler bricht ab, mit Liste; sonst (Speicher) werden unlesbare Einträge wie bisher übergangen */
@@ -166,5 +175,5 @@
   function onChange(fn) { listeners.push(fn); }
 
   root.STORE = { load: load, save: save, update: update, reset: reset, has: has, exportJson: exportJson, importJson: importJson, setAssets: setAssets, onChange: onChange, backupList: backupList, restore: restore, corruptInfo: corruptInfo, corruptRaw: corruptRaw, rawSaved: rawSaved, dropCorrupt: dropCorrupt,
-    lastBackup: function () { return lastBackup; }, memOnly: function () { return !!mem; }, KEY: KEY };
+    lastBackup: function () { return lastBackup; }, memOnly: function () { return !!mem; }, checkpoint: guard, KEY: KEY };
 })(window);

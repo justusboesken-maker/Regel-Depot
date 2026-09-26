@@ -29,13 +29,22 @@ on:
     - cron: '37 21 * * 1-4'  # Mo–Do 23:37 Berlin (Sommer): Euro-Schlüsse des Tages (Lang & Schwarz schließt 23 Uhr)
     - cron: '37 22 * * 1-4'  #   … Winter
     - cron: '7 5-21 * * *'   # stündlich 05–21 UTC (ganzjährig): Kurs-Ticker (Bitcoin, Gold, EUR/USD, ETH, SOL, Lang & Schwarz)
+    # Wochen, die vor dem Freitagabend enden (Feiertag am Freitag, Gründonnerstag, Gold vor Weihnachten/Neujahr): Vorwarnung und Wochenschluss
+    # am letzten Handelstag zu den Freitagszeiten; an anderen Tagen endet der Lauf sofort ohne Commit.
+    - cron: '17 13 * * 1-4'  # Mo–Do 15:17 Berlin (Sommer): Vorwarnung, falls die Woche heute endet
+    - cron: '17 14 * * 1-4'  #   … Winter
+    - cron: '47 16 * * 1-4'  # Mo–Do 18:47 Berlin (Sommer): vorgezogener Wochenschluss
+    - cron: '47 17 * * 1-4'  #   … Winter
+    # Halbtage (FTSE, London schließt 12:30 Uhr: letzter Geschäftstag vor Weihnachten und vor Neujahr, immer im Dezember = Winterzeit)
+    - cron: '17 10 * 12 1-5' # Mo–Fr im Dezember 11:17 Berlin: Vorwarnung FTSE am Halbtag
+    - cron: '47 13 * 12 1-5' # Mo–Fr im Dezember 14:47 Berlin: Wochenschluss FTSE am Halbtag
   workflow_dispatch:
     inputs:
       step:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, all, test-sources, test-eodhd, test-push]
+        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, early-warn, early-close, early-warn-half, early-close-half, all, test-sources, test-eodhd, test-push]
 
 permissions:
   contents: write
@@ -80,8 +89,16 @@ jobs:
             "37 21 * * 1-4") STEP=eod; SEASON=summer ;;
             "37 22 * * 1-4") STEP=eod; SEASON=winter ;;
             "7 5-21 * * *") STEP=live ;;
+            "17 13 * * 1-4") STEP=early-warn; SEASON=summer ;;
+            "17 14 * * 1-4") STEP=early-warn; SEASON=winter ;;
+            "47 16 * * 1-4") STEP=early-close; SEASON=summer ;;
+            "47 17 * * 1-4") STEP=early-close; SEASON=winter ;;
+            "17 10 * 12 1-5") STEP=early-warn; FINAL="--half" ;;
+            "47 13 * 12 1-5") STEP=early-close; FINAL="--half" ;;
             *) STEP="${{ inputs.step || 'auto' }}" ;;
           esac
+          # Manuell: early-warn-half / early-close-half = Lauf für den Halbtag
+          case "$STEP" in *-half) STEP="${STEP%-half}"; FINAL="--half" ;; esac
           # Berliner Sommerzeit = UTC+2 (+0200), Winterzeit = UTC+1 (+0100)
           if [ "$(TZ=Europe/Berlin date +%z)" = "+0200" ]; then NOW_SEASON=summer; else NOW_SEASON=winter; fi
           RUN=true
