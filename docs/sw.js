@@ -4,8 +4,8 @@ self.addEventListener('activate', function (e) { e.waitUntil(self.clients.claim(
 
 self.addEventListener('push', function (e) {
   var data = {};
-  try { data = e.data ? e.data.json() : {}; } catch (err) { data = { title: 'Regel-Depot', body: e.data ? e.data.text() : '' }; }
-  var title = data.title || 'Regel-Depot';
+  try { data = e.data ? e.data.json() : {}; } catch (err) { data = { title: 'Investus', body: e.data ? e.data.text() : '' }; }
+  var title = data.title || 'Investus';
   var opts = {
     body: data.body || '',
     icon: 'icons/icon-192.png',

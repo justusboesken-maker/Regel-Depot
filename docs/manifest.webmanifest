@@ -1,7 +1,7 @@
 {
-  "name": "Regel-Depot 50/30/20",
-  "short_name": "Regel-Depot",
-  "description": "Signale, Depot und Rebalancing für das Regel-Depot 50/30/20",
+  "name": "Investus 50/30/20",
+  "short_name": "Investus",
+  "description": "Signale, Depot und Rebalancing für Investus, das Regel-Depot 50/30/20",
   "start_url": "./",
   "scope": "./",
   "display": "standalone",

@@ -830,7 +830,7 @@ function weeklySummary() {
   if (prel.length) body += ' Vorläufig: ' + prel.join('; ') + '.';
   if (pend.length) body += ' Noch offen: ' + pend.join(', ') + '.';
   addEvent({ id, kind: 'info', a: null, k: THIS_MON, d: TODAY, title: 'Wochenstart ' + ds(THIS_MON), text: body });
-  queuePush({ id, title: 'Regel-Depot · Wochenstart ' + ds(THIS_MON), body, tag: 'week', url: './#status', ts: NOW.toISOString() });
+  queuePush({ id, title: 'Investus · Wochenstart ' + ds(THIS_MON), body, tag: 'week', url: './#status', ts: NOW.toISOString() });
 }
 
 /* ---------- Aufbewahrung ----------
@@ -915,7 +915,7 @@ async function main() {
       await closeAsset('btc'); await closeAsset('gold'); await closeAsset('ftse');
       await goldCross();
       await eurQuotes(['btc', 'eurusd']);
-      if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Regel-Depot: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
+      if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Investus: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
       flush = false;                                                   /* Nachts nicht pushen, das macht mo-notify */
     } else if (step === 'mo-notify') {
       for (const a of A) await closeAsset(a);
@@ -991,7 +991,7 @@ async function main() {
       try { const merged = ENG.mergeWeekly(stored, wAdj, true), E1 = ENG.evalRule(merged, CFG.assets.ftse.rule), E0 = ENG.evalRule(stored, CFG.assets.ftse.rule); const n = Math.min(52, E0.st.length); let diff = 0; for (let i = 1; i <= n; i++) { const k = stored.k[stored.k.length - i], j = merged.k.indexOf(k); if (j >= 0 && E1.st[j] !== E0.st[E0.st.length - i]) diff++; } note('Regelzustand der letzten ' + n + ' Wochen mit EODHD-Daten: ' + (diff ? diff + ' Woche(n) anders' : 'identisch')); } catch (e2) { note('Regelprüfung nicht möglich: ' + e2.message); }
       RUN.ok = true; flush = false;
     } else if (step === 'test-push') {
-      queuePush({ id: 'test-' + NOW.toISOString(), title: 'Regel-Depot: Test', body: 'Push funktioniert. ' + NOW.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) + ' Uhr.', tag: 'test', url: './#signale', ts: NOW.toISOString() });
+      queuePush({ id: 'test-' + NOW.toISOString(), title: 'Investus: Test', body: 'Push funktioniert. ' + NOW.toLocaleString('de-DE', { timeZone: 'Europe/Berlin' }) + ' Uhr.', tag: 'test', url: './#signale', ts: NOW.toISOString() });
     } else { throw new Error('unbekannter Schritt ' + step); }
   } catch (e) { fail(null, e); }
   /* Nichts zu tun (vorgezogene Läufe an normalen Tagen): nichts schreiben, damit kein Commit entsteht */
