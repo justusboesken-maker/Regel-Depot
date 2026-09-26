@@ -10,6 +10,7 @@
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
+  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
@@ -22,6 +23,7 @@
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
+    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09;
   }
 }
 :root[data-theme="dark"]{
@@ -32,6 +34,7 @@
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
+  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09;
 }
 *{box-sizing:border-box}
 html{scroll-padding-top:56px}
@@ -44,8 +47,6 @@ body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font
 a{color:var(--accent);text-underline-offset:2px}
 h1,h2,h3,h4{font-weight:600;letter-spacing:-.01em;text-wrap:balance;margin:0}
 h1{font-size:clamp(26px,4vw,36px);line-height:1.1}
-.brand{display:grid;gap:3px}
-.brand .claim{margin:0;font-size:clamp(16px,2.2vw,20px);line-height:1.25;font-weight:500;color:var(--ink-2)}
 h2{font-size:clamp(20px,2.4vw,24px);line-height:1.2}
 h3{font-size:16.5px;line-height:1.3}
 h4{font-size:14.5px}
@@ -59,6 +60,19 @@ p{margin:0}
 [hidden]{display:none!important}
 
 /* Kopf und Navigation */
+/* Kopfbereich „Investus“ farbig abgehoben (Justus 26.09.2026, Entwurf 7 „Hell getönt“): Verlauf je Modus, dahinter zart die FTSE-Wochenschlüsse der letzten fünf Jahre (#mhDeco, app.js drawMasthead) */
+.masthead{position:relative;background:var(--mh-bg);border-bottom:1px solid var(--mh-line);overflow:hidden}
+.masthead .wrap.hdr{position:relative;z-index:1}
+.masthead .top{padding-block:20px 24px}
+.masthead .switch{color:var(--mh-muted)}
+.masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
+.masthead .switch input:not(:checked)+.track::after{background:#fff}
+.mh-deco{position:absolute;right:0;bottom:0;width:min(62%,820px);height:60%;pointer-events:none}
+.mh-deco .ln{fill:none;stroke:var(--mh-deco);stroke-opacity:var(--mh-deco-lo);stroke-width:1.6;stroke-linejoin:round}
+.mh-deco stop{stop-color:var(--mh-deco)}
+.mh-deco .s0{stop-opacity:var(--mh-deco-fo)}
+.mh-deco .s1{stop-opacity:0}
+@media (max-width:640px){.mh-deco{width:100%;height:50%;opacity:.85}}
 .top{padding-block:28px 14px;display:grid;gap:10px}
 .toprow{display:flex;align-items:center;justify-content:flex-end;gap:12px}
 /* Dunkelmodus-Schalter */

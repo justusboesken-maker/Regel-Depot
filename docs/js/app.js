@@ -239,6 +239,17 @@
 
   /* ---------- Kopf, Banner, Zu tun ---------- */
   function lastRun() { return D.runs && D.runs.length ? D.runs[0] : null; }
+  /* Kopfbereich: FTSE-Wochenschlüsse der letzten fünf Jahre (log.) als zarte Linie im Hintergrund (Justus 26.09.2026, Entwurf 7); Farben kommen aus dem CSS (--mh-deco) */
+  function drawMasthead() {
+    var svg = $('mhDeco'); if (!svg) return;
+    var S = C.ftse && C.ftse.S, c = S && S.c ? S.c.slice(-260).filter(function (v) { return v > 0; }) : [];
+    if (c.length < 10) { svg.textContent = ''; return; }
+    var lo = Infinity, hi = -Infinity; c.forEach(function (v) { var l = Math.log(v); if (l < lo) lo = l; if (l > hi) hi = l; });
+    var W = 1000, H = 200, n = c.length, d = c.map(function (v, i) { return (i ? 'L' : 'M') + (i / (n - 1) * W).toFixed(1) + ',' + (H - 8 - (hi > lo ? (Math.log(v) - lo) / (hi - lo) : 0.5) * (H - 24)).toFixed(1); }).join('');
+    svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none');
+    svg.innerHTML = '<defs><linearGradient id="mhFill" x1="0" y1="0" x2="0" y2="1"><stop class="s0" offset="0"/><stop class="s1" offset="1"/></linearGradient></defs>'
+      + '<path d="' + d + 'L' + W + ',' + H + 'L0,' + H + 'Z" fill="url(#mhFill)"/><path class="ln" d="' + d + '" vector-effect="non-scaling-stroke"/>';
+  }
   function renderGlobal(Mo) {
     var g = $('globalBanner'); g.textContent = '';
     var r = lastRun(), age = r ? ENG.daysBetween(r.t.slice(0, 10), todayISO()) : null;
@@ -1308,7 +1319,7 @@
     if (!READY) { renderOffline(); return; }
     try {
       var Mo = model();
-      renderGlobal(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
+      drawMasthead(); renderGlobal(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
     } catch (e) { console.error(e); renderFail(e); }
     renderStore(); askPersist();
   }
