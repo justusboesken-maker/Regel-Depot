@@ -131,9 +131,13 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 /* Status-Karten */
 .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
 #status>.toolbar{justify-content:flex-end}
-.scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:14px}
+/* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
+   die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
+.scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 56px}
 .scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:14px;scroll-margin-top:60px}
-.scard{display:grid;gap:12px;padding:16px 18px;align-content:start}
+.scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
+.card.scard{background:none;border:0;border-radius:0;box-shadow:none}
+.scards .scard+.scard::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 .scard .hd h3{display:flex;align-items:center;gap:8px}
@@ -160,7 +164,7 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .scard .next b{color:var(--ink);font-variant-numeric:tabular-nums}
 .scard details.mini>summary{padding:10px 12px;font-size:13px}
 .scard details.mini .body{padding:0 6px 8px}
-@media (max-width:980px){.scards{grid-template-columns:minmax(0,1fr)} .scards .scard{grid-row:auto;grid-template-rows:none}}
+@media (max-width:980px){.scards{grid-template-columns:minmax(0,1fr);gap:0} .scards .scard{grid-row:auto;grid-template-rows:none;padding:22px 0} .scards .scard:first-child{padding-top:4px} .scards .scard+.scard{border-top:1px solid var(--rule)} .scards .scard+.scard::before{display:none}}
 .warnbox{border-radius:8px;padding:9px 12px;background:var(--warn-bg);color:var(--warn);font-size:13px;display:flex;gap:8px;align-items:flex-start}
 .warnbox svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px}
 .infobox{border-radius:8px;padding:9px 12px;background:var(--accent-soft);color:var(--ink);font-size:13px}
@@ -391,12 +395,16 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 @media (max-width:640px){.modal{padding:8px} .modalbox{padding:14px} .bigx{top:6px;right:6px}}
 
 /* Regeln */
-.rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
-.rule{padding:15px 17px;display:grid;gap:8px;align-content:start}
+/* Regel-Karten wie die Status-Karten als offene Spalten (Justus 26.09.2026) */
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 56px}
+.rule{padding:4px 0 8px;display:grid;gap:8px;align-content:start;position:relative}
+.card.rule{background:none;border:0;border-radius:0;box-shadow:none}
+.rules .rule+.rule::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
+@media (max-width:980px){.rules{grid-template-columns:minmax(0,1fr);gap:0} .rules .rule{padding:18px 0} .rules .rule:first-child{padding-top:4px} .rules .rule+.rule{border-top:1px solid var(--rule)} .rules .rule+.rule::before{display:none}}
 .rule .formula{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border-radius:6px;padding:8px 10px;color:var(--ink);line-height:1.55}
 footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:grid;gap:6px}
 @media (max-width:640px){
-  .pad,.scard{padding:14px}
+  .pad{padding:14px}
   .feed .it{grid-template-columns:auto 1fr;padding:12px 14px}
   .feed .it time{grid-column:2}
 }
