@@ -108,13 +108,15 @@
       if (!pos[t.a]) pos[t.a] = []; /* Beimischungen (z. B. eth, sol) bekommen ihre eigene FIFO-Liste */
       if (t.type === 'kauf') { pos[t.a].push({ d: t.d, units: t.units, cpu: (t.units * t.price + (t.fee || 0)) / t.units, id: t.id, est: !!t.est }); }
       else if (t.type === 'verkauf') {
-        var left = t.units, per = (t.units * t.price - (t.fee || 0)) / t.units, cost = 0, sg = 0, lg = 0;
+        var left = t.units, per = (t.units * t.price - (t.fee || 0)) / t.units, cost = 0, sg = 0, lg = 0, su = 0, lu = 0;
         while (left > 1e-12 && pos[t.a].length) {
           var lot = pos[t.a][0], q = Math.min(left, lot.units), g = q * (per - lot.cpu);
-          cost += q * lot.cpu; if (isLongTerm(lot.d, t.d)) lg += g; else sg += g;
+          cost += q * lot.cpu; if (isLongTerm(lot.d, t.d)) { lg += g; lu += q; } else { sg += g; su += q; }
           lot.units -= q; left -= q; if (lot.units <= 1e-12) pos[t.a].shift();
         }
-        real.push({ a: t.a, d: t.d, units: t.units, proceeds: t.units * per, cost: cost, gain: t.units * per - cost, shortGain: sg, longGain: lg, open: left, id: t.id });
+        /* Stücke ohne passenden Kauf davor (open) zählen nicht als Gewinn; die Seite lässt solche Verkäufe nicht mehr zu und meldet sie */
+        var covered = t.units - (left > 1e-12 ? left : 0);
+        real.push({ a: t.a, d: t.d, units: t.units, covered: covered, proceeds: covered * per, cost: cost, gain: covered * per - cost, shortGain: sg, longGain: lg, shortUnits: su, longUnits: lu, open: left > 1e-9 ? left : 0, id: t.id });
       }
     });
     return { pos: pos, real: real };
@@ -214,7 +216,7 @@
       if (r.want) { r.get = r.want * f; if (r.st === 1) r.buy = (r.buyOwn || 0) + r.get; else r.cashTo = r.get; }
       else if (r.st === 1 && r.buyOwn) r.buy = r.buyOwn;
       if (r.st === 0 && !r.want) { r.cashTo = -(r.give || 0) + (r.ruleSale ? r.V : 0); }
-      if (r.sell > 0) { var sm = simSell(o.pos[a], r.sell, o.px[a], o.date, a, cfg); r.sellUnits = sm.q; r.g20 = sm.g20; r.t20 = sm.taxable20; r.sg = sm.sg; r.lg = sm.lg; }
+      if (r.sell > 0) { var sm = simSell(o.pos[a], r.sell, o.px[a], o.date, a, cfg); r.sellUnits = sm.q; r.g20 = sm.g20; r.t20 = sm.taxable20; r.sg = sm.sg; r.lg = sm.lg; r.anyShort = sm.parts.some(function (x) { return !x.long; }); }
       if (r.buy > 0) r.buyUnits = r.buy / (o.px[a] || 1);
       r.after = r.st === 1 ? (r.V - r.sell + r.buy) : (r.C + (r.ruleSale ? r.V : 0) + (r.want ? r.get : -(r.give || 0)));
     });
@@ -250,7 +252,52 @@
     return vp;
   }
 
+  /* ---------- Eingaben ----------
+     Zahl aus einem Eingabefeld, unabhängig vom Gebietsschema des Browsers. Deutsch zuerst: „2.708,00“ = 2708, „0,5“ = 0,5, „1.234.567“ = 1234567.
+     Punkt und Komma zusammen: das letzte Zeichen trennt die Nachkommastellen („2,708.00“ = 2708). Genau ein Punkt mit drei Ziffern danach
+     („2.708“) gilt als Tausenderpunkt, sonst als Dezimalpunkt („12.5“, „0.123“). units: Stückzahlen, dort ist ein einzelner Punkt immer
+     Dezimalpunkt („0.002“, „1.500“ = 1,5). Leer -> null, unlesbar -> NaN. */
+  function groupsOk(s, sep) { var g = s.split(sep); if (!/^\d{1,3}$/.test(g[0])) return false; for (var i = 1; i < g.length; i++) if (!/^\d{3}$/.test(g[i])) return false; return true; }
+  function parseNum(s, units) {
+    if (s == null) return null;
+    if (typeof s === 'number') return isFinite(s) ? s : NaN;
+    var t = String(s).replace(/[\s  €%]/g, '').replace(/[’']/g, '');
+    if (t === '') return null;
+    var neg = false;
+    if (/^[−–-]/.test(t)) { neg = true; t = t.slice(1); } else if (t.charAt(0) === '+') t = t.slice(1);
+    if (!/^[0-9.,]+$/.test(t) || !/[0-9]/.test(t)) return NaN;
+    var dot = t.lastIndexOf('.'), comma = t.lastIndexOf(',');
+    if (dot >= 0 && comma >= 0) {
+      var dec = dot > comma ? '.' : ',', th = dec === '.' ? ',' : '.', parts = t.split(dec);
+      if (parts.length !== 2 || !groupsOk(parts[0], th)) return NaN;
+      t = parts[0].split(th).join('') + '.' + parts[1];
+    } else if (comma >= 0) {
+      var cs = t.split(',');
+      if (cs.length === 2) t = cs[0] + '.' + cs[1];
+      else { if (!groupsOk(t, ',')) return NaN; t = cs.join(''); }
+    } else if (dot >= 0) {
+      var ds = t.split('.');
+      if (ds.length > 2) { if (!groupsOk(t, '.')) return NaN; t = ds.join(''); }
+      else if (!units && /^[1-9]\d{0,2}$/.test(ds[0]) && /^\d{3}$/.test(ds[1])) t = ds.join('');
+    }
+    var v = Number(t);
+    if (!isFinite(v)) return NaN;
+    return neg ? -v : v;
+  }
+  /* Datum aus einer Eingabe oder Datei: JJJJ-MM-TT (auch mit Uhrzeit) oder TT.MM.JJJJ; nur echte Kalendertage. Sonst null. */
+  function parseDate(s) {
+    if (s == null) return null;
+    var t = String(s).trim(), m = /^(\d{4})-(\d{2})-(\d{2})(?:[T ].*)?$/.exec(t), y, mo, d;
+    if (m) { y = +m[1]; mo = +m[2]; d = +m[3]; }
+    else { m = /^(\d{1,2})\.(\d{1,2})\.(\d{4})$/.exec(t); if (!m) return null; d = +m[1]; mo = +m[2]; y = +m[3]; }
+    if (y < 1990 || y > 2100 || mo < 1 || mo > 12 || d < 1 || d > 31) return null;
+    var dt = new Date(Date.UTC(y, mo - 1, d));
+    if (dt.getUTCFullYear() !== y || dt.getUTCMonth() !== mo - 1 || dt.getUTCDate() !== d) return null;
+    return iso(dt.getTime());
+  }
+
   var ENG = {
+    parseNum: parseNum, parseDate: parseDate,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf,

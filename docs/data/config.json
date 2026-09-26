@@ -47,6 +47,7 @@
         "src": "coinbase",
         "sym": "BTC-USD",
         "adj": false,
+        "keepBooked": true,
         "label": "Coinbase BTC-USD, Woche Montag bis Sonntag (UTC); weitere Quellen Kraken, Yahoo, Alpha Vantage"
       },
       "eur": {
@@ -72,6 +73,8 @@
       "signal": {
         "src": "lbma",
         "fix": "pm",
+        "keepBooked": true,
+        "spotFallback": true,
         "label": "LBMA-Goldpreis, Nachmittagsfixing (USD)"
       },
       "cross": {

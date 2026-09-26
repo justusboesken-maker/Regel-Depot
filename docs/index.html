@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260926-0141">
+<link rel="stylesheet" href="css/app.css?v=20260926-0424">
 </head>
 <body>
 
@@ -71,7 +71,7 @@
       <form class="form" id="accForm" novalidate>
         <label>Datum<input type="date" id="accDate" required></label>
         <label>Art<select id="accType"><option value="einzahlung">Einzahlung</option><option value="auszahlung">Auszahlung</option></select></label>
-        <label>Betrag in €<input type="number" id="accAmount" step="any" min="0" inputmode="decimal" required></label>
+        <label>Betrag in €<input type="text" id="accAmount" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Baustein<select id="accAsset"><option value="auto">automatisch (Regel)</option><option value="ftse">FTSE All-World</option><option value="btc">Bitcoin</option><option value="gold">Gold</option></select></label>
         <label>Notiz<small>optional</small><input type="text" id="accNote" maxlength="120"></label>
         <label class="check wide"><input type="checkbox" id="accHist"> Nur nachtragen<small>für eine frühere Bewegung, die im heutigen Cash schon enthalten ist – ändert nur den Verlauf</small></label>
@@ -88,9 +88,9 @@
         <label>Datum<input type="date" id="fDate" required></label>
         <label>Position<select id="fAsset"><option value="ftse">FTSE All-World (VWCE)</option><option value="btc">Bitcoin</option><option value="gold">Gold (WisdomTree ETC)</option><option value="eth">Ethereum (Beimischung, Krypto-Baustein)</option><option value="sol">Solana (Beimischung, Krypto-Baustein)</option></select></label>
         <label>Art<select id="fType"><option value="kauf">Kauf</option><option value="verkauf">Verkauf</option><option value="einzahlung">Einzahlung (Cash des Bausteins)</option><option value="auszahlung">Auszahlung (Cash des Bausteins)</option></select></label>
-        <label id="lUnits">Stück<input type="number" id="fUnits" step="any" min="0" inputmode="decimal" required></label>
-        <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="number" id="fPrice" step="any" min="0" inputmode="decimal" required></label>
-        <label id="lFee">Gebühr in €<input type="number" id="fFee" step="any" min="0" value="1" inputmode="decimal"></label>
+        <label id="lUnits">Stück<input type="text" id="fUnits" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="text" id="fPrice" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label id="lFee">Gebühr in €<input type="text" id="fFee" value="1" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Notiz<small>optional</small><input type="text" id="fNote" maxlength="120"></label>
         <button class="btn" type="submit" id="fSubmit">Eintragen</button>
       </form>
@@ -150,18 +150,18 @@
     <summary>Steuerangaben <span class="small muted" id="taxYearLbl"></span></summary>
     <div class="body">
       <form class="form" id="taxForm" novalidate>
-        <label>Pauschbetrag genutzt (€)<small>laut Trade Republic, Profil › Steuern</small><input type="number" id="tPbUsed" step="any" min="0" inputmode="decimal"></label>
+        <label>Pauschbetrag genutzt (€)<small>laut Trade Republic, Profil › Steuern</small><input type="text" id="tPbUsed" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Stand dieser Angabe<small>spätere Verkäufe rechnet die Seite dazu</small><input type="date" id="tPbDate"></label>
-        <label>Weitere Zinsen bis 31.12. (€)<small>Schätzung für den Rest des Jahres</small><input type="number" id="tInt" step="any" min="0" inputmode="decimal"></label>
-        <label>Verlusttopf „Sonstige“ (€)<input type="number" id="tLoss" step="any" min="0" inputmode="decimal"></label>
-        <label>Andere private Veräußerungen (€)<small>Gewinn minus Verlust im Jahr, z. B. andere Kryptowerte</small><input type="number" id="tS23" step="any" inputmode="decimal"></label>
-        <label>Persönlicher Grenzsteuersatz (%)<small>0, solange dein Einkommen unter dem Grundfreibetrag bleibt</small><input type="number" id="tRate" step="any" min="0" max="50" inputmode="decimal"></label>
-        <label>Spielraum bis zum Grundfreibetrag (€)<small>wie viel Einkommen dieses Jahr noch steuerfrei bleibt</small><input type="number" id="tHead" step="any" min="0" inputmode="decimal"></label>
+        <label>Weitere Zinsen bis 31.12. (€)<small>Schätzung für den Rest des Jahres</small><input type="text" id="tInt" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Verlusttopf „Sonstige“ (€)<input type="text" id="tLoss" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Andere private Veräußerungen (€)<small>Gewinn minus Verlust im Jahr, z. B. andere Kryptowerte</small><input type="text" id="tS23" autocomplete="off" spellcheck="false"></label>
+        <label>Persönlicher Grenzsteuersatz (%)<small>0, solange dein Einkommen unter dem Grundfreibetrag bleibt</small><input type="text" id="tRate" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Spielraum bis zum Grundfreibetrag (€)<small>wie viel Einkommen dieses Jahr noch steuerfrei bleibt</small><input type="text" id="tHead" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label class="check"><input type="checkbox" id="tNv"> NV-Bescheinigung liegt Trade Republic vor<small>dann behält die Bank keine Abgeltungsteuer ein</small></label>
-        <label>Abstand zur Freigrenze (€)<small>Puffer für Kursschwankungen</small><input type="number" id="tBuf" step="any" min="0" inputmode="decimal"></label>
-        <label>Mindestbetrag je Order (€)<small>kleinere Umschichtungen sind optional</small><input type="number" id="tMin" step="any" min="0" inputmode="decimal"></label>
+        <label>Abstand zur Freigrenze (€)<small>Puffer für Kursschwankungen</small><input type="text" id="tBuf" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Mindestbetrag je Order (€)<small>kleinere Umschichtungen sind optional</small><input type="text" id="tMin" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Rebalancing-Stichtag<input type="date" id="tReb"></label>
-        <label>Zins auf Cash (% p. a.)<small>Trade Republic verzinst Guthaben, aktuell EZB-Satz</small><input type="number" id="tCashRate" step="any" min="0" max="10" inputmode="decimal"></label>
+        <label>Zins auf Cash (% p. a.)<small>Trade Republic verzinst Guthaben, aktuell EZB-Satz</small><input type="text" id="tCashRate" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <button class="btn" type="submit">Speichern</button>
       </form>
       <p class="formmsg" id="tMsg" role="status"></p>
@@ -172,9 +172,9 @@
     <summary>Cash je Position</summary>
     <div class="body">
       <form class="form" id="cashForm" novalidate>
-        <label>FTSE All-World (€)<input type="number" id="cFtse" step="any" min="0" inputmode="decimal"></label>
-        <label>Bitcoin (€)<input type="number" id="cBtc" step="any" min="0" inputmode="decimal"></label>
-        <label>Gold (€)<input type="number" id="cGold" step="any" min="0" inputmode="decimal"></label>
+        <label>FTSE All-World (€)<input type="text" id="cFtse" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Bitcoin (€)<input type="text" id="cBtc" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label>Gold (€)<input type="text" id="cGold" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Stand vom<input type="date" id="cDate"></label>
         <button class="btn" type="submit">Speichern</button>
       </form>
@@ -201,9 +201,9 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260926-0141"></script>
-<script src="js/store.js?v=20260926-0141"></script>
-<script src="js/charts.js?v=20260926-0141"></script>
-<script src="js/app.js?v=20260926-0141"></script>
+<script src="js/engine.js?v=20260926-0424"></script>
+<script src="js/store.js?v=20260926-0424"></script>
+<script src="js/charts.js?v=20260926-0424"></script>
+<script src="js/app.js?v=20260926-0424"></script>
 </body>
 </html>

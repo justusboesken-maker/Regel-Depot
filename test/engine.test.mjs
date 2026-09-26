@@ -239,3 +239,33 @@ test('B-13 Beimischung: FIFO-Buch legt eigene Listen für weitere Anlagen an, §
   const sm = ENG.simSell(B.pos.eth, 0.075 * 3000, 3000, '2026-12-30', 'eth', { tfs: 0.3 });
   assert.ok(sm.sg > 0 && sm.g20 === 0, 'Beimischung zählt nicht zu § 20');
 });
+
+/* ---------- Prüfbericht 26.09.2026, Punkt 4 und 13 ---------- */
+test('Verkauf ohne Kauf davor zählt nicht als Gewinn; Haltefrist nach Kauflosen', () => {
+  const B = ENG.book([
+    { id: 'k1', d: '2026-06-01', a: 'btc', type: 'kauf', units: 0.01, price: 50000, fee: 0 },
+    { id: 'v0', d: '2026-05-01', a: 'btc', type: 'verkauf', units: 0.005, price: 60000, fee: 0 }
+  ]);
+  const r = B.real[0];
+  assert.equal(r.id, 'v0'); assert.ok(Math.abs(r.open - 0.005) < 1e-12, 'ganze Stückzahl ungedeckt');
+  assert.equal(r.gain, 0, 'ungedeckte Stücke sind kein Gewinn'); assert.equal(r.covered, 0);
+  const B2 = ENG.book([
+    { id: 'k1', d: '2024-06-01', a: 'gold', type: 'kauf', units: 2, price: 100, fee: 0 },
+    { id: 'v1', d: '2026-06-01', a: 'gold', type: 'verkauf', units: 1, price: 100, fee: 0 },
+    { id: 'k2', d: '2026-05-01', a: 'btc', type: 'kauf', units: 1, price: 100, fee: 0 },
+    { id: 'v2', d: '2026-06-01', a: 'btc', type: 'verkauf', units: 1, price: 100, fee: 0 }
+  ]);
+  const g = B2.real.find((x) => x.id === 'v1'), b = B2.real.find((x) => x.id === 'v2');
+  assert.equal(g.gain, 0); assert.equal(g.longUnits, 1); assert.equal(g.shortUnits, 0);
+  assert.equal(b.gain, 0); assert.equal(b.shortUnits, 1, 'Gewinn 0, aber innerhalb eines Jahres gekauft: kurzfristig');
+});
+test('Zahlen aus Eingaben unabhängig vom Gebietsschema', () => {
+  const P = ENG.parseNum;
+  assert.equal(P('2.708,00'), 2708); assert.equal(P('2708,50'), 2708.5); assert.equal(P('2708.50'), 2708.5); assert.equal(P('2,708.00'), 2708);
+  assert.equal(P('2.708'), 2708, 'ein Punkt mit drei Ziffern: Tausenderpunkt'); assert.equal(P('1.234.567'), 1234567); assert.equal(P('0,5'), 0.5);
+  assert.equal(P('12.5'), 12.5); assert.equal(P('0.123'), 0.123); assert.equal(P(' 1 000,5 € '), 1000.5); assert.equal(P('-250'), -250); assert.equal(P('−3,5'), -3.5);
+  assert.equal(P('0.002', true), 0.002); assert.equal(P('1.500', true), 1.5, 'Stückzahl: Punkt ist Dezimalpunkt');
+  assert.equal(P(''), null); assert.equal(P('   '), null); assert.ok(isNaN(P('abc'))); assert.ok(isNaN(P('1.2.3'))); assert.ok(isNaN(P('1,2,3,4.5,6')));
+  assert.equal(ENG.parseDate('01.06.2026'), '2026-06-01'); assert.equal(ENG.parseDate('2026-06-01'), '2026-06-01'); assert.equal(ENG.parseDate('2026-06-01T10:00:00Z'), '2026-06-01');
+  assert.equal(ENG.parseDate('31.02.2026'), null); assert.equal(ENG.parseDate('2026-13-01'), null); assert.equal(ENG.parseDate('gestern'), null);
+});

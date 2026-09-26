@@ -7,6 +7,12 @@
 const UA = 'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/17.5 Safari/605.1.15';
 const iso = (t) => new Date(t).toISOString().slice(0, 10);
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/* API-Keys aus Fehlertexten entfernen (die landen sonst in runs.json, state.json und Commit-Nachrichten des öffentlichen Repos) */
+export function hideKey(s, key) {
+  let t = String(s == null ? '' : s);
+  if (key && key.length >= 4) t = t.split(key).join('***');
+  return t.replace(/(api ?key (?:as|is)\s+)[A-Za-z0-9_-]+/gi, '$1***').replace(/((?:apikey|api_key|api_token|token)=)[^&\s"']+/gi, '$1***');
+}
 
 async function get(url, opts = {}) {
   const ctl = new AbortController(), timer = setTimeout(() => ctl.abort(), opts.timeout || 25000);
@@ -76,14 +82,31 @@ export async function yahooDaily(sym, opts = {}) {
   return { dates, closes, price: m.regularMarketPrice, priceTime: m.regularMarketTime ? new Date(m.regularMarketTime * 1000).toISOString() : null, marketState: m.marketState || null, currency: m.currency || null, src: 'yahoo ' + sym + (opts.adj ? ' adjclose' : '') };
 }
 
-/* ---------- LBMA Gold (Fixing in USD) ---------- */
+/* ---------- LBMA Gold (Fixing in USD) ----------
+   Die LBMA-Seite weist Abrufe zeitweise mit HTTP 403 ab (26.09.2026 nachts, zwei Stunden vorher ging es). Deshalb bis zu drei Versuche
+   mit Pause, abwechselnd mit ehrlicher Programm-Kennung und Browser-Kennung, ab dem zweiten Versuch ohne Zwischenspeicher (Zeitstempel in der Adresse). */
+const UA_BOT = 'regel-depot/1.0 (+https://github.com/justusboesken-maker/Regel-Depot)';
 export async function lbmaGold(fix = 'pm', since = '2005-01-01') {
-  const res = await get('https://prices.lbma.org.uk/json/gold_' + fix + '.json');
-  if (!res.ok) throw new Error('LBMA HTTP ' + res.status);
-  const j = await res.json();
-  const rows = j.filter((x) => x && x.d >= since && x.v && x.v[0] > 0).sort((a, b) => (a.d < b.d ? -1 : 1));
-  if (!rows.length) throw new Error('LBMA: keine Daten');
-  return { dates: rows.map((x) => x.d), closes: rows.map((x) => x.v[0]), src: 'lbma gold ' + fix + ' usd' };
+  const tries = [{ ua: UA_BOT, wait: 0 }, { ua: UA, wait: 15000, bust: true }, { ua: UA_BOT, wait: 40000, bust: true }];
+  let lastErr = null, n = 0;
+  for (const t of tries) {
+    if (t.wait) await sleep(t.wait);
+    n++;
+    try {
+      const res = await get('https://prices.lbma.org.uk/json/gold_' + fix + '.json' + (t.bust ? '?t=' + Date.now() : ''), { headers: { 'User-Agent': t.ua } });
+      if (!res.ok) throw new Error('LBMA HTTP ' + res.status);
+      const j = await res.json();
+      if (!Array.isArray(j)) throw new Error('LBMA: unerwartete Antwort');
+      const rows = j.filter((x) => x && typeof x.d === 'string' && x.d >= since && x.v && +x.v[0] > 0).sort((a, b) => (a.d < b.d ? -1 : 1));
+      if (!rows.length) throw new Error('LBMA: keine Daten');
+      return { dates: rows.map((x) => x.d), closes: rows.map((x) => +x.v[0]), src: 'lbma gold ' + fix + ' usd' };
+    } catch (e) {
+      lastErr = e;
+      /* Nur vorübergehende Fehler wiederholen (gesperrt, überlastet, Netz, abgebrochene oder kaputte Antwort) */
+      if (!/HTTP (403|408|425|429|5\d\d)|abort|fetch failed|network|ECONN|ETIMEDOUT|socket|JSON|Unexpected|unerwartete/i.test(e.message)) break;
+    }
+  }
+  throw new Error(lastErr.message + (n > 1 ? ' (' + n + ' Versuche)' : ''));
 }
 
 /* ---------- Alpha Vantage (kostenloser Key, 25 Abrufe am Tag) ---------- */
@@ -98,7 +121,8 @@ async function avJson(params, key) {
   const res = await get('https://www.alphavantage.co/query?' + q.toString());
   if (!res.ok) throw new Error('Alpha Vantage HTTP ' + res.status);
   const j = await res.json();
-  if (j.Note || j.Information || j['Error Message']) throw new Error('Alpha Vantage: ' + String(j.Note || j.Information || j['Error Message']).slice(0, 140));
+  /* Die Limit-Meldung nennt den Key im Klartext („We have detected your API key as …“): nie in Fehlertexte übernehmen */
+  if (j.Note || j.Information || j['Error Message']) throw new Error('Alpha Vantage: ' + hideKey(String(j.Note || j.Information || j['Error Message']), key).slice(0, 140));
   return j;
 }
 /* Wöchentlich bereinigt (Woche endet am letzten Handelstag), VWRD.LON: gleiche 2-Wochen-Signale wie Yahoo VWRD.L adjclose */
@@ -174,7 +198,7 @@ async function eodhdJson(pathAndQuery, key) {
   const res = await get('https://eodhd.com/api/' + pathAndQuery + (pathAndQuery.includes('?') ? '&' : '?') + 'api_token=' + encodeURIComponent(key) + '&fmt=json');
   if (!res.ok) throw new Error('EODHD HTTP ' + res.status);
   const j = await res.json();
-  if (j && !Array.isArray(j) && (j.errors || j.message)) throw new Error('EODHD: ' + String(j.message || JSON.stringify(j.errors)).slice(0, 120));
+  if (j && !Array.isArray(j) && (j.errors || j.message)) throw new Error('EODHD: ' + hideKey(String(j.message || JSON.stringify(j.errors)), key).slice(0, 120));
   return j;
 }
 /* Tagesschlüsse (unbereinigt und bereinigt), sym z. B. VWRD.LSE */

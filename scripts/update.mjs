@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 /* Regel-Depot 50/30/20 – Update-Skript für GitHub Actions
-   Holt Kurse (Yahoo Finance, LBMA, Ersatzquellen), bildet Wochenschlüsse, rechnet die Regeln,
+   Holt Kurse (Signale in US-Dollar: Alpha Vantage und EODHD für den FTSE, Coinbase für Bitcoin, LBMA für Gold; Euro-Kurse für die
+   Depotbewertung: Lang & Schwarz, Coinbase, EZB; Ersatzquellen Kraken, Yahoo, gold-api), bildet Wochenschlüsse, rechnet die Regeln,
    schreibt docs/data/*.json, sammelt Ereignisse und schickt Web-Push-Nachrichten.
 
-   Aufruf: node scripts/update.mjs --step <auto|fr-warn|fr-close|so-warn|mo-close|mo-notify|eod|all|init|test-push>
-           [--final] [--now 2026-09-28T00:30:00Z] [--mock <ordner>] [--dry] [--verbose]
-   Umgebung: VAPID_PRIVATE_KEY, PUSH_SUB_1 … PUSH_SUB_5 (Subscription-JSON), ALPHAVANTAGE_KEY (optional) */
+   Aufruf: node scripts/update.mjs --step <auto|live|fr-warn|fr-close|sa-close|so-warn|mo-close|mo-notify|eod|all|init|test-sources|test-eodhd|test-push>
+           [--final] [--fallback] [--now 2026-09-28T00:30:00Z] [--mock <ordner>] [--dry] [--verbose]
+   Umgebung: VAPID_PRIVATE_KEY, PUSH_SUB_1 … PUSH_SUB_5 (Subscription-JSON), ALPHAVANTAGE_KEY, EODHD_KEY, PUSH_SENT_FILE (Workflow) */
 import fs from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -27,9 +28,19 @@ if (isNaN(NOW.getTime())) { console.error('Ungültiges --now'); process.exit(2);
 const log = (...a) => console.log(...a);
 const vlog = (...a) => { if (OPT.verbose) console.log(...a); };
 
+/* ---------- Geheimnisse nie in Dateien oder Commit-Nachrichten ----------
+   Fehlertexte der Quellen können den API-Key enthalten (Alpha Vantage nennt ihn in der Limit-Meldung). Alles, was in docs/data
+   (öffentlich) oder in die Commit-Nachricht geht, läuft durch mask(). */
+const SECRETS = [process.env.ALPHAVANTAGE_KEY, process.env.EODHD_KEY, process.env.VAPID_PRIVATE_KEY].filter((s) => s && s.length >= 4);
+function mask(s) {
+  let t = String(s == null ? '' : s);
+  for (const k of SECRETS) t = t.split(k).join('***');
+  return SRC.hideKey(t);
+}
+
 /* ---------- Dateien ---------- */
 function loadJson(rel, fallback) { const p = path.join(DATA, rel); if (!fs.existsSync(p)) return fallback; return JSON.parse(fs.readFileSync(p, 'utf8')); }
-function saveJson(rel, obj, pretty) { const p = path.join(DATA, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, pretty ? JSON.stringify(obj, null, 1) : JSON.stringify(obj)); }
+function saveJson(rel, obj, pretty) { const p = path.join(DATA, rel); fs.mkdirSync(path.dirname(p), { recursive: true }); fs.writeFileSync(p, mask(pretty ? JSON.stringify(obj, null, 1) : JSON.stringify(obj))); }
 
 const CFG = loadJson('config.json');
 const A = Object.keys(CFG.assets);
@@ -61,8 +72,8 @@ const name = (a) => CFG.assets[a].name;
 
 /* ---------- Ergebnis eines Laufs ---------- */
 const RUN = { t: NOW.toISOString(), step: OPT.step, ok: true, summary: [], errors: [], notified: 0, changed: false };
-function note(s) { RUN.summary.push(s); log('· ' + s); }
-function fail(a, e) { const msg = (a ? a + ': ' : '') + (e && e.message ? e.message : String(e)); RUN.errors.push(msg); RUN.ok = false; log('! ' + msg); }
+function note(s) { s = mask(s); RUN.summary.push(s); log('· ' + s); }
+function fail(a, e) { const msg = mask((a ? a + ': ' : '') + (e && e.message ? e.message : String(e))); RUN.errors.push(msg); RUN.ok = false; log('! ' + msg); }
 
 /* ---------- Ereignisse und Push-Warteschlange ---------- */
 function addEvent(ev) {
@@ -112,10 +123,10 @@ async function fetchMock(key) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 const AVKEY = process.env.ALPHAVANTAGE_KEY || '', EODKEY = process.env.EODHD_KEY || '';
-const AVMEMO = {}, LSMEMO = {};
+const AVMEMO = {}, LSMEMO = {}, LBMAMEMO = {};
 const F = {
   yahoo: (sym, opts) => OPT.mock ? fetchMock('yahoo_' + sym) : SRC.yahooDaily(sym, opts),
-  lbma: (fix) => OPT.mock ? fetchMock('lbma_' + fix) : SRC.lbmaGold(fix),
+  lbma: (fix) => LBMAMEMO[fix] || (LBMAMEMO[fix] = OPT.mock ? fetchMock('lbma_' + fix) : SRC.lbmaGold(fix)), /* je Lauf einmal (auch ein Fehlschlag gilt für den ganzen Lauf) */
   coinbase: (p) => OPT.mock ? fetchMock('coinbase_' + p) : SRC.coinbaseDaily(p, 60),
   coinbaseSpot: (p) => OPT.mock ? fetchMock('coinbasespot_' + p) : SRC.coinbaseSpot(p),
   av: (sym) => AVMEMO[sym] || (AVMEMO[sym] = OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY)), /* je Lauf nur einmal laden */
@@ -146,37 +157,80 @@ async function firstOk(label, tries) {
   throw new Error(errs.join(' | '));
 }
 
-/* Signalreihe einer Anlage laden: {S (Wochenserie ohne laufende/unvollständige Wochen), price, priceTime, src, fallback, lastD, raw} */
+/* Signalreihe einer Anlage laden: {daily (Tages- oder Wochenpunkte), src, fallback, weeklyAlready, preliminary} */
 const START = { ftse: '2012-05-01', btc: '2014-09-15' };
+/* Ungültige Punkte (null, NaN, 0, kaputtes Datum) entfernen: Sie zählten sonst als vorhandener Schluss, und die Woche fehlte still */
+function cleanDaily(r) {
+  if (!r || !Array.isArray(r.dates) || !Array.isArray(r.closes)) throw new Error('Kursreihe fehlt oder ist ungültig');
+  const dates = [], closes = [], raw = Array.isArray(r.raw) ? [] : null;
+  for (let i = 0; i < r.dates.length; i++) {
+    const d = r.dates[i], c = r.closes[i];
+    if (typeof d !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(d) || c == null || c === '' || !isFinite(+c) || !(+c > 0)) continue;
+    dates.push(d); closes.push(+c); if (raw) raw.push(r.raw[i]);
+  }
+  if (dates.length < r.dates.length) vlog('Kursreihe ' + (r.src || '') + ': ' + (r.dates.length - dates.length) + ' ungültige Punkte verworfen');
+  return Object.assign({}, r, { dates, closes, raw: raw || r.raw });
+}
+/* Londoner Ortszeit eines Zeitpunkts: Datum, Wochentag (Mo = 0), Minuten seit Mitternacht */
+function londonAt(t) {
+  const p = {}; new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/London', year: 'numeric', month: '2-digit', day: '2-digit', weekday: 'short', hour: 'numeric', minute: 'numeric', hour12: false }).formatToParts(new Date(t)).forEach((x) => { p[x.type] = x.value; });
+  return { d: p.year + '-' + p.month + '-' + p.day, dow: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'].indexOf(p.weekday), m: ((+p.hour) % 24) * 60 + (+p.minute) };
+}
+/* Liegt ein Kurszeitpunkt nach der Londoner Schlussauktion (16:35 Uhr Ortszeit) des Freitags fri? Im Winter ist der um 15–20 Minuten
+   verzögerte EODHD-Kurs beim ersten Freitagslauf (16:47 UTC = 16:47 London) noch von vor der Auktion und taugt nicht als Schluss. */
+function afterAuction(t, fri) { if (!t) return false; const L = londonAt(t); return L.d > fri || (L.d === fri && L.m >= 16 * 60 + 35); }
+/* Freitagsschluss der fälligen Woche ergänzen, wenn die Wochenreihe r ihn noch nicht hat (nur nach dem Londoner Schluss, nur mit Datum
+   des Freitags): EODHD-Tagesschluss (endgültig), EODHD-Live-Kurs nach der Schlussauktion (vorläufig), Alpha-Vantage-Quote ab 17 Uhr
+   London (vorläufig). scale: Faktor, mit dem Rohkurse auf die Basis der Reihe gebracht werden (EODHD-Ersatzreihe). */
+async function addFridayClose(r, opts) {
+  opts = opts || {};
+  const dueK = addDays(dueCutoff('ftse'), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || FRI_CLOSED, scale = opts.scale || 1;
+  if (!afterClose || (i >= 0 && r.dates[i] >= fri)) return r;
+  const put = (d, p, label, prelim) => { if (i >= 0 && mondayOf(r.dates[i]) === dueK) { r.dates[i] = d; r.closes[i] = p * scale; } else { r.dates.push(d); r.closes.push(p * scale); } r.src += ' + Schlusskurs ' + d + ' ' + label; r.preliminary = prelim ? d : null; r.prelimLabel = prelim ? label.replace(/^(aus dem|von) /, '').replace(/ \(vorläufig\)$/, '') : null; vlog('FTSE: Wochenschluss ' + d + ' ' + label + ': ' + p); };
+  let done = false;
+  if (EODKEY || OPT.mock) {
+    /* EODHD veröffentlicht den Londoner Tagesschluss meist ein bis zwei Stunden nach Handelsschluss: endgültiger Kurs */
+    if (!opts.skipEod) { try { const e = await F.eodhd('VWRD.LSE', dueK); const k = e.dates.indexOf(fri); if (k >= 0 && e.closes[k] > 0) { put(fri, e.closes[k], 'von EODHD (Tagesschluss)', false); done = true; } else vlog('FTSE: EODHD hat den ' + fri + ' noch nicht (letzter Tag ' + e.dates[e.dates.length - 1] + ')'); } catch (e) { vlog('EODHD: ' + e.message); } }
+    if (!done) { try { const l = await F.eodhdLive('VWRD.LSE'), ld = l.priceTime.slice(0, 10); if (ld >= fri && l.price > 0 && afterAuction(l.priceTime, fri)) { put(ld, l.price, 'aus dem EODHD-Live-Kurs (vorläufig)', true); done = true; } else vlog('FTSE: EODHD-Live-Kurs ' + l.priceTime + ' noch nicht nach der Schlussauktion'); } catch (e) { vlog('EODHD live: ' + e.message); } }
+  }
+  if (!done && !opts.noQuote) {
+    /* Das Quote trägt keine Uhrzeit: erst ab 17 Uhr London verwenden, damit es sicher nach der Schlussauktion liegt */
+    const Ln = londonAt(NOW), quoteOk = Ln.d > fri || (Ln.d === fri && Ln.m >= 17 * 60);
+    if (quoteOk) { try { const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null; if (qd && qd >= fri && q.price > 0) put(qd, q.price, 'aus dem Alpha-Vantage-Quote (vorläufig)', true); else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt'); } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); } }
+    else vlog('FTSE: Quote erst ab 17 Uhr London');
+  }
+  return r;
+}
 /* Wochenschluss von Alpha Vantage: bereinigte Wochenreihe; den frischen Freitagsschluss trägt Alpha Vantage oft erst Stunden nach
-   Börsenschluss ein, deshalb wird er, wenn er noch fehlt, aus dem Quote ergänzt (nur nach Londoner Schluss und nur mit Datum des Freitags). */
+   Börsenschluss ein, deshalb wird er, wenn er noch fehlt, ergänzt (addFridayClose). */
 async function avSignalFtse() {
-  const r = await F.av('VWRD.LON'); RUN.avWeeklyFtse = r;
-  try {
-    const dueK = addDays(dueCutoff('ftse'), -7), fri = addDays(dueK, 4), i = r.dates.length - 1, afterClose = TODAY > fri || FRI_CLOSED;
-    if (i >= 0 && r.dates[i] < fri && afterClose) {
-      const put = (d, p, label, prelim) => { if (mondayOf(r.dates[i]) === dueK) { r.dates[i] = d; r.closes[i] = p; } else { r.dates.push(d); r.closes.push(p); } r.src += ' + Schlusskurs ' + d + ' ' + label; r.preliminary = prelim ? d : null; vlog('FTSE: Wochenschluss ' + d + ' ' + label + ': ' + p); };
-      let done = false;
-      if (EODKEY) {
-        /* EODHD veröffentlicht den Londoner Tagesschluss meist ein bis zwei Stunden nach Handelsschluss: endgültiger Kurs */
-        try { const e = await F.eodhd('VWRD.LSE', dueK); const k = e.dates.indexOf(fri); if (k >= 0) { put(fri, e.closes[k], 'von EODHD (Tagesschluss)', false); done = true; } else vlog('FTSE: EODHD hat den ' + fri + ' noch nicht (letzter Tag ' + e.dates[e.dates.length - 1] + ')'); } catch (e) { vlog('EODHD: ' + e.message); }
-        if (!done) { try { const l = await F.eodhdLive('VWRD.LSE'), ld = l.priceTime.slice(0, 10); if (ld >= fri && l.price > 0) { put(ld, l.price, 'aus dem EODHD-Live-Kurs (vorläufig)', true); done = true; } } catch (e) { vlog('EODHD live: ' + e.message); } }
-      }
-      if (!done) {
-        const q = await F.avQuote('VWRD.LON'), qd = q.priceTime ? q.priceTime.slice(0, 10) : null;
-        if (qd && qd >= fri && q.price > 0) put(qd, q.price, 'aus dem Alpha-Vantage-Quote (vorläufig)', true);
-        else vlog('FTSE: Quote noch vom ' + qd + ', Freitagsschluss fehlt');
-      }
-    }
-  } catch (e) { vlog('Alpha-Vantage-Quote: ' + e.message); }
-  return { daily: r, src: r.src, weeklyAlready: true, preliminary: r.preliminary || null };
+  const r = cleanDaily(await F.av('VWRD.LON')); RUN.avWeeklyFtse = r;
+  await addFridayClose(r);
+  return { daily: r, src: r.src, weeklyAlready: true, preliminary: r.preliminary || null, prelimLabel: r.prelimLabel || null };
+}
+/* Ersatz, wenn Alpha Vantage nicht liefert: EODHD-Tagesschlüsse (bereinigt) zu Wochen, nur die Wochen nach der gespeicherten Reihe.
+   Sie werden über das Verhältnis in der jüngsten gemeinsamen Woche an die gespeicherte Alpha-Vantage-Reihe angeglichen, damit eine
+   Ausschüttung dazwischen die Reihe nicht versetzt. Sobald Alpha Vantage wieder liefert, ersetzt dessen Reihe diese Wochen. */
+async function eodhdSignalFtse() {
+  if (!EODKEY && !OPT.mock) throw new Error('kein EODHD-Key');
+  const stored = storedSeries('ftse'); if (!stored.k.length) throw new Error('keine gespeicherte Reihe zum Angleichen');
+  const lastK = stored.k[stored.k.length - 1], e = await F.eodhd('VWRD.LSE', addDays(lastK, -28));
+  const W = ENG.weeklyFromDaily(e.dates, (e.adj || e.closes).map((x) => +x), null);
+  let f = null, refK = null;
+  for (let i = W.k.length - 1; i >= 0 && f == null; i--) { const j = stored.k.indexOf(W.k[i]); if (j >= 0 && W.c[i] > 0 && stored.c[j] > 0) { f = stored.c[j] / W.c[i]; refK = W.k[i]; } }
+  if (f == null) throw new Error('keine gemeinsame Woche mit der gespeicherten Reihe');
+  const idx = W.k.map((k, i) => (k > lastK ? i : -1)).filter((i) => i >= 0);
+  const r = { dates: idx.map((i) => W.d[i]), closes: idx.map((i) => W.c[i] * f), src: 'eodhd VWRD.LSE bereinigt, angeglichen an die gespeicherte Reihe (Faktor ' + f.toFixed(5) + ', Woche ' + refK + ')' };
+  await addFridayClose(r, { scale: f, skipEod: true, noQuote: true });
+  return { daily: r, src: r.src, weeklyAlready: true, preliminary: r.preliminary || null, prelimLabel: r.prelimLabel || null };
 }
 /* Quellenkette je Anlage: erste = Hauptquelle laut config, die weiteren erst im zweiten Anlauf (ALLOW_FB) */
 function signalChain(a) {
   const c = CFG.assets[a];
   if (a === 'ftse') {
-    const chain = { alphavantage: avSignalFtse, yahoo: async function yahoo() { const r = await F.yahoo('VWRD.L', { adj: true, start: START.ftse }); return { daily: r, src: r.src }; } };
-    return [c.signal.src === 'yahoo' ? chain.yahoo : chain.alphavantage, c.signal.src === 'yahoo' ? chain.alphavantage : chain.yahoo];
+    const yahoo = async function yahoo() { const r = await F.yahoo('VWRD.L', { adj: true, start: START.ftse }); return { daily: r, src: r.src }; };
+    const eodhd = async function eodhd() { return eodhdSignalFtse(); };
+    return c.signal.src === 'yahoo' ? [yahoo, avSignalFtse, eodhd] : [avSignalFtse, eodhd, yahoo];
   }
   if (a === 'btc') {
     const chain = {
@@ -193,16 +247,17 @@ function signalChain(a) {
 async function loadSignalSeries(a) {
   const c = CFG.assets[a];
   if (c.signal.src === 'lbma') {
-    const r = await F.lbma(c.signal.fix || 'pm');
+    const r = cleanDaily(await F.lbma(c.signal.fix || 'pm'));
     return { daily: r, src: r.src, fallback: false };
   }
   const chain = signalChain(a);
+  const clean = (r) => Object.assign(r, { daily: cleanDaily(r.daily) });
   let primaryError = null;
-  try { const r = await chain[0](); return Object.assign({ fallback: false }, r); }
+  try { const r = clean(await chain[0]()); return Object.assign({ fallback: false }, r); }
   catch (e) { primaryError = e.message; vlog('Hauptquelle ' + c.signal.src + ' für ' + a + ' fehlgeschlagen: ' + e.message); }
   if (!ALLOW_FB) throw new Error(primaryError + ' (weitere Quellen erst im nächsten Anlauf)');
   const errs = [primaryError];
-  for (const f of chain.slice(1)) { try { const r = await f(); return Object.assign({ fallback: true, primaryError }, r); } catch (e) { errs.push((f.name || '?') + ': ' + e.message); vlog(a + ' · ' + errs[errs.length - 1]); } }
+  for (const f of chain.slice(1)) { try { const r = clean(await f()); return Object.assign({ fallback: true, primaryError }, r); } catch (e) { errs.push((f.name || '?') + ': ' + e.message); vlog(a + ' · ' + errs[errs.length - 1]); } }
   throw new Error(errs.join(' | '));
 }
 
@@ -227,12 +282,14 @@ function weekComplete(a, k, lastD) {
 }
 
 function storedSeries(a) { const j = WEEKLY[a]; return j && j.w ? ENG.fromRows(j.w) : { k: [], d: [], c: [] }; }
-function switchText(a, s) {
+function switchText(a, s, pre) {
   const r = CFG.assets[a].rule, buy = s.to === 1, mon = addDays(s.k, 7);
   const why = r.type === 'band'
     ? 'Schluss ' + usd(a, s.c) + ' liegt mehr als ' + de(r.p * 100, 0) + ' % ' + (buy ? 'über' : 'unter') + ' dem SMA50 (Schwelle ' + usd(a, s.m * (buy ? 1 + r.p : 1 - r.p)) + ')'
     : r.n + '. Wochenschluss in Folge ' + (buy ? 'über' : 'unter') + ' dem SMA50 (' + usd(a, s.c) + ' gegen ' + usd(a, s.m) + ')';
-  return { title: name(a) + ': ' + (buy ? 'Kaufsignal' : 'Verkaufssignal'), body: 'Wochenschluss ' + ds(s.d) + ': ' + why + '. Laut Regel ' + (buy ? 'kaufen' : 'verkaufen') + ' zur Eröffnung am Montag, ' + ds(mon) };
+  /* Vorläufiger Schluss (FTSE aus dem Live-Kurs oder Quote, Gold aus dem Spotpreis): in Titel und Text kennzeichnen */
+  const pv = pre ? ' Vorläufiger Wochenschluss (' + pre + '); der endgültige folgt, eine Änderung der Regel wird gemeldet.' : '';
+  return { title: name(a) + ': ' + (buy ? 'Kaufsignal' : 'Verkaufssignal') + (pre ? ' (vorläufig)' : ''), body: 'Wochenschluss ' + ds(s.d) + ': ' + why + '. Laut Regel ' + (buy ? 'kaufen' : 'verkaufen') + ' zur Eröffnung am Montag, ' + ds(mon) + pv };
 }
 function lastState(a) { return STATE.assets && STATE.assets[a] ? STATE.assets[a] : null; }
 function summarizeAsset(a, E, extra) {
@@ -247,73 +304,137 @@ function summarizeAsset(a, E, extra) {
 const round = (x, d) => (x == null || !isFinite(x) ? null : Math.round(x * Math.pow(10, d)) / Math.pow(10, d));
 
 /* ---------- Wochenschluss einer Anlage verarbeiten ---------- */
+const stTxt = (st) => (st === 1 ? 'investiert' : 'Cash');
+function subset(S, keep) { const idx = S.k.map((k, i) => (keep(k) ? i : -1)).filter((i) => i >= 0); return { k: idx.map((i) => S.k[i]), d: idx.map((i) => S.d[i]), c: idx.map((i) => S.c[i]) }; }
+/* Gebucht bleibt gebucht (config signal.keepBooked, Bitcoin und Gold; von Justus am 26.09.2026 festgelegt): Eine Quelle überschreibt schon
+   gebuchte Wochen nicht, auch nicht eine andere Quelle mit leicht anderem Schluss. Ausnahme: eine vorläufig gebuchte Woche (allowK), die der
+   endgültige Schluss ersetzt. Der FTSE bleibt ausgenommen: Seine bereinigte Reihe verschiebt sich mit jeder Ausschüttung und wird neu übernommen. */
+function mergeFor(a, stored, fresh, allowK) {
+  const c = CFG.assets[a];
+  if (c.signal.keepBooked) { const have = {}; stored.k.forEach((k) => { have[k] = 1; }); fresh = subset(fresh, (k) => !have[k] || k === allowK); }
+  return ENG.mergeWeekly(stored, fresh, !!c.signal.adj);
+}
+function sameSeries(x, y) {
+  if (x.k.length !== y.k.length) return false;
+  for (let i = 0; i < x.k.length; i++) if (x.k[i] !== y.k[i] || x.d[i] !== y.d[i] || round(x.c[i], 4) !== round(y.c[i], 4)) return false;
+  return true;
+}
+function stateAt(S, E, k) { const j = S.k.indexOf(k); return j >= 0 && E.st[j] != null ? E.st[j] : null; }
+/* Schon gebuchte Wochen (bis prevK), deren Regelzustand sich durch neue Daten geändert hat; skipK: die vorläufige Woche (wird als Korrektur gemeldet) */
+function revisedWeeks(a, stored, merged, E, prevK, skipK) {
+  if (prevK == null || !stored.k.length) return [];
+  const E0 = ENG.evalRule(stored, CFG.assets[a].rule), pos = {}, out = [];
+  merged.k.forEach((k, j) => { pos[k] = j; });
+  for (let i = 0; i < stored.k.length; i++) { const k = stored.k[i], j = pos[k]; if (k > prevK || k === skipK || j == null) continue; if (E0.st[i] != null && E.st[j] != null && E0.st[i] !== E.st[j]) out.push(k); }
+  return out;
+}
+/* Wochen buchen: zusammenführen, Regel rechnen, speichern, melden.
+   targetK: jüngste Woche, die jetzt gebucht wird; src: {src, fallback, primaryError, preliminary (Datum), prelimLabel}; comp: Ergebnis von weekComplete.
+   Meldungen: Hat sich der Zustand der zuletzt gebuchten Woche geändert (vorläufiger Schluss korrigiert oder rückwirkende Datenänderung),
+   gibt es genau eine Nachricht mit dem Ergebnis; sonst die neuen Wechsel als Kauf- oder Verkaufssignal. */
+function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
+  const c = CFG.assets[a], prelimK = prev && prev.preliminary && prev.k ? prev.k : null;
+  const merged = mergeFor(a, stored, fresh, prelimK);
+  const lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
+  /* Keine Lücken: Jede Woche nach der zuletzt gespeicherten bis zur gebuchten braucht einen Schluss */
+  if (lastStored) { const have = {}; merged.k.forEach((k) => { have[k] = 1; }); for (let k = addDays(lastStored, 7); k <= targetK; k = addDays(k, 7)) if (!have[k]) { const reason = 'Schluss der Woche ab ' + ds(k) + ' fehlt in der Kursreihe'; markPending(a, targetK, reason); note(name(a) + ': ' + reason); return { done: false, pending: true }; } }
+  if (!merged.k.length || merged.k[merged.k.length - 1] < targetK) { markPending(a, targetK, 'Schlusskurs der Woche fehlt oder ist ungültig'); note(name(a) + ': Schlusskurs der Woche ' + ds(targetK) + ' fehlt oder ist ungültig'); return { done: false, pending: true }; }
+  const E = ENG.evalRule(merged, c.rule);
+  if (E.st.length < 60) { fail(name(a), 'zu wenige Wochen: ' + E.st.length); return { done: false }; }
+  saveSeries(a, merged, src.src);
+  const L = E.last, prevK = prev && prev.k ? prev.k : lastStored, prevSt = prev && prev.st != null ? prev.st : null;
+  const wasPrelim = !!(prelimK && prelimK === prevK);
+  const srcPrelimK = src.preliminary ? mondayOf(src.preliminary) : null;
+  const stPrevNow = prevK ? stateAt(merged, E, prevK) : null;
+  const rev = revisedWeeks(a, stored, merged, E, prevK, wasPrelim ? prevK : null);
+  const newSw = E.sw.filter((s) => prevK == null || s.k > prevK);
+  const flipPrev = prevSt != null && stPrevNow != null && stPrevNow !== prevSt;
+  const pushEv = (ev, push) => { if (addEvent(ev) && push) queuePush({ id: ev.id, title: push.title, body: push.body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() }); };
+  if (!flipPrev) {
+    if (wasPrelim) { const j = merged.k.indexOf(prevK); if (srcPrelimK === prevK) vlog(a + ': Schluss weiterhin vorläufig (' + src.preliminary + ')'); else if (j >= 0) note(name(a) + ': endgültiger Schluss ' + ds(merged.d[j]) + ' ' + usd(a, merged.c[j]) + ' bestätigt den vorläufigen Stand'); }
+    if (rev.length) {
+      addEvent({ id: 'rev-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Datenrevision', text: 'Die Kursquelle (' + src.src + ') liefert für ' + rev.length + ' frühere Woche(n) andere Schlüsse (ab ' + ds(rev[0]) + '); der Regelzustand dieser Wochen ist rückwirkend anders. Der Zustand zum Wochenschluss ' + ds(prev.d) + ' bleibt ' + stTxt(prevSt) + '.', c: round(L.c, 4), m: round(L.m, 4) });
+      note(name(a) + ': Datenrevision, ' + rev.length + ' Woche(n) rückwirkend anders, Zustand unverändert');
+    }
+    newSw.forEach((s) => {
+      const pre = srcPrelimK && s.k === srcPrelimK ? (src.prelimLabel || 'vorläufiger Kurs') : null, txt = switchText(a, s, pre), id = 'sig-' + a + '-' + s.d;
+      pushEv(Object.assign({ id, kind: s.to === 1 ? 'kauf' : 'verkauf', a, k: s.k, d: s.d, title: txt.title, text: txt.body, c: round(s.c, 4), m: round(s.m, 4) }, pre ? { preliminary: true } : {}), txt);
+    });
+  } else {
+    /* Der Zustand der zuletzt gebuchten Woche ist jetzt ein anderer: eine Nachricht mit dem Ergebnis (neue Wechsel stecken darin) */
+    const j = merged.k.indexOf(prevK), stillPrelim = srcPrelimK === prevK;
+    const why = wasPrelim
+      ? (stillPrelim ? 'Neuer vorläufiger Wochenschluss ' : 'Endgültiger Wochenschluss ') + ds(merged.d[j]) + ' ' + usd(a, merged.c[j]) + ' statt vorläufig ' + usd(a, prev.c) + '.'
+      : 'Die Kursquelle (' + src.src + ') liefert für ' + Math.max(1, rev.length) + ' frühere Woche(n) andere Schlüsse' + (rev.length ? ' (ab ' + ds(rev[0]) + ')' : '') + '; rückwirkend war die Regel zum Wochenschluss ' + ds(prev.d) + ' ' + stTxt(stPrevNow) + ' statt ' + stTxt(prevSt) + '.';
+    const extra = L.k > prevK ? ' Dazu der neue Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + (srcPrelimK === L.k ? ' (vorläufig: ' + (src.prelimLabel || 'vorläufiger Kurs') + ')' : '') + '.' : '';
+    const net = L.st !== prevSt;
+    const body = why + extra + (net ? ' Laut Regel jetzt ' + stTxt(L.st) + ' statt ' + stTxt(prevSt) + '.' : ' Damit ist die Regel wieder ' + stTxt(L.st) + '; für dich ändert sich nichts.');
+    const kindT = wasPrelim ? 'Korrektur' : 'Datenrevision', id = (wasPrelim ? 'korr-' : 'rev-') + a + '-' + L.d;
+    pushEv({ id, kind: net ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': ' + (wasPrelim ? 'Korrektur des Wochenschlusses' : 'Datenrevision'), text: body, c: round(L.c, 4), m: round(L.m, 4) }, net ? { title: name(a) + ': ' + kindT, body } : null);
+    note(name(a) + ': ' + kindT + ', Zustand zum ' + ds(prev.d) + ' jetzt ' + stTxt(stPrevNow) + (net ? ', ZUSTAND GEDREHT' : ', unterm Strich unverändert'));
+  }
+  const edge = Math.abs(L.c / (c.rule.type === 'band' ? L.m * (L.st === 1 ? 1 - c.rule.p : 1 + c.rule.p) : L.m) - 1) < (CFG.edge ? CFG.edge.pct : 0.005);
+  if (edge && !newSw.length && !flipPrev) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle (SMA50 ' + usd(a, L.m) + '). Quelle: ' + src.src + '.' });
+  const prelimNow = srcPrelimK && L.k === srcPrelimK ? src.preliminary : null;
+  STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: prelimNow, prelimLabel: prelimNow ? (src.prelimLabel || null) : null });
+  RUN.changed = true;
+  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + stTxt(L.st) + (newSw.length && !flipPrev ? ', SIGNALWECHSEL' : '') + (prelimNow ? ' (vorläufig: ' + (src.prelimLabel || '') + ')' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : ''));
+  return { done: true, E, newSw };
+}
+/* Gold: Fehlt das LBMA-Fixing am Montagmorgen (ab 5 Uhr UTC) noch, zählt der Spotpreis kurz nach dem Fixing vom Freitag (STATE.goldSnap) als
+   vorläufiger Wochenschluss. Das Fixing ersetzt ihn, sobald es da ist; ändert sich dadurch die Regel, kommt eine Korrektur.
+   Von Justus am 26.09.2026 so festgelegt (config signal.spotFallback). */
+function spotFallback(a, base, prev, dueK, reason) {
+  const c = CFG.assets[a], snap = STATE.goldSnap;
+  if (!c.signal.spotFallback || !snap || snap.k !== dueK || !(snap.p > 0)) return null;
+  if (NOW.getTime() < new Date(addDays(dueK, 7) + 'T05:00:00Z').getTime()) return null;
+  const tl = londonAt(snap.t), hm = String(Math.floor(tl.m / 60)).padStart(2, '0') + ':' + String(tl.m % 60).padStart(2, '0');
+  const label = 'Spotpreis ' + ds(snap.d) + ' ' + hm + ' Uhr London (' + (snap.src || 'gold-api.com') + '), das LBMA-Fixing fehlt noch';
+  /* Die nächtliche Fehlermeldung „ohne Wochenschluss“ ist damit überholt */
+  STATE.queue = (STATE.queue || []).filter((q) => q.id !== 'err-' + a + '-' + dueK);
+  note(name(a) + ': LBMA-Fixing fehlt (' + String(reason).slice(0, 80) + '), vorläufiger Wochenschluss aus dem ' + label.split(', das')[0]);
+  return bookWeeks(a, base, { k: [dueK], d: [snap.d], c: [snap.p] }, prev, dueK, { src: 'Spotpreis ' + (snap.src || 'gold-api.com') + ' ' + snap.t + ' (vorläufig, LBMA-Fixing fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: snap.d, prelimLabel: label }, { ok: true });
+}
 async function closeAsset(a) {
   const c = CFG.assets[a], cutoff = dueCutoff(a), stored = storedSeries(a), prev = lastState(a);
   const dueK = addDays(cutoff, -7);                                   /* jüngste fällige Woche */
-  const already = !!(stored.k.length && stored.k[stored.k.length - 1] >= dueK && prev && prev.k >= dueK && !prev.pending);
+  const lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
+  const already = !!(lastStored && lastStored >= dueK && prev && prev.k >= dueK && !prev.pending);
+  const prelimNow = !!(already && prev.preliminary);
   if (already && !prev.preliminary) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
-  if (already && prev.preliminary) vlog(a + ': Woche ' + dueK + ' vorläufig gebucht (Quote ' + prev.preliminary + '), prüfe auf endgültigen Schluss');
+  if (prelimNow) vlog(a + ': Woche ' + dueK + ' vorläufig gebucht (' + prev.preliminary + '), prüfe auf endgültigen Schluss');
   let src;
   try { src = await loadSignalSeries(a); }
-  catch (e) { fail(name(a), 'Kursabruf fehlgeschlagen: ' + e.message); markPending(a, dueK, 'Kursabruf fehlgeschlagen: ' + e.message); return { done: false, error: e.message }; }
-  const daily = src.daily, lastD = daily.dates[daily.dates.length - 1];
-  const fresh = src.weeklyAlready ? ENG.fromRows(daily.dates.map((d, i) => [mondayOf(d), d, daily.closes[i]])) : ENG.weeklyFromDaily(daily.dates, daily.closes, cutoff);
-  if (src.weeklyAlready) { const keep = fresh.k.map((k, i) => k < cutoff ? i : -1).filter((i) => i >= 0); fresh.k = keep.map((i) => fresh.k[i]); fresh.d = keep.map((i) => fresh.d[i]); fresh.c = keep.map((i) => fresh.c[i]); }
-  /* Für die Vollständigkeit zählt der letzte Tageskurs, der zur fälligen Woche gehört */
+  catch (e) {
+    const reason = 'Kursabruf fehlgeschlagen: ' + e.message;
+    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + e.message.slice(0, 80) + ')'); return { done: true, already: true }; }
+    const fb = spotFallback(a, stored, prev, dueK, reason); if (fb) return fb;
+    fail(name(a), reason); markPending(a, dueK, reason); return { done: false, error: e.message };
+  }
+  const daily = src.daily;
+  const fresh0 = src.weeklyAlready ? ENG.fromRows(daily.dates.map((d, i) => [mondayOf(d), d, daily.closes[i]])) : ENG.weeklyFromDaily(daily.dates, daily.closes, cutoff);
+  const fresh = subset(fresh0, (k) => k < cutoff);
+  /* Für die Vollständigkeit zählt der letzte (gültige) Tageskurs, der zur fälligen Woche gehört */
   const lastInWeek = daily.dates.filter((d) => mondayOf(d) === dueK).pop() || null;
   const comp = weekComplete(a, dueK, lastInWeek);
   if (!comp.ok) {
-    /* Frühere Wochen trotzdem einmischen (ohne die unvollständige) */
-    const cut = fresh.k.map((k, i) => k < dueK ? i : -1).filter((i) => i >= 0);
-    const older = { k: cut.map((i) => fresh.k[i]), d: cut.map((i) => fresh.d[i]), c: cut.map((i) => fresh.c[i]) };
-    if (older.k.length) saveSeries(a, ENG.mergeWeekly(stored, older, !!c.signal.adj), src.src);
+    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + comp.reason + ')'); return { done: true, already: true }; }
+    /* Frühere Wochen trotzdem übernehmen (ohne die unvollständige) – als Buchung, damit rückwirkende Änderungen und neue Wechsel gemeldet werden */
+    let base = stored, prevB = prev;
+    const older = subset(fresh, (k) => k < dueK);
+    if (older.k.length) {
+      const trial = mergeFor(a, stored, older, prev && prev.preliminary ? prev.k : null);
+      if (!sameSeries(stored, trial)) { const r = bookWeeks(a, stored, older, prev, older.k[older.k.length - 1], src, { ok: true }); if (r.done) { base = storedSeries(a); prevB = lastState(a); } }
+    }
+    const fb = spotFallback(a, base, prevB, dueK, comp.reason); if (fb) return fb;
     markPending(a, dueK, comp.reason + (src.fallback ? ' (Ersatzquelle)' : ''));
     note(name(a) + ': Wochenschluss ' + ds(addDays(dueK, c.week === 'sun' ? 6 : 4)) + ' fehlt noch (' + comp.reason + ')');
     return { done: false, pending: true };
   }
-  const merged = ENG.mergeWeekly(stored, fresh, !!c.signal.adj);
-  const E = ENG.evalRule(merged, c.rule);
-  if (E.st.length < 60) { fail(name(a), 'zu wenige Wochen: ' + E.st.length); return { done: false }; }
-  saveSeries(a, merged, src.src);
-  /* Neue Wechsel seit dem letzten verarbeiteten Stand */
-  const prevK = prev && prev.k ? prev.k : (stored.k.length ? stored.k[stored.k.length - 1] : null);
-  const newSw = E.sw.filter((s) => prevK == null || s.k > prevK);
-  newSw.forEach((s) => {
-    const txt = switchText(a, s), id = 'sig-' + a + '-' + s.d;
-    if (addEvent({ id, kind: s.to === 1 ? 'kauf' : 'verkauf', a, k: s.k, d: s.d, title: txt.title, text: txt.body, c: round(s.c, 4), m: round(s.m, 4) })) {
-      queuePush({ id, title: txt.title, body: txt.body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
-    }
-  });
-  const L = E.last, thr = ENG.flipThreshold(E, c.rule);
-  /* Vorläufiger Schluss (aus dem Quote) wurde durch den endgültigen ersetzt: nur melden, wenn sich die Regel dadurch ändert */
-  if (already && prev.preliminary) {
-    if (src.preliminary) { vlog(a + ': Schluss weiterhin vorläufig (' + src.preliminary + ')'); }
-    else if (prev.st !== L.st) {
-      const id = 'korr-' + a + '-' + L.d, body = 'Endgültiger Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' statt vorläufig ' + usd(a, prev.c) + '. Laut Regel jetzt ' + (L.st === 1 ? 'investiert' : 'Cash') + '.';
-      if (addEvent({ id, kind: L.st === 1 ? 'kauf' : 'verkauf', a, k: L.k, d: L.d, title: name(a) + ': Korrektur des Wochenschlusses', text: body, c: round(L.c, 4), m: round(L.m, 4) })) queuePush({ id, title: name(a) + ': Korrektur', body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
-    } else note(name(a) + ': endgültiger Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' bestätigt den vorläufigen Stand');
-  }
-  /* Rückwirkende Datenänderung: Liefert die Quelle für schon gebuchte Wochen andere Schlüsse, kann sich der Regelzustand nachträglich ändern.
-     Das wird protokolliert; dreht dadurch der aktuelle Zustand ohne frisches Signal, gibt es eine Nachricht. */
-  if (prevK && stored.k.length) {
-    const E0 = ENG.evalRule(stored, c.rule), changed = [];
-    for (let i = 0; i < stored.k.length; i++) { const k = stored.k[i]; if (k > prevK) continue; const j = merged.k.indexOf(k); if (j >= 0 && E0.st[i] != null && E.st[j] != null && E0.st[i] !== E.st[j]) changed.push(k); }
-    if (changed.length) {
-      const flip = prev && prev.st != null && prev.st !== L.st && !newSw.length && !(already && prev.preliminary);
-      const id = 'rev-' + a + '-' + L.d, body = 'Die Kursquelle (' + src.src + ') liefert für ' + changed.length + ' frühere Woche(n) andere Schlüsse (ab ' + ds(changed[0]) + '); der Regelzustand dieser Wochen ist rückwirkend anders.' + (flip ? ' Laut Regel jetzt ' + (L.st === 1 ? 'investiert' : 'Cash') + ' statt ' + (prev.st === 1 ? 'investiert' : 'Cash') + '.' : ' Der aktuelle Zustand bleibt ' + (L.st === 1 ? 'investiert' : 'Cash') + '.');
-      if (addEvent({ id, kind: flip ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': Datenrevision', text: body, c: round(L.c, 4), m: round(L.m, 4) }) && flip) queuePush({ id, title: name(a) + ': Datenrevision', body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() });
-      note(name(a) + ': Datenrevision, ' + changed.length + ' Woche(n) rückwirkend anders' + (flip ? ', ZUSTAND GEDREHT' : ''));
-    }
-  }
-  const edge = Math.abs(L.c / (c.rule.type === 'band' ? L.m * (L.st === 1 ? 1 - c.rule.p : 1 + c.rule.p) : L.m) - 1) < (CFG.edge ? CFG.edge.pct : 0.005);
-  if (edge && !newSw.length) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle (SMA50 ' + usd(a, L.m) + '). Quelle: ' + src.src + '.' });
-  STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: src.preliminary || null });
-  RUN.changed = true;
-  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + (L.st ? 'investiert' : 'Cash') + (newSw.length ? ', SIGNALWECHSEL' : '') + (src.preliminary ? ' (vorläufig aus dem Quote)' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : ''));
-  return { done: true, E, newSw };
+  return bookWeeks(a, stored, fresh, prev, dueK, src, comp);
 }
 function markPending(a, k, reason) {
-  STATE.assets[a] = Object.assign({}, STATE.assets[a] || {}, { pending: { k, reason, at: NOW.toISOString() } });
+  STATE.assets[a] = Object.assign({}, STATE.assets[a] || {}, { pending: { k, reason: mask(reason), at: NOW.toISOString() } });
   RUN.changed = true;
 }
 function saveSeries(a, S, src) {
@@ -364,13 +485,13 @@ function lbmaRatio(pm, ref) {
 async function currentPrice(a) {
   const c = CFG.assets[a];
   if (a === 'gold') {
-    /* LBMA hat keinen Live-Kurs: COMEX-Future (Yahoo) oder Spot (Stooq) mit dem Verhältnis zur LBMA skalieren */
-    const pm = await F.lbma(c.signal.fix || 'pm');
+    /* LBMA hat keinen Live-Kurs: Spotpreis (gold-api, goldprice.org), sonst das heutige Vormittagsfixing, zuletzt der COMEX-Future
+       mit dem Verhältnis zur LBMA. Die LBMA-Reihe wird erst im letzten Schritt gebraucht, damit ein LBMA-Ausfall die Vorwarnung nicht verhindert. */
     return firstOk('Gold', [
       async function spot2() { const q = await F.goldSpot2(); return { price: q.price, priceTime: q.priceTime, note: 'Spotpreis (gold-api.com)', src: q.src }; },
       async function lbmaAm() { const am = await F.lbma('am'); const i = am.dates.length - 1; if (am.dates[i] !== TODAY) throw new Error('Vormittagsfixing von heute noch nicht da (' + am.dates[i] + ')'); return { price: am.closes[i], priceTime: TODAY + 'T09:30:00Z', note: 'LBMA-Vormittagsfixing von heute', src: am.src }; },
       async function spot1() { const q = await F.goldSpot1(); return { price: q.price, priceTime: q.priceTime, note: 'Spotpreis (goldprice.org)', src: q.src }; },
-      async function yahooComex() { const g = await F.yahoo(c.cross.sym, { range: '1mo' }); const ratio = lbmaRatio(pm, g); if (!ratio || !(g.price > 0)) throw new Error('kein Verhältnis oder Kurs'); return { price: g.price * ratio, priceTime: g.priceTime, note: 'geschätzt aus dem COMEX-Future ' + usd(a, g.price) + ' × ' + de(ratio, 4), src: g.src + ' × lbma ratio' }; }
+      async function yahooComex() { const pm = await F.lbma(c.signal.fix || 'pm'); const g = await F.yahoo(c.cross.sym, { range: '1mo' }); const ratio = lbmaRatio(pm, g); if (!ratio || !(g.price > 0)) throw new Error('kein Verhältnis oder Kurs'); return { price: g.price * ratio, priceTime: g.priceTime, note: 'geschätzt aus dem COMEX-Future ' + usd(a, g.price) + ' × ' + de(ratio, 4), src: g.src + ' × lbma ratio' }; }
     ]);
   }
   if (a === 'btc') {
@@ -523,13 +644,32 @@ async function goldDailyFallback() {
 
 /* ---------- Live-Ticker (stündlich): aktuelle Kurse und Abstand zur Wochenschluss-Schwelle ----------
    Bitcoin und Gold laufend (Coinbase, gold-api), EUR/USD laufend (Coinbase-Wechselkurs), FTSE nur mit dem letzten Tagesschluss (Alpha Vantage, im eod-Lauf). */
+/* Offene Woche: die erste Woche, deren Schluss noch aussteht. FTSE und Gold: nach dem Freitagsschluss (und am Wochenende) die nächste Woche;
+   Bitcoin: die Woche endet Sonntag 24 Uhr UTC. Fehlt die zuletzt geschlossene Woche noch in der Reihe (Buchung steht aus), bleibt sie die
+   offene Woche; der aktuelle Kurs steht dann für ihren Schluss. */
+function openWeek(a, stored) {
+  const cal = dueCutoff(a), last = stored.k.length ? stored.k[stored.k.length - 1] : null, next = last ? addDays(last, 7) : cal;
+  return next < cal ? next : cal;
+}
 function ruleNow(a, price) {
-  const c = CFG.assets[a], stored = storedSeries(a);
-  const cut = stored.k.map((k, i) => k < THIS_MON ? i : -1).filter((i) => i >= 0);
-  const S = { k: cut.map((i) => stored.k[i]), d: cut.map((i) => stored.d[i]), c: cut.map((i) => stored.c[i]) };
+  const c = CFG.assets[a], stored = storedSeries(a), openK = openWeek(a, stored);
+  const S = subset(stored, (k) => k < openK);
   if (S.k.length < 60 || !(price > 0)) return null;
-  const E = ENG.evalRule(S, c.rule), ft = ENG.flipThreshold(E, c.rule), E2 = ENG.whatIf(S, c.rule, TODAY, price);
-  return { thr: round(ft.thr, 4), dist: round(price / ft.thr - 1, 6), can: ft.can, need: ft.need || null, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, sma: round(E.last.m, 4), up: E2.last.up, dn: E2.last.dn, week: THIS_MON };
+  const E = ENG.evalRule(S, c.rule), ft = ENG.flipThreshold(E, c.rule), E2 = ENG.whatIf(S, c.rule, addDays(openK, c.week === 'sun' ? 6 : 4), price);
+  return { thr: round(ft.thr, 4), dist: round(price / ft.thr - 1, 6), can: ft.can, need: ft.need || null, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, sma: round(E.last.m, 4), up: E2.last.up, dn: E2.last.dn, week: openK, closePending: openK < dueCutoff(a) };
+}
+/* Gold: den ersten Spotpreis nach dem LBMA-Nachmittagsfixing (Freitag 15 Uhr London) festhalten; er dient als vorläufiger Wochenschluss,
+   falls das Fixing am Montagmorgen noch fehlt (spotFallback). Nur Kurse aus dem Fenster 15:02 bis 17:00 Uhr London, damit er nah am Fixing liegt. */
+function recordGoldSnap(g) {
+  if (!CFG.assets.gold.signal.spotFallback || !g || !(g.price > 0)) return;
+  const t = g.priceTime || NOW.toISOString(), L = londonAt(t);
+  if (L.dow !== 4 || isHolidayFriday(L.d) || L.m < 15 * 60 + 2 || L.m > 17 * 60) return;
+  if (londonAt(NOW).d !== L.d) return;                                   /* nur ein frischer Kurs vom selben Tag */
+  const k = mondayOf(L.d), cur = STATE.goldSnap;
+  if (cur && cur.k === k) return;                                        /* der erste Kurs nach dem Fixing zählt */
+  STATE.goldSnap = { k, d: L.d, p: round(g.price, 2), t, src: String(g.src || '').replace(/ XAU\/USD spot$/, '') };
+  RUN.changed = true;
+  note('Gold: Spotpreis nach dem Fixing festgehalten, ' + usd('gold', g.price) + ' (' + t.slice(11, 16) + ' UTC), Ersatz für den Wochenschluss, falls das LBMA-Fixing bis Montagmorgen fehlt');
 }
 async function liveTick() {
   const prev = loadJson('live.json', { prices: {} }), out = { t: NOW.toISOString(), prices: {}, rule: {} };
@@ -546,6 +686,7 @@ async function liveTick() {
   } catch (e) { fail('Live Bitcoin', e.message); if (prev.prices && prev.prices.btc) out.prices.btc = prev.prices.btc; }
   try {
     let g = null; try { g = await F.goldSpot2(); } catch (e) { g = await F.goldSpot1(); }
+    recordGoldSnap(g);
     const cb = calib('gold');
     out.prices.gold = { usd: round(g.price, 2), eur: !lsCfg('gold') && fx && cb ? round(g.price / fx.rate * cb.ratio, 4) : null, src: g.src, t: g.priceTime || NOW.toISOString(), spot: true };
   } catch (e) {
@@ -589,7 +730,7 @@ async function ftseEod() {
   try {
     /* Alpha Vantage hängt oft einen Tag zurück oder ist nicht erreichbar: Ist der gespeicherte Wochenschluss (z. B. von EODHD) neuer, gilt der */
     let d = null, c = null, src = null, avErr = null;
-    try { const r = await F.av('VWRD.LON'), i = r.dates.length - 1; d = r.dates[i]; c = r.closes[i]; src = r.src; } catch (e) { avErr = e; }
+    try { const r = cleanDaily(await F.av('VWRD.LON')), i = r.dates.length - 1; if (i < 0) throw new Error('keine gültigen Schlüsse'); d = r.dates[i]; c = r.closes[i]; src = r.src; } catch (e) { avErr = e; }
     const S = storedSeries('ftse'), j = S.k.length - 1;
     if (j >= 0 && (!d || S.d[j] > d)) { d = S.d[j]; c = S.c[j]; src = 'Wochenschluss ' + ds(d) + (WEEKLY.ftse && /EODHD/.test(WEEKLY.ftse.src || '') ? ' (EODHD)' : ''); }
     if (!d) throw avErr || new Error('keine Daten');
@@ -640,8 +781,10 @@ function weeklySummary() {
   const parts = A.map((a) => { const s = STATE.assets[a]; return s ? CFG.assets[a].short + ' ' + (s.st ? 'investiert' : 'Cash') : null; }).filter(Boolean);
   const sig = EVENTS.filter((e) => (e.kind === 'kauf' || e.kind === 'verkauf') && e.k >= addDays(THIS_MON, -7));
   const pend = A.filter((a) => STATE.assets[a] && STATE.assets[a].pending).map((a) => name(a));
+  const prel = A.filter((a) => STATE.assets[a] && !STATE.assets[a].pending && STATE.assets[a].preliminary).map((a) => name(a) + ' (' + (STATE.assets[a].prelimLabel || 'vorläufiger Kurs') + ')');
   let body = parts.join(' · ') + '. ' + (sig.length ? sig.map((e) => e.title).join('; ') + '.' : 'Keine neuen Signale.');
   (CFG.oneTimeHints || []).forEach((h) => { if (h.date === TODAY && STATE.assets[h.asset] && STATE.assets[h.asset].st === h.ifState) body += ' ' + h.text; });
+  if (prel.length) body += ' Vorläufig: ' + prel.join('; ') + '.';
   if (pend.length) body += ' Noch offen: ' + pend.join(', ') + '.';
   addEvent({ id, kind: 'info', a: null, k: THIS_MON, d: TODAY, title: 'Wochenstart ' + ds(THIS_MON), text: body });
   queuePush({ id, title: 'Regel-Depot · Wochenstart ' + ds(THIS_MON), body, tag: 'week', url: './#status', ts: NOW.toISOString() });
@@ -772,6 +915,6 @@ async function main() {
   saveJson('runs.json', RUNS);
   if (SRC.yahooStatus && SRC.yahooStatus.calls) { RUN.yahoo = { calls: SRC.yahooStatus.calls, failures: SRC.yahooStatus.failures, blocked: SRC.yahooStatus.blocked }; RUNS[0].yahoo = RUN.yahoo; saveJson('runs.json', RUNS); }
   log((RUN.ok ? 'OK' : 'MIT FEHLERN') + ' · ' + RUN.summary.length + ' Punkte · ' + RUN.errors.length + ' Fehler' + (RUN.yahoo ? ' · Yahoo ' + RUN.yahoo.calls + ' Abrufe, ' + RUN.yahoo.failures + ' Fehler' + (RUN.yahoo.blocked ? ', gesperrt' : '') : ''));
-  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'ok=' + (RUN.ok ? 'true' : 'false') + '\nsummary=' + RUN.summary.join(' | ').replace(/\n/g, ' ').slice(0, 900) + '\n');
+  if (process.env.GITHUB_OUTPUT) fs.appendFileSync(process.env.GITHUB_OUTPUT, 'ok=' + (RUN.ok ? 'true' : 'false') + '\nsummary=' + mask(RUN.summary.join(' | ').replace(/\n/g, ' ')).slice(0, 900) + '\n');
 }
 main().catch((e) => { console.error(e); process.exit(1); });
