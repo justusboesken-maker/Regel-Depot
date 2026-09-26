@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-25T23:41:19.229Z",
+ "updated": "2026-09-26T01:50:56.999Z",
  "assets": {
   "ftse": {
    "k": "2026-09-21",
@@ -102,7 +102,11 @@
    "src": "lbma gold pm usd",
    "fallback": false,
    "primaryError": null,
-   "pending": null,
+   "pending": {
+    "k": "2026-09-21",
+    "reason": "Kursabruf fehlgeschlagen: LBMA HTTP 403",
+    "at": "2026-09-26T01:50:56.999Z"
+   },
    "holiday": false,
    "partial": false,
    "edge": false,
@@ -137,6 +141,6 @@
   }
  },
  "queue": [],
- "step": "eod",
+ "step": "sa-close",
  "pendingQueue": 0
 }
