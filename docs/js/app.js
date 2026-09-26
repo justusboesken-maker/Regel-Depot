@@ -575,7 +575,7 @@
     perfRangeLabels(cmp);
     if (cmp) { drawCompare(Mo); return; }
     if ($('perfDD')) { $('perfDD').hidden = true; $('perfDD').textContent = ''; }
-    resetKeys(host);
+    resetKeys(host); dropSyncTip();
     host.setAttribute('aria-label', (PERF.mode === 'wert' ? 'Wert' : 'Gewinn oder Verlust') + ' des Depots und der Bausteine');
     var series = [{ key: 'total', label: 'Depot gesamt' }, { key: 'ftse', label: 'FTSE-Baustein', colorVar: '--ftse' }, { key: 'btc', label: 'Bitcoin-Baustein', colorVar: '--btc' }, { key: 'gold', label: 'Gold-Baustein', colorVar: '--gold' }];
     var est = Mo.dep.tx.filter(function (t) { return t.est; }).map(function (t) { return (({ btc: 'Bitcoin', ftse: 'VWCE', gold: 'Gold-ETC' })[t.a] || INFO(t.a).short) + ' ' + dDE(t.d); });
@@ -660,6 +660,8 @@
   }
   /* Tastatur-Bedienung, die der Vergleich auf #chPerf setzt, in den anderen Ansichten wieder entfernen */
   function resetKeys(host) { host.removeAttribute('tabindex'); host.onkeydown = null; host.onfocus = null; host.onblur = null; }
+  /* Gemeinsame Anzeige des Vergleichs (liegt in der Karte) beim Wechsel der Ansicht entfernen */
+  function dropSyncTip() { var card = $('perfCard'); if (card) Array.prototype.forEach.call(card.querySelectorAll(':scope > .tip.sync'), function (t) { t.remove(); }); }
   function drawCompare(Mo) {
     var host = $('chPerf'), box = $('perfDD'), leg = $('perfLegend'), cap = $('perfCap');
     host.textContent = ''; box.textContent = ''; leg.textContent = ''; cap.textContent = '';
@@ -678,14 +680,16 @@
     cap.textContent = capText;
     if (c.wait || few) {
       var why = c.wait || ('Im Zeitraum „' + w.label + '“ gibt es noch keine zwei Tagespunkte. Wähl einen längeren Zeitraum oder „Alles“.');
-      box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', why)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + why); return;
+      box.hidden = true; resetKeys(host); dropSyncTip(); host.appendChild(el('p', 'small muted', why)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + why); return;
     }
     var n = w.dates.length, pM = w.pM, pB = w.pB, narrow = (host.clientWidth || 700) < 560, since = (w.cut ? w.label + ' ab ' : 'seit ') + dDE(w.dates[0]);
     function pp(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' Prozentpunkte'; }
+    /* Eine Anzeige über beide Charts (Justus 26.09.2026, Entwurf A): gleicher Tag oben und im Drawdown */
+    var G = CH.syncGroup($('perfCard'));
     CH.pctChart(host, w.dates, [
       { vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot' },
       { vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
-    ], { height: narrow ? 230 : 280, ends: true,
+    ], { height: narrow ? 230 : 280, ends: true, sync: G,
       sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
       aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
@@ -694,7 +698,7 @@
     CH.pctChart(ddCh, w.dates, [
       { vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
       { vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
-    ], { height: narrow ? 140 : 160, dd: true, ends: true, aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
+    ], { height: narrow ? 140 : 160, dd: true, ends: true, sync: G, title: 'Drawdown', aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
     /* Kennzahlen */
     var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody');
     t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich, ' + since));
