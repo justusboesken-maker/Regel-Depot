@@ -1,9 +1,9 @@
 /* Regel-Depot – Depotdaten im Browser (localStorage), Import und Export.
-   Schema: {version:1, tx:[{id,d,a,type,units,price,fee,est,note,ts}], cash:{ftse,btc,gold}, tax:{…}, meta:{…}} */
+   Schema: {version:1, tx:[{id,d,a,type,units,price,fee,est,note,ts}], cash:{ftse,btc,gold}, cashDate:'JJJJ-MM-TT' (seit wann das Cash so feststeht), tax:{…}, meta:{…}} */
 (function (root) {
   'use strict';
   var KEY = 'regelDepot.v1';
-  var EMPTY = { version: 1, tx: [], cash: { ftse: 0, btc: 0, gold: 0 }, tax: {}, meta: {} };
+  var EMPTY = { version: 1, tx: [], cash: { ftse: 0, btc: 0, gold: 0 }, cashDate: '', tax: {}, meta: {} };
   var listeners = [];
   var mem = null; /* Fallback, wenn localStorage nicht geht */
 
@@ -18,6 +18,7 @@
       return { id: String(t.id || ('tx' + Date.now() + '-' + i)), d: String(t.d).slice(0, 10), a: t.a, type: cashMove ? t.type : (t.type === 'verkauf' ? 'verkauf' : 'kauf'), units: cashMove ? 0 : +t.units, price: cashMove ? 0 : +t.price, amount: cashMove ? +t.amount : 0, fee: +t.fee || 0, est: !!t.est, note: t.note ? String(t.note).slice(0, 300) : '', ts: +t.ts || 0 };
     });
     if (o.cash && typeof o.cash === 'object') ['ftse', 'btc', 'gold'].forEach(function (a) { d.cash[a] = Math.max(0, +o.cash[a] || 0); });
+    if (o.cashDate && /^\d{4}-\d{2}-\d{2}$/.test(String(o.cashDate))) d.cashDate = String(o.cashDate);
     if (o.tax && typeof o.tax === 'object') d.tax = clone(o.tax);
     if (o.meta && typeof o.meta === 'object') d.meta = clone(o.meta);
     return d;

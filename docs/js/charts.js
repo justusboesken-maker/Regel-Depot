@@ -190,18 +190,22 @@
   /* ---------- Portfolio-Chart: Gesamtdepot und Bausteine je Woche ----------
      pts: [{k, d, total, gainTotal, parts:{a:{val, cash, interest, gain, cost}}}], mode 'wert'|'gewinn',
      series: [{key:'total'|a, label, colorVar}] */
-  function portfolioChart(host, leg, cap, pts, mode, series, capText) {
-    host.textContent = ''; leg.textContent = ''; cap.textContent = '';
+  /* Depotverlauf in Euro. mode: 'gewinn' oder 'wert'. series: [{key, label, colorVar}], key 'total' = Gesamtdepot.
+     opts: {height} (Höhe in px), {legend:false} (keine Legende schreiben) */
+  function portfolioChart(host, leg, cap, pts, mode, series, capText, opts) {
+    opts = opts || {};
+    host.textContent = ''; if (leg && opts.legend !== false) leg.textContent = ''; if (cap) cap.textContent = '';
     if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
     var n = pts.length;
     var col = { grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface') };
-    function val(s, q) { if (s.key === 'total') return mode === 'wert' ? q.total : q.gainTotal; var pt = q.parts[s.key]; if (!pt) return null; return mode === 'wert' ? pt.val + pt.cash + pt.interest : pt.gain; }
-    series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : col.ink; if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
-    var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = narrow ? 240 : 300;
+    function val(s, q) { if (s.key === 'total') return mode === 'wert' ? q.total : q.gainTotal; var pt = q.parts[s.key]; if (!pt) return null; return mode === 'wert' ? pt.val + pt.cash : pt.gain; }
+    if (leg && opts.legend !== false) series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : col.ink; if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
+    var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = opts.height || (narrow ? 240 : 300);
     var m = { t: 14, r: narrow ? 74 : 92, b: 30, l: narrow ? 66 : 80 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
     pts.forEach(function (q) { series.forEach(function (s) { var v = val(s, q); if (v == null) return; if (v < lo) lo = v; if (v > hi) hi = v; }); });
+    if (!isFinite(lo)) { lo = 0; hi = 1; }
     if (mode === 'gewinn') { lo = Math.min(lo, 0); hi = Math.max(hi, 0); } else lo = Math.min(lo, 0);
     var pad = (hi - lo) * 0.08 || Math.max(10, Math.abs(hi) * 0.05); lo -= (mode === 'gewinn' ? pad : 0); hi += pad;
     function X(i) { return m.l + (n <= 1 ? 0 : i / (n - 1)) * iw; }
@@ -215,7 +219,8 @@
     else { pts.forEach(function (q, i) { var ymd = ENG.addDays(q.k, 4).slice(0, 7); if (prevM !== null && ymd !== prevM) tks.push({ i: i, l: MON[+ymd.slice(5) - 1] + (ymd.slice(5) === '01' ? ' ' + ymd.slice(2, 4) : '') }); prevM = ymd; }); if (tks.length > 8) { var st = Math.ceil(tks.length / 7); tks = tks.filter(function (t, k) { return k % st === 0; }); } }
     tks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: m.t + ih, y2: m.t + ih + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: m.t + ih + 18, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
     var ends = [];
-    series.slice().reverse().forEach(function (s) {
+    /* Gesamtlinie zuerst zeichnen (liegt unten), damit ein Baustein sichtbar bleibt, wo er allein das Depot ausmacht */
+    series.slice().sort(function (a, b) { return (a.key === 'total' ? 0 : 1) - (b.key === 'total' ? 0 : 1); }).forEach(function (s) {
       var d = '', started = false, last = null, color = s.colorVar ? css(s.colorVar) : col.ink;
       pts.forEach(function (q, i) { var v = val(s, q); if (v == null) { started = false; return; } d += (started ? 'L' : 'M') + X(i).toFixed(1) + ',' + Y(v).toFixed(1); started = true; last = { i: i, v: v }; });
       if (!d) return;
@@ -236,8 +241,9 @@
       tip.textContent = ''; tip.appendChild(el('div', 'd', (i === n - 1 ? 'Stand ' : daily ? 'Tag ' : 'Wochenschluss ') + dDE(q.d)));
       series.forEach(function (s, si) { var v = val(s, q); if (v == null) { dots[si].setAttribute('visibility', 'hidden'); return; } dots[si].setAttribute('cx', x); dots[si].setAttribute('cy', Y(v)); dots[si].setAttribute('visibility', 'visible'); tipRow(tip, s.colorVar ? css(s.colorVar) : col.ink, mode === 'gewinn' ? sgnEur(v) : eur(v), s.label); });
       var sub = el('div', 's');
-      var cashT = 0, intT = 0, valT = 0; Object.keys(q.parts).forEach(function (a) { cashT += q.parts[a].cash; intT += q.parts[a].interest; valT += q.parts[a].val; });
-      sub.textContent = 'Positionen ' + eur(valT) + ' · Cash ' + eur(cashT) + ' · Zinsen ' + eur(intT) + (mode === 'wert' ? ' · Gewinn ' + sgnEur(q.gainTotal) : ' · Wert ' + eur(q.total)); tip.appendChild(sub);
+      if (series.length === 1 && series[0].key !== 'total') { var pt = q.parts[series[0].key]; if (pt) sub.textContent = 'Position ' + eur(pt.val) + ' · Cash ' + eur(pt.cash) + (pt.interest > 0.5 ? ' · davon Zinsen ' + eur(pt.interest) : '') + (mode === 'wert' ? ' · Gewinn ' + sgnEur(pt.gain) : ' · Wert ' + eur(pt.val + pt.cash)); }
+      else { var cashT = 0, intT = 0, valT = 0; Object.keys(q.parts).forEach(function (a) { cashT += q.parts[a].cash; intT += q.parts[a].interest; valT += q.parts[a].val; }); sub.textContent = 'Positionen ' + eur(valT) + ' · Cash ' + eur(cashT) + (intT > 0.5 ? ' · davon Zinsen ' + eur(intT) : '') + (mode === 'wert' ? ' · Gewinn ' + sgnEur(q.gainTotal) : ' · Wert ' + eur(q.total)); }
+      tip.appendChild(sub);
       placeTip(tip, host, W, x, m.t);
     }
     function hide() { cross.setAttribute('visibility', 'hidden'); dots.forEach(function (d) { d.setAttribute('visibility', 'hidden'); }); tip.style.opacity = '0'; }
@@ -245,10 +251,22 @@
     hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
     host.tabIndex = 0; host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); }; host.onfocus = function () { show(cur); }; host.onblur = hide;
     var last = pts[n - 1];
-    host.setAttribute('aria-label', mode === 'wert' ? 'Depotwert je Woche, zuletzt ' + eur(last.total) : 'Gewinn je Woche, zuletzt ' + sgnEur(last.gainTotal));
-    cap.textContent = capText || '';
+    host.setAttribute('aria-label', (series.length === 1 ? series[0].label : 'Bausteine') + ': ' + (mode === 'wert' ? 'Wert, zuletzt ' + eur(val(series[0], last) || 0) : 'Gewinn, zuletzt ' + sgnEur(val(series[0], last) || 0)));
+    if (cap) cap.textContent = capText || '';
   }
-
-  root.CH = { ruleChart: ruleChart, donut: donut, perfChart: perfChart, portfolioChart: portfolioChart, mk: mk, el: el, css: css };
+  /* Zwei Charts untereinander: oben das Gesamtdepot, darunter die drei Bausteine gemeinsam (eigene Euro-Skala, damit ihre Bewegung erkennbar bleibt) */
+  function portfolioSplit(host, leg, cap, pts, mode, series, capText) {
+    host.textContent = ''; if (leg) leg.textContent = ''; if (cap) cap.textContent = '';
+    if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
+    var total = series.filter(function (s) { return s.key === 'total'; }), parts = series.filter(function (s) { return s.key !== 'total'; });
+    var wrap = el('div', 'splitcharts'); host.appendChild(wrap);
+    function block(title, ser, height) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false }); }
+    var narrow = (host.clientWidth || 700) < 560;
+    block('Depot gesamt', total, narrow ? 200 : 230);
+    block('Bausteine', parts, narrow ? 220 : 260);
+    if (leg) series.forEach(function (s) { var sp = el('span'), i = el('i'); i.style.borderTopColor = s.colorVar ? 'var(' + s.colorVar + ')' : css('--ink'); if (s.key === 'total') i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(s.label)); leg.appendChild(sp); });
+    if (cap) cap.textContent = capText || '';
+  }
+  root.CH = { ruleChart: ruleChart, donut: donut, perfChart: perfChart, portfolioChart: portfolioChart, portfolioSplit: portfolioSplit, mk: mk, el: el, css: css };
   root.FMT = { de: de, eur: eur, sgnEur: sgnEur, pct: pct, pctPlain: pctPlain, dDE: dDE, dShort: dShort, dtDE: dtDE, MON: MON };
 })(window);

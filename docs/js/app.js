@@ -423,14 +423,16 @@
        Käufe vor dem Regelstart gelten als von außen bezahlt (Kraken, Überweisungen); davor ist das Cash so hoch wie heute, ohne Zinsen.
        Ein Baustein zählt erst ab seiner ersten Buchung; Bausteine ohne Buchungen (nur Cash) zählen ab dem Beginn der Reihe. */
     var START = (CFG.trading && CFG.trading.start) || '2026-09-28', rate = Mo.cfg.cashRate || 0;
+    /* Das eingetragene Cash gilt ab „Stand vom“ (cashDate); ohne Datum erst ab dem Regelstart. Davor nimmt die Seite kein Cash an. */
+    var CASH_FROM = Mo.dep.cashDate || START;
     var cashTx = tx.filter(function (t) { return t.d >= START; });
     function principalAt(a, date) { var c = Mo.cash[a] || 0; cashTx.forEach(function (t) { if (bucketOf(t.a) === a && t.d > date) c -= cashDelta(t); }); return c; }
     var cum = {}, totalI = {};
     A.forEach(function (a) { cum[a] = {}; var acc = 0, dd = START; while (dd <= today) { acc += Math.max(0, principalAt(a, dd)) * rate / 365; cum[a][dd] = acc; dd = ENG.addDays(dd, 1); } totalI[a] = acc; });
     function interestAt(a, date) { return date < START ? 0 : (cum[a][date] || 0); }
-    function cashAt(a, date) { var Pr = principalAt(a, date); return Math.max(0, Pr - (totalI[a] - interestAt(a, date))); }
+    function cashAt(a, date) { if (date < CASH_FROM) return 0; var Pr = principalAt(a, date); return Math.max(0, Pr - (totalI[a] - interestAt(a, date))); }
     var firstTx = {}; tx.forEach(function (t) { var b = bucketOf(t.a); if (!firstTx[b] || t.d < firstTx[b]) firstTx[b] = t.d; });
-    function exists(a, date) { return !firstTx[a] || date >= firstTx[a]; }
+    function exists(a, date) { return firstTx[a] ? date >= firstTx[a] : date >= CASH_FROM; }
     var pts = [];
     stamps.forEach(function (k) {
       var end = daily ? k : ENG.addDays(k, 6); if (end > today) end = today;
@@ -461,8 +463,8 @@
     else if (r === 'wochen') from = ENG.addDays(today, -364);
     else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
     var startD = (CFG.trading && CFG.trading.start) || '2026-09-28';
-    var capText = note + 'Baustein = Position plus Cash, ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash ab dem Regelstart ' + dDE(startD) + ' aus den Buchungen zurückgerechnet und mit ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. verzinst (geschätzt); Käufe davor gelten als von außen bezahlt, das Cash davor entspricht dem heutigen. Ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
-    CH.portfolioChart(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
+    var capText = note + 'Baustein = Position plus Cash, ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash ab dem Regelstart ' + dDE(startD) + ' aus den Buchungen zurückgerechnet und mit ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. verzinst (geschätzt); Käufe davor gelten als von außen bezahlt. Cash zählt ab dem Stand-Datum aus den Einstellungen' + (Mo.dep.cashDate ? ' (' + dDE(Mo.dep.cashDate) + ')' : '') + ', davor nimmt die Seite kein Cash an. Ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    CH.portfolioSplit(host, leg, cap, Mo.ready ? perfSeries(Mo, grid, from) : null, PERF.mode, series, capText);
   }
 
   /* ---------- Signale: Verlauf, Push, Zeitplan, Läufe ---------- */
@@ -647,7 +649,7 @@
   function fillForms(Mo) {
     var t = Mo.cfg, c = Mo.cash;
     if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? t.pbUsed : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = t.interestRest || 0; $('tLoss').value = t.lossOther || 0; $('tS23').value = t.s23Other || 0; $('tRate').value = t.rateKnown ? String(Math.round(t.rate * 1000) / 10) : ''; $('tHead').value = t.headroom == null ? '' : t.headroom; $('tNv').checked = !!t.nv; $('tBuf').value = t.buffer; $('tMin').value = t.minOrder; $('tReb').value = t.rebalDate || ''; $('tCashRate').value = String(Math.round((t.cashRate || 0) * 10000) / 100); }
-    if (!formDirty.cash) { $('cFtse').value = (c.ftse || 0).toFixed(2); $('cBtc').value = (c.btc || 0).toFixed(2); $('cGold').value = (c.gold || 0).toFixed(2); }
+    if (!formDirty.cash) { $('cFtse').value = (c.ftse || 0).toFixed(2); $('cBtc').value = (c.btc || 0).toFixed(2); $('cGold').value = (c.gold || 0).toFixed(2); if ($('cDate')) $('cDate').value = Mo.dep.cashDate || ''; }
     $('taxYearLbl').textContent = String(t.year);
     var tn = $('taxNote'); tn.textContent = (Mo.dep.tax && Mo.dep.tax.note) || '';
     var di = $('dataInfo'), m = Mo.dep.meta || {};
@@ -667,7 +669,8 @@
       formDirty.tax = false; msg('tMsg', 'Gespeichert (in diesem Browser).'); schedule(); });
     $('cashForm').addEventListener('submit', function (e) { e.preventDefault();
       var c = { ftse: num('cFtse') || 0, btc: num('cBtc') || 0, gold: num('cGold') || 0 }; if (c.ftse < 0 || c.btc < 0 || c.gold < 0) { msg('cMsg', 'Cash kann nicht negativ sein.', true); return; }
-      STORE.update(function (d) { d.cash = c; }); formDirty.cash = false; msg('cMsg', 'Gespeichert (in diesem Browser).'); schedule(); });
+      var cd = $('cDate') && $('cDate').value ? $('cDate').value : todayISO();
+      STORE.update(function (d) { d.cash = c; d.cashDate = cd; }); formDirty.cash = false; msg('cMsg', 'Gespeichert (in diesem Browser). Der Depotverlauf zeigt dieses Cash ab ' + dDE(cd) + '.'); schedule(); });
     function syncTxForm() { var cashMove = $('fType').value === 'einzahlung' || $('fType').value === 'auszahlung'; $('lUnits').hidden = cashMove; $('lFee').hidden = cashMove; $('lPriceText').textContent = cashMove ? 'Betrag in €' : 'Kurs je Stück in €'; }
     $('fType').addEventListener('change', syncTxForm); syncTxForm();
     $('txForm').addEventListener('submit', function (e) { e.preventDefault();
