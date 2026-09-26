@@ -278,7 +278,7 @@
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); left.appendChild(el('p', 'sub', m.ruleName + ' · Signal ' + (m.signal.sym || 'LBMA') + ' (USD) · Depot ' + (a === 'btc' ? 'Bitcoin' + (hasAlts(Mo) ? ' + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') : '') : a === 'ftse' ? 'VWCE' : 'WisdomTree Gold'))); hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
-      var bigBtn = el('button', 'btn sm ghost bigbtn', 'Groß anzeigen'); bigBtn.type = 'button'; bigBtn.setAttribute('aria-label', m.name + ' in Großansicht öffnen'); bigBtn.setAttribute('data-big', a); bigBtn.addEventListener('click', function () { openBig(a); }); right.appendChild(bigBtn); hd.appendChild(right);
+      hd.appendChild(right);
       top.appendChild(hd);
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
@@ -301,7 +301,7 @@
       var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); mid.appendChild(ab);
       card.appendChild(mid);
       /* Werte-Zeile über dem Chart (Justus 26.09.2026): zeigt die Woche unter dem Zeiger, sonst den letzten Wochenschluss */
-      var cw = el('div', 'cchart'), rdl = el('div', 'chart-legend readout rule-rd'), ch = el('div', 'chart'); rdl.id = 'rd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); cw.appendChild(rdl); cw.appendChild(ch); card.appendChild(cw);
+      var cw = el('div', 'cchart'), rdl = el('div', 'chart-legend readout rule-rd'), ch = el('div', 'chart'); rdl.id = 'rd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(rdl); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
@@ -313,12 +313,29 @@
     drawCharts();
   }
   /* ---------- Großansicht ---------- */
-  var BIG = { a: null, range: null };
-  /* Schließen gibt den Fokus an den Knopf zurück, der die Großansicht geöffnet hat (auch wenn die Karte inzwischen neu gezeichnet wurde) */
+  var BIG = { a: null, range: null, t0: 0, key: false };
+  /* Schließen: wurde die Großansicht mit der Tastatur geöffnet, geht der Fokus zurück an den Chart (auch wenn die Karte inzwischen neu gezeichnet wurde) */
   function closeBig() {
-    var mo = $('bigModal'); if (!mo) return; var a = BIG.a;
-    mo.hidden = true; document.body.style.overflow = ''; BIG.a = null;
-    var back = a && document.querySelector('[data-big="' + a + '"]'); if (back) { try { back.focus(); } catch (e) { /* still */ } }
+    var mo = $('bigModal'); if (!mo) return; var a = BIG.a, key = BIG.key;
+    mo.hidden = true; document.body.style.overflow = ''; BIG.a = null; BIG.key = false;
+    var back = key && a && $('ch-' + a); if (back) { try { back.focus(); } catch (e) { /* still */ } }
+  }
+  /* Klicks direkt nach dem Öffnen (zweiter Tipp eines Doppeltippens) schließen nicht gleich wieder */
+  function closeBigClick() { if (performance.now() - BIG.t0 > 400) closeBig(); }
+  /* Großansicht per Doppelklick (Maus), Doppeltippen (Touch, Stift) oder Eingabetaste auf dem Chart einer Status-Karte (Justus 26.09.2026) */
+  function bindBigOpen(host, a) {
+    var pt = 'mouse', last = 0, lx = 0, ly = 0;
+    function open(key) { if (BIG.a) return; openBig(a, key); }
+    host.addEventListener('pointerdown', function (e) { pt = e.pointerType || 'mouse'; });
+    host.addEventListener('mousedown', function (e) { if (e.detail > 1) e.preventDefault(); }); /* kein Wortmarkieren beim Doppelklick */
+    host.addEventListener('dblclick', function (e) { e.preventDefault(); open(false); });
+    host.addEventListener('click', function (e) {
+      if (pt === 'mouse') return;
+      var t = performance.now();
+      if (last && t - last < 400 && Math.abs(e.clientX - lx) < 32 && Math.abs(e.clientY - ly) < 32) { last = 0; open(false); return; }
+      last = t; lx = e.clientX; ly = e.clientY;
+    });
+    host.addEventListener('keydown', function (e) { if (e.key === 'Enter' && !e.repeat) { e.preventDefault(); open(true); } });
   }
   /* Fokus bleibt in der Großansicht: Tab und Umschalt+Tab laufen im Kreis */
   function trapFocus(e) {
@@ -332,14 +349,15 @@
     else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
   }
   document.addEventListener('keydown', trapFocus);
-  function openBig(a) {
+  function openBig(a, key) {
     var Mo = model(), mo = $('bigModal'), box = $('bigBox'); if (!mo) return;
-    BIG.a = a; if (BIG.range == null) BIG.range = VIEW.range;
+    BIG.a = a; BIG.key = !!key; BIG.t0 = performance.now(); if (BIG.range == null) BIG.range = VIEW.range;
     box.textContent = '';
     var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch;
     var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(el('i', 'sw')); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); tl.appendChild(el('p', 'sub muted', m.ruleName + ' · ' + m.signal.label + ' · ' + pctPlain(m.w, 0) + ' des Depots')); hd.appendChild(tl);
     var right = el('div', 'row'); var stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash' + (ls ? ' seit ' + dDE(ls.d) : ''))); right.appendChild(stp);
-    var cb = el('button', 'btn ghost', 'Schließen'); cb.type = 'button'; cb.addEventListener('click', closeBig); right.appendChild(cb); hd.appendChild(right); box.appendChild(hd);
+    hd.appendChild(right); box.appendChild(hd);
+    var cb = el('button', 'bigx'); cb.type = 'button'; cb.setAttribute('aria-label', 'Großansicht schließen'); cb.title = 'Schließen (Esc)'; cb.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>'; cb.addEventListener('click', closeBigClick); box.appendChild(cb);
     var tools = el('div', 'toolbar');
     var facts = el('div', 'bigfacts');
     function fact(l, v, cls) { var f = el('div', 'bf ' + (cls || '')); f.appendChild(el('span', 'k', l)); f.appendChild(el('b', 'v', v)); facts.appendChild(f); }
@@ -365,7 +383,7 @@
   }
   function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); }); unifyReadouts(); }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); unifyReadouts(); }
   /* Die Werte-Zeilen der drei Status-Karten gleich aufteilen (die schmalste Aufteilung gilt für alle), damit die Charts auf gleicher Höhe bleiben */
   function unifyReadouts() {
     var rds = A.map(function (a) { return $('rd-' + a); }).filter(Boolean); if (rds.length < 2) return;
@@ -1320,7 +1338,7 @@
   (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
   window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
-  if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBig(); });
+  if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBigClick(); });
   /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
   var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
   function themeChoice() { try { var t = localStorage.getItem('regelDepot.theme'); return t === 'dark' || t === 'light' ? t : null; } catch (e) { return null; } }

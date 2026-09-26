@@ -193,6 +193,7 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .chart svg{display:block;width:100%;height:auto;overflow:visible}
 .chart svg text{font-family:var(--sans);font-variant-numeric:tabular-nums}
 .chart:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:6px}
+.scard .chart{touch-action:manipulation}
 .chart.loading{opacity:.55}
 .splitcharts{display:grid;gap:10px}
 .splitbox .subhd{margin:0 0 2px}
@@ -348,10 +349,13 @@ ol.steps{margin:0;padding-left:20px;font-size:13.5px;color:var(--ink-2);display:
 ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;background:var(--surface-2);padding:1px 5px;border-radius:4px}
 
 /* Großansicht */
-.bigbtn{margin-top:2px}
 .modal{position:fixed;inset:0;z-index:50;background:rgba(15,23,36,.55);backdrop-filter:blur(3px);overflow:auto;padding:24px 12px;display:grid;align-items:start;justify-items:center}
-.modalbox{background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;gap:14px}
-.bighd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px}
+.modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;gap:14px}
+.bigx{position:absolute;top:10px;right:10px;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
+.bigx svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
+.bigx:hover{background:var(--surface-2);color:var(--ink)}
+.bigx:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+.bighd{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:flex-start;gap:10px;padding-right:34px}
 .bighd h2{display:flex;align-items:center;gap:10px}
 .bighd h2 .sw{width:12px;height:12px;border-radius:3px;background:var(--acol)}
 .bighd .row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
@@ -371,7 +375,7 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .modalbox .next{font-size:13.5px;color:var(--ink-2)} .modalbox .next b{color:var(--ink)}
 .bigsw{display:grid;gap:6px}
 .bigsw .swrow{display:flex;flex-wrap:wrap;gap:8px 10px;align-items:center;font-size:13.5px;color:var(--ink-2)}
-@media (max-width:640px){.modal{padding:8px} .modalbox{padding:14px}}
+@media (max-width:640px){.modal{padding:8px} .modalbox{padding:14px} .bigx{top:6px;right:6px}}
 
 /* Regeln */
 .rules{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
