@@ -52,9 +52,29 @@
     }
     G.add = function (c) { G.charts.push(c); };
     G.show = function (i) { G.cur = i; G.charts.forEach(function (c) { c.mark(i); }); readout(box, spec(i)); };
+    /* Kopf so hoch wie am Tag mit dem längsten Kopf: Auf schmalen Bildschirmen bricht der Kopf (Datum, dahinter Positionen/Cash/Wert bzw.
+       Unterschied/Zahlungen) je nach Tag unterschiedlich um; mit fester Höhe (--rdh) springen die Werte darunter und die Charts beim
+       Darüberfahren nicht. Vorauswahl über die Textbreite (Canvas), gemessen werden die 24 breitesten Köpfe, der erste und der letzte Tag. */
+    function fitHead() {
+      var c0 = G.charts[0], n = c0.n, cand = [], mx = 0, i, bw = box.clientWidth, cs = getComputedStyle(box), cx = null;
+      box.style.setProperty('--rdh', '0px');
+      try { cx = document.createElement('canvas').getContext('2d'); } catch (e) { cx = null; }
+      var hs = [], ss = [];
+      for (i = 0; i < n; i++) { hs.push(String(c0.head(i) || '')); ss.push(nb(String(c0.sub(i) || ''))); }
+      if (cx && bw > 0) {
+        cx.font = '600 ' + cs.fontSize + ' ' + cs.fontFamily; var hw = hs.map(function (t) { return cx.measureText(t).width; });
+        cx.font = cs.fontSize + ' ' + cs.fontFamily; var sw = ss.map(function (t) { return t ? cx.measureText(t).width : 0; });
+        for (i = 0; i < n; i++) cand.push([!sw[i] || hw[i] + 10 + sw[i] <= bw ? 1 : 1 + Math.ceil(sw[i] / bw), sw[i] + hw[i] / 1000, i]);
+        cand.sort(function (a, b) { return b[0] - a[0] || b[1] - a[1]; });
+      } else { for (i = 0; i < n; i++) cand.push([0, hs[i].length + ss[i].length, i]); cand.sort(function (a, b) { return b[1] - a[1]; }); }
+      var pick = cand.slice(0, 24).map(function (x) { return x[2]; }).concat([0, n - 1]);
+      pick.forEach(function (k) { readout(box, spec(k)); var h = box.querySelector('.rd-h'); if (h) mx = Math.max(mx, h.getBoundingClientRect().height); });
+      if (mx > 0) box.style.setProperty('--rdh', Math.ceil(mx) + 'px'); else box.style.removeProperty('--rdh');
+    }
     G.reset = function () {
       if (!G.charts.length) return;
       if (box && !G.w) { G.w = G.charts.reduce(function (w, c) { return Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
+      if (box && !G.fit) { G.fit = true; fitHead(); }
       readout(box, spec(G.charts[0].n - 1));
     };
     G.hide = function () { G.charts.forEach(function (c) { c.unmark(); }); G.reset(); };
@@ -125,11 +145,34 @@
     var dotC = mk('circle', { r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var dotS = mk('circle', { r: 3.5, fill: col.sma, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: st0 + sh - m.t, fill: 'transparent' }, svg), cur = n - 1;
-    function read(k) {
+    function textAt(k) {
       var sw = E.sw.filter(function (s) { return s.i === k; })[0], note, cls = '';
       if (sw) { note = (sw.to ? '▲ Kaufsignal' : '▼ Verkaufssignal') + ', Handel am ' + dShort(ENG.addDays(S.k[k], 7)); cls = sw.to ? 'sig-buy' : 'sig-sell'; }
       else note = (E.st[k] === 1 ? 'Regel investiert' : 'Regel in Cash') + ' · ' + (band ? 'Band ' + o.usd(E.sma[k] * (1 - p)).replace(/\s?\$$/, '') + '–' + o.usd(E.sma[k] * (1 + p)) : E.up[k] > 0 ? E.up[k] + '. Schluss über SMA50' : E.dn[k] > 0 ? E.dn[k] + '. Schluss unter SMA50' : 'Schluss auf dem SMA50');
-      readout(rd, { head: 'Wochenschluss ' + dDE(S.d[k]), extra: pct(S.c[k] / E.sma[k] - 1, 1) + ' zum SMA50', groups: [{ rows: [{ color: col.line, label: 'Schluss', val: o.usd(S.c[k]) }, { color: col.sma, dash: true, label: 'SMA50', val: o.usd(E.sma[k]) }] }], note: note, noteCls: cls });
+      return { head: 'Wochenschluss ' + dDE(S.d[k]), extra: pct(S.c[k] / E.sma[k] - 1, 1) + ' zum SMA50', note: note, noteCls: cls };
+    }
+    function read(k) {
+      var t = textAt(k);
+      t.groups = [{ rows: [{ color: col.line, label: 'Schluss', val: o.usd(S.c[k]) }, { color: col.sma, dash: true, label: 'SMA50', val: o.usd(E.sma[k]) }] }];
+      readout(rd, t);
+    }
+    /* Aufteilung der Werte-Zeile nach der verfügbaren Breite, mit der Schrift des Geräts gemessen und für alle sichtbaren Wochen gleich (sonst
+       sprängen Zeile und Chart beim Darüberfahren): rd-wide = drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand); rd-mid = Datum und
+       Abstand in zwei Zeilen; ohne Klasse zusätzlich Schluss und SMA50 untereinander (auch, wenn nicht gemessen werden kann); rd-two = der
+       Regelstand darf zwei Zeilen nutzen, die Höhe ist immer reserviert. Die Status-Karten gleichen sich danach an (app.js unifyReadouts). */
+    function fitMode() {
+      rd.classList.remove('rd-wide', 'rd-mid', 'rd-two');
+      var bw = rd.clientWidth, cx = null, k, T = [], head = 0, note = 0, hb = [], nw = [];
+      if (!bw) return;
+      try { cx = document.createElement('canvas').getContext('2d'); } catch (e) { cx = null; }
+      if (!cx) return;
+      var cs = getComputedStyle(rd), fam = cs.fontSize + ' ' + cs.fontFamily;
+      for (k = i0; k < n; k++) T.push(textAt(k));
+      cx.font = '600 ' + fam; T.forEach(function (t, j) { hb[j] = cx.measureText(t.head).width; nw[j] = t.noteCls ? cx.measureText(nb(t.note)).width : 0; });
+      cx.font = fam; T.forEach(function (t, j) { head = Math.max(head, hb[j] + 10 + cx.measureText(nb(t.extra)).width); note = Math.max(note, t.noteCls ? nw[j] : cx.measureText(nb(t.note)).width); });
+      rd.classList.add('rd-mid'); var row = rd.querySelector('.rd-row'), rowFits = !!row && row.scrollWidth <= row.clientWidth + 0.5; rd.classList.remove('rd-mid');
+      if (rowFits) rd.classList.add(head + 2 <= bw ? 'rd-wide' : 'rd-mid');
+      if (note + 2 > bw) rd.classList.add('rd-two');
     }
     function show(k) {
       if (k < i0 || k >= n) return; cur = k; var x = X(k);
@@ -144,7 +187,7 @@
     host.tabIndex = 0;
     host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(i0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); };
     host.onfocus = function () { show(cur); }; host.onblur = hide;
-    read(n - 1);
+    read(n - 1); fitMode();
   }
 
   /* ---------- Kreisdiagramm ---------- */

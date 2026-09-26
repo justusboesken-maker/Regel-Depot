@@ -206,13 +206,14 @@
   function streakText(L) { if (L.up > 0) return L.up + '× über SMA50'; if (L.dn > 0) return L.dn + '× unter SMA50'; return 'auf dem SMA50'; }
   /* Performance seit dem letzten Regel-Signal (Justus 26.09.2026): Kursveränderung des Signalkurses in $ vom Schluss der Signalwoche bis zum
      aktuellen Kurs wie bei „Aktuell“ (ohne aktuellen Kurs der letzte Wochenschluss). Aus Sicht der Regel gefärbt: nach einem Kauf Gewinn grün,
-     Verlust rot; nach einem Verkauf fallender Kurs grün („Verlust vermieden“), steigender rot („Anstieg verpasst“). Unter 0,05 % neutral. */
+     Verlust rot; nach einem Verkauf fallender Kurs grün („Verlust vermieden“), steigender rot („Anstieg verpasst“). Unter 0,05 % neutral.
+     Beschriftung „Performance seit Signal TT.MM.JJJJ“ (Justus 26.09.2026, statt „seit Kauf/Verkauf“). */
   function perfSince(a, lp) {
     var L = C[a].E.last, ls = L && L.lastSwitch; if (!ls || !(ls.c > 0)) return null;
     var now = lp && lp.usd > 0 ? lp.usd : L.c; if (!(now > 0)) return null;
     var r = now / ls.c - 1; if (Math.abs(r) < 0.0005) r = 0;
     var good = r === 0 ? null : ls.to === 1 ? r > 0 : r < 0;
-    return { label: 'Performance seit ' + (ls.to === 1 ? 'Kauf ' : 'Verkauf ') + dDE(ls.d), r: r, from: ls.c, to: now,
+    return { label: 'Performance seit Signal ' + dDE(ls.d), r: r, from: ls.c, to: now,
       text: pct(r, 1) + (ls.to === 1 || r === 0 ? '' : r < 0 ? ' · Verlust vermieden' : ' · Anstieg verpasst'), cls: good == null ? '' : good ? 'good' : 'bad' };
   }
   function thresholdInfo(a) {
@@ -364,7 +365,14 @@
   }
   function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); }); }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); }); unifyReadouts(); }
+  /* Die Werte-Zeilen der drei Status-Karten gleich aufteilen (die schmalste Aufteilung gilt für alle), damit die Charts auf gleicher Höhe bleiben */
+  function unifyReadouts() {
+    var rds = A.map(function (a) { return $('rd-' + a); }).filter(Boolean); if (rds.length < 2) return;
+    var lvl = Math.min.apply(null, rds.map(function (r) { return r.classList.contains('rd-wide') ? 2 : r.classList.contains('rd-mid') ? 1 : 0; }));
+    var two = rds.some(function (r) { return r.classList.contains('rd-two'); });
+    rds.forEach(function (r) { r.classList.toggle('rd-wide', lvl === 2); r.classList.toggle('rd-mid', lvl === 1); r.classList.toggle('rd-two', two); });
+  }
 
   /* ---------- Depot ---------- */
   function renderDepot(Mo) {

@@ -212,9 +212,11 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .tip .r b{font-variant-numeric:tabular-nums;font-weight:600;color:var(--ink);text-align:right}
 .tip .r span{color:var(--ink-2)}
 .tip .s{margin-top:5px;padding-top:5px;border-top:1px solid var(--rule);color:var(--ink-2)}
-/* Werte-Zeile über den Charts (Justus 26.09.2026): statt eines Kästchens im Chart; feste Mindestbreite der Werte, damit nichts springt */
-.chart-legend.readout{display:grid;gap:3px}
-.readout .rd-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;min-height:1.45em}
+/* Werte-Zeile über den Charts (Justus 26.09.2026): statt eines Kästchens im Chart; feste Mindestbreite der Werte, damit nichts springt.
+   Etwas größer seit 26.09. abends (Justus: „wirklich nur ein bisschen größer“): Depotentwicklung 13 → 14 px, Signalcharts 12,5 → 13,5 px.
+   --rdh: Höhe des Kopfs für den längsten Tag (syncGroup), damit die Werte darunter beim Darüberfahren nicht springen */
+.chart-legend.readout{display:grid;gap:3px;font-size:14px}
+.readout .rd-h{display:flex;flex-wrap:wrap;align-items:baseline;gap:0 10px;min-height:var(--rdh,1.5em)}
 .readout .rd-h b{font-weight:600;color:var(--ink)}
 .readout .rd-x{color:var(--muted)}
 .readout .rd-row{display:flex;flex-wrap:wrap;align-items:center;gap:3px 18px}
@@ -225,13 +227,20 @@ h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text
 .readout .rd-n{color:var(--ink-2)}
 .readout .sig-buy{color:var(--good);font-weight:600}
 .readout .sig-sell{color:var(--bad);font-weight:600}
-/* Signalcharts: genau drei Zeilen, damit die Charts der drei Karten auf gleicher Höhe bleiben */
-.rule-rd{font-size:12.5px;margin-bottom:6px}
+/* Signalcharts: feste Zeilen je nach verfügbarer Breite (charts.js fitMode misst mit der Schrift des Geräts), in allen drei Karten gleich,
+   damit die Charts auf gleicher Höhe bleiben und nichts abgeschnitten wird. Grundform (schmal): Datum, Abstand, Schluss, SMA50, Regelstand je
+   eine Zeile; rd-mid: Schluss und SMA50 nebeneinander; rd-wide: drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand);
+   rd-two: der Regelstand darf zwei Zeilen nutzen (immer reserviert). */
+.chart-legend.rule-rd{font-size:13.5px;margin-bottom:6px}
 .rule-rd .rd-h,.rule-rd .rd-n{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.rule-rd .rd-h b{margin-right:10px}
-.rule-rd .rd-row{flex-wrap:nowrap;overflow:hidden}
-@media (max-width:980px){.rule-rd .rd-h b{display:block;margin-right:0}.rule-rd .rd-row{flex-wrap:wrap}}
-@media (max-width:560px){#perfLegend.readout .rd-h{min-height:2.9em}.readout .rd-long{display:none}.readout .rd-short{display:inline}}
+.rule-rd .rd-h b{display:block}
+.rule-rd .rd-row{display:grid;justify-items:start}
+.rule-rd .rd-l{min-width:4.6em}
+.rule-rd.rd-mid .rd-row,.rule-rd.rd-wide .rd-row{display:flex;flex-wrap:nowrap;overflow:hidden}
+.rule-rd.rd-mid .rd-l,.rule-rd.rd-wide .rd-l{min-width:0}
+.rule-rd.rd-wide .rd-h b{display:inline;margin-right:10px}
+.rule-rd.rd-two .rd-n{white-space:normal;min-height:3em}
+@media (max-width:560px){#perfLegend.readout .rd-h{min-height:var(--rdh,3em)}.readout .rd-long{display:none}.readout .rd-short{display:inline}}
 .cap{font-size:13px;color:var(--muted)}
 .subhd{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
 /* Ein-/ausklappbare Karten */
