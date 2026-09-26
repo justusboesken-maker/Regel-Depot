@@ -91,12 +91,10 @@
     var col = { line: css(o.color), sma: css('--ink-2'), grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface'), band: css('--band'), buy: css('--sig-buy'), sell: css('--sig-sell'), neg: css('--neg') };
     var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = o.tall ? Math.max(300, Math.min(420, Math.round(W * 0.38))) : (narrow ? 170 : 200), sh = o.tall ? 72 : 54, gap = 8;
     var m = { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
-    var plot = el('div', 'rc-plot'); host.appendChild(plot);
-    var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false', 'aria-hidden': 'true' }, plot);
+    var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
     for (i = i0; i < n; i++) { var vs = [S.c[i], E.sma[i]]; if (band) vs.push(E.sma[i] * (1 + p), E.sma[i] * (1 - p)); vs.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; }); }
-    /* Skala: o.scale 'log' oder 'lin' (Wahl von Justus je Anlage), sonst automatisch log. bei großer Spanne */
-    var useLog = o.scale === 'log' ? true : o.scale === 'lin' ? false : hi / lo > 2.2, ya, yb, Y;
+    var useLog = hi / lo > 2.2, ya, yb, Y;
     if (useLog) { ya = Math.log10(lo) - 0.03; yb = Math.log10(hi) + 0.03; Y = function (v) { return m.t + (1 - (Math.log10(v) - ya) / (yb - ya)) * ih; }; }
     else { var pad = (hi - lo) * 0.07; ya = lo - pad; yb = hi + pad; Y = function (v) { return m.t + (1 - (v - ya) / (yb - ya)) * ih; }; }
     function X(k) { return m.l + (k - i0) / (N - 1) * iw; }
@@ -114,7 +112,7 @@
     /* Signale */
     E.sw.forEach(function (s) { if (s.i < i0) return; var x = X(s.i), y = Y(S.c[s.i]), up = s.to === 1, yy = up ? y + 13 : y - 13; var d = up ? 'M' + x + ',' + (yy - 6) + ' L' + (x + 6) + ',' + (yy + 5) + ' L' + (x - 6) + ',' + (yy + 5) + 'Z' : 'M' + x + ',' + (yy + 6) + ' L' + (x + 6) + ',' + (yy - 5) + ' L' + (x - 6) + ',' + (yy - 5) + 'Z'; mk('path', { d: d, fill: up ? col.buy : col.sell, stroke: col.surface, 'stroke-width': 2, 'paint-order': 'stroke' }, svg); });
     mk('circle', { cx: X(n - 1), cy: Y(S.c[n - 1]), r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2 }, svg);
-    if (useLog && !o.onScale) { var lg = mk('text', { x: m.l + 4, y: m.t + 11, 'font-size': 10.5, fill: col.muted }, svg); lg.textContent = 'log. Skala'; }
+    if (useLog) { var lg = mk('text', { x: m.l + 4, y: m.t + 11, 'font-size': 10.5, fill: col.muted }, svg); lg.textContent = 'log. Skala'; }
     /* Abstandsstreifen: Abstand zum SMA50 in Prozent, mit Schwelle */
     var dmax = 0.02; for (i = i0; i < n; i++) dmax = Math.max(dmax, Math.abs(S.c[i] / E.sma[i] - 1));
     dmax = Math.min(Math.max(dmax * 1.1, band ? p * 1.6 : 0.03), 1.5);
@@ -138,24 +136,15 @@
     var maxT = Math.max(2, Math.floor(iw / 58)); if (ticks.length > maxT) { var stp = Math.ceil(ticks.length / maxT); ticks = ticks.filter(function (t, k) { return k % stp === 0; }); }
     mk('line', { x1: m.l, x2: m.l + iw, y1: st0 + sh, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1 }, g);
     ticks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: st0 + sh, y2: st0 + sh + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: st0 + sh + 16, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
-    host.setAttribute('role', 'group'); host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50' + (useLog ? ' (log. Skala)' : '') + ', zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
+    host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
     /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
        im Chart-Container); ohne Zeiger zeigt sie den letzten Wochenschluss */
-    var rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, plot); } else rd.classList.add('readout', 'rule-rd');
+    var rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd');
     var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
     var cross = mk('line', { y1: m.t, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dotC = mk('circle', { r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var dotS = mk('circle', { r: 3.5, fill: col.sma, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: st0 + sh - m.t, fill: 'transparent' }, svg), cur = n - 1;
-    /* Skala umschalten (Justus 26.09.2026): Die Aufschrift oben links nennt die Skala, ein Klick wechselt zwischen log. und normaler Skala;
-       die Wahl gilt je Anlage (Karte und Großansicht) und bleibt gespeichert (app.js setScale) */
-    if (o.onScale) {
-      var sb = el('button', 'scalebtn', (useLog ? 'log. Skala' : 'normale Skala') + ' \u21c4'); sb.type = 'button';
-      sb.style.left = (m.l + 4) + 'px'; sb.style.top = (m.t + 3) + 'px';
-      sb.setAttribute('aria-label', (useLog ? 'Log. Skala' : 'Normale Skala') + ', umschalten auf ' + (useLog ? 'normale' : 'log.') + ' Skala');
-      sb.addEventListener('click', function (e) { e.stopPropagation(); o.onScale(useLog ? 'lin' : 'log', document.activeElement === sb); });
-      plot.appendChild(sb);
-    }
     function textAt(k) {
       var sw = E.sw.filter(function (s) { return s.i === k; })[0], note, cls = '';
       if (sw) { note = (sw.to ? '▲ Kaufsignal' : '▼ Verkaufssignal') + ', Handel am ' + dShort(ENG.addDays(S.k[k], 7)); cls = sw.to ? 'sig-buy' : 'sig-sell'; }
@@ -196,7 +185,7 @@
     function idx(evt) { var rc = svg.getBoundingClientRect(), sx = (evt.clientX - rc.left) * (W / rc.width); var t = Math.round((sx - m.l) / iw * (N - 1)); return Math.max(i0, Math.min(n - 1, i0 + t)); }
     hit.addEventListener('pointermove', function (e) { show(idx(e)); }); hit.addEventListener('pointerdown', function (e) { show(idx(e)); }); hit.addEventListener('pointerleave', hide);
     host.tabIndex = 0;
-    host.onkeydown = function (e) { if (e.target !== host) return; if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(i0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); };
+    host.onkeydown = function (e) { if (e.key === 'ArrowRight') { show(Math.min(n - 1, cur + 1)); e.preventDefault(); } else if (e.key === 'ArrowLeft') { show(Math.max(i0, cur - 1)); e.preventDefault(); } else if (e.key === 'Escape') hide(); };
     host.onfocus = function () { show(cur); }; host.onblur = hide;
     read(n - 1); fitMode();
   }

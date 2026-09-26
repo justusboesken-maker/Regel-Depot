@@ -363,18 +363,9 @@
     mo.hidden = false; document.body.style.overflow = 'hidden';
     drawBig(a); cb.focus();
   }
-  function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true, scale: scaleOf(a), onScale: function (s, f) { setScale(a, s, f ? 'bigChart' : null); } }); }
+  function drawBig(a) { var host = $('bigChart'); if (!host || BIG.a !== a) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: BIG.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', tall: true }); }
   document.addEventListener('keydown', function (e) { if (e.key === 'Escape' && BIG.a) closeBig(); });
-  /* Skala der Signalcharts je Anlage (Justus 26.09.2026): ohne Wahl automatisch (log. Skala bei großer Kursspanne), sonst 'log' oder 'lin';
-     gilt für Karte und Großansicht, gespeichert in diesem Browser (regelDepot.scale), auch beim Wechsel des Zeitraums */
-  var SCALE = (function () { try { var j = JSON.parse(localStorage.getItem('regelDepot.scale') || '{}'); return j && typeof j === 'object' && !Array.isArray(j) ? j : {}; } catch (e) { return {}; } })();
-  function scaleOf(a) { var s = SCALE[a]; return s === 'log' || s === 'lin' ? s : null; }
-  function setScale(a, s, focusId) {
-    SCALE[a] = s; try { localStorage.setItem('regelDepot.scale', JSON.stringify(SCALE)); } catch (e) { /* still */ }
-    drawCharts(); if (BIG.a === a) drawBig(a);
-    var h = focusId && $(focusId), b = h && h.querySelector('.scalebtn'); if (b) b.focus();
-  }
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a), scale: scaleOf(a), onScale: function (s, f) { setScale(a, s, f ? 'ch-' + a : null); } }); }); unifyReadouts(); }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: $('rd-' + a) }); }); unifyReadouts(); }
   /* Die Werte-Zeilen der drei Status-Karten gleich aufteilen (die schmalste Aufteilung gilt für alle), damit die Charts auf gleicher Höhe bleiben */
   function unifyReadouts() {
     var rds = A.map(function (a) { return $('rd-' + a); }).filter(Boolean); if (rds.length < 2) return;
