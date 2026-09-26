@@ -303,6 +303,27 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .donut figcaption b{color:var(--ink);font-weight:600}
 .donut .tip{min-width:170px}
 .perf-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px}
+/* Depot offen wie Status und Regeln (Justus 27.09.2026): keine Kästen, die Blöcke nur durch Linien getrennt,
+   der Inhalt bündig mit dem Abschnittstitel */
+#depot{row-gap:0}
+#depot>.card,#depot>details.box{background:none;border:0;border-radius:0;box-shadow:none}
+#depot>#depotBanner:not(:empty){padding-top:16px}
+#depot>.card{padding:22px 0 26px;border-top:1px solid var(--rule)}
+#depot>#alloc{border-top:0;padding-top:16px}
+#depot>.card>.pad{padding:0 0 6px}
+#depot table th:first-child,#depot table td:first-child{padding-left:0}
+#depot table th:last-child,#depot table td:last-child{padding-right:0}
+/* Ist und Ziel als zwei offene Spalten mit Linie in der Mitte; bis 640 px untereinander, getrennt durch eine Linie */
+#depot .donuts{--dg:clamp(24px,5vw,56px);column-gap:var(--dg)}
+#depot .donuts>*{position:relative}
+#depot .donuts>*+*::before{content:"";position:absolute;left:calc(var(--dg) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
+@media (max-width:640px){#depot .donuts{grid-template-columns:minmax(0,1fr);row-gap:0} #depot .donuts>*+*{border-top:1px solid var(--rule);padding-top:18px;margin-top:18px} #depot .donuts>*+*::before{display:none} #depot .donut svg{max-width:220px}}
+/* Eingabe-Bereiche als Zeilen zwischen Linien */
+#depot>details.box{border-top:1px solid var(--rule)}
+#depot>details.box:last-child{border-bottom:1px solid var(--rule)}
+#depot details.box>summary{padding:15px 0}
+#depot details.box>summary:focus-visible{border-radius:4px}
+#depot details.box .body{padding:4px 0 22px}
 
 /* Banner */
 .banner{border-left:3px solid var(--warn);background:var(--warn-bg);padding:11px 14px;border-radius:0 8px 8px 0;color:var(--ink);font-size:14px;display:grid;gap:4px}
