@@ -239,30 +239,18 @@
 
   /* ---------- Kopf, Banner, Zu tun ---------- */
   function lastRun() { return D.runs && D.runs.length ? D.runs[0] : null; }
-  function renderTop(Mo) {
-    var h = $('topMeta'); h.textContent = '';
-    function s(label, val, cls) { var e = el('span', cls || null); e.appendChild(el('b', null, label + ' ')); e.appendChild(document.createTextNode(val)); h.appendChild(e); }
-    s('Wochenschluss', 'FTSE ' + dShort(C.ftse.E.last.d) + ' · Gold ' + dShort(C.gold.E.last.d) + ' · Bitcoin ' + dShort(C.btc.E.last.d));
-    var p = pxOf('ftse') || pxOf('btc'); if (p) s('Euro-Kurse', dShort(p.d));
-    if (D.live && D.live.t) s('Live-Kurse', dtDE(D.live.t) + (D.browserLive.btc ? ' · Bitcoin im Browser live' : ''));
-    var r = lastRun(); if (r && !r.ok) s('Letzter Lauf', dtDE(r.t) + ' · mit Fehlern', 'bad');
-    s('Depot', Mo.ready ? 'in diesem Browser' : 'noch nicht importiert');
-  }
   function renderGlobal(Mo) {
     var g = $('globalBanner'); g.textContent = '';
     var r = lastRun(), age = r ? ENG.daysBetween(r.t.slice(0, 10), todayISO()) : null;
     if (D.errors.length) { var b0 = el('div', 'banner bad'); b0.appendChild(el('b', null, 'Ein Teil der Daten konnte nicht geladen werden')); b0.appendChild(el('span', null, D.errors.join(' · '))); g.appendChild(b0); }
+    /* Fehlgeschlagener letzter Lauf: früher rot in der Zeile unter dem Titel, seit 26.09.2026 (Zeile entfällt, Wunsch Justus) als Hinweis nur im Fehlerfall */
+    if (r && !r.ok) { var b3 = el('div', 'banner bad'), et = (r.errors && r.errors.length ? r.errors.join(' · ') : '') || r.summary || ''; b3.appendChild(el('b', null, 'Letzter automatischer Lauf mit Fehlern')); b3.appendChild(el('span', null, ((STEPS && STEPS[r.step]) || r.step || 'Lauf') + ', ' + dtDE(r.t) + (et ? ': ' + (et.length > 180 ? et.slice(0, 177) + '…' : et) : '') + '. Details unter „Signale“ › „Letzte Läufe“.')); g.appendChild(b3); }
     if (age != null && age > 8) { var b1 = el('div', 'banner'); b1.appendChild(el('b', null, 'Die automatischen Läufe sind seit ' + age + ' Tagen ausgeblieben')); b1.appendChild(el('span', null, 'Die Kurse und Signale sind möglicherweise veraltet. Prüfe bei GitHub unter „Actions“, ob der Workflow „Regel-Depot Update“ läuft.')); g.appendChild(b1); }
     if (!Mo.ready && !STORE.corruptInfo()) { var b2 = el('div', 'banner info'); b2.appendChild(el('b', null, 'Depotdaten fehlen in diesem Browser')); b2.appendChild(el('span', null, 'Importiere deine Depot-Datei unter „Einstellungen“ (oder trage Käufe von Hand ein). Kurse und Signale funktionieren auch ohne Depot.'));
       var acts = el('div', 'actions'); var btn = el('a', 'btn sm', 'Zu den Einstellungen'); btn.href = '#einstellungen'; acts.appendChild(btn); b2.appendChild(acts); g.appendChild(b2); }
   }
 
   /* ---------- Status-Karten ---------- */
-  function renderChartLegend() {
-    var h = $('chLegend'); h.textContent = '';
-    var items = [{ t: 'Wochenschluss', c: 'var(--ink-2)' }, { t: 'SMA50', c: 'var(--ink-2)', dash: true }, { t: 'Regel investiert', box: 'color-mix(in srgb, var(--ink-2) 16%, transparent)' }, { t: 'Band ±3 % (Bitcoin)', box: 'var(--band)' }, { t: 'Kaufsignal', tri: 'up' }, { t: 'Verkaufssignal', tri: 'dn' }, { t: 'Abstand zum SMA50 (unten)', box: 'color-mix(in srgb, var(--ink-2) 35%, transparent)' }];
-    items.forEach(function (it) { var s = el('span'), i = el('i'); if (it.box) { i.className = 'box'; i.style.background = it.box; } else if (it.tri) { i.className = 'tri' + (it.tri === 'dn' ? ' dn' : ''); if (it.tri === 'up') i.style.borderBottomColor = 'var(--sig-buy)'; else i.style.borderTopColor = 'var(--sig-sell)'; } else { if (it.dash) i.className = 'dash'; i.style.borderTopColor = it.c; } s.appendChild(i); s.appendChild(document.createTextNode(it.t)); h.appendChild(s); });
-  }
   function weeksTable(a, rows) {
     var S = C[a].S, E = C[a].E, n = S.c.length, t = el('table'), th = el('thead'), tr = el('tr'), cnt = rows || 12;
     ['Wochenschluss', 'Schluss', 'SMA50', 'Abstand', 'Regel'].forEach(function (h, k) { var c = el('th', k > 0 && k < 4 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
@@ -270,7 +258,6 @@
     t.appendChild(tb); return t;
   }
   function renderStatus(Mo) {
-    renderChartLegend();
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
       var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch, st = D.state && D.state.assets && D.state.assets[a];
@@ -1321,7 +1308,7 @@
     if (!READY) { renderOffline(); return; }
     try {
       var Mo = model();
-      renderTop(Mo); renderGlobal(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
+      renderGlobal(Mo); renderStatus(Mo); renderDepot(Mo); drawPerf(Mo); renderFeed(); renderSched(); renderRunLog(); renderPush(); renderReb(Mo); fillForms(Mo); renderRules();
     } catch (e) { console.error(e); renderFail(e); }
     renderStore(); askPersist();
   }
@@ -1357,7 +1344,7 @@
     var g = $('globalBanner'); if (!g) return; g.textContent = '';
     var b = el('div', 'banner bad'); b.appendChild(el('b', null, title)); b.appendChild(el('span', null, text));
     if (reload) { var acts = el('div', 'actions'), btn = el('button', 'btn sm', 'Seite neu laden'); btn.type = 'button'; btn.addEventListener('click', function () { try { location.reload(); } catch (e) { /* still */ } }); acts.appendChild(btn); b.appendChild(acts); }
-    g.appendChild(b); var tm = $('topMeta'); if (tm) tm.textContent = 'Fehler beim Laden';
+    g.appendChild(b);
   }
   function renderFail(e) {
     failBanner('Die Seite konnte nicht vollständig angezeigt werden', 'Fehler: ' + (e && e.message ? e.message : String(e)) + '. Mögliche Ursachen: eine ältere Version der Seite im Browser-Speicher (einmal komplett neu laden: Safari Option + Cmd + R, Chrome oder Firefox Cmd + Shift + R) oder unerwartete Depotdaten (unter Einstellungen „Als Datei sichern“ und die Datei prüfen). Sichern, Import und Buchungen funktionieren weiter.', true);
