@@ -68,10 +68,10 @@ p{margin:0}
 .masthead{position:relative;background:var(--mh-bg);border-bottom:1px solid var(--mh-line);overflow:hidden}
 .masthead .wrap.hdr{position:relative;z-index:1}
 .masthead .top{padding-block:20px 24px}
-/* Titel „Investus“ in Schreibschrift und poliertem Gold (Justus 27.09.2026, Entwurf G): Snell Roundhand fett ist auf Mac und iPhone
-   vorinstalliert, anderswo greift eine ähnliche Schreibschrift; Goldverlauf je Modus (--mh-gold). Zeilenhöhe wie beim bisherigen Titel, damit
-   der Kopf gleich hoch bleibt; Innenabstand mit gleich großem negativem Rand, damit auch Schwünge außerhalb der Zeile den Verlauf bekommen */
-.masthead h1{justify-self:start;font-family:"Snell Roundhand","Apple Chancery","Segoe Script","URW Chancery L","TeX Gyre Chorus",cursive;font-weight:700;font-size:clamp(36px,5.56vw,50px);line-height:.79;letter-spacing:0;padding:.3em .45em .3em .3em;margin:-.3em -.45em -.3em -.3em;background-image:var(--mh-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:var(--mh-gold-sh)}
+/* Titel „Investus“ in poliertem Gold (Justus 27.09.2026, Entwurf G); Schrift wieder wie vorher (Justus 27.09.2026: „Die Schriftart soll wieder
+   die von vorher sein. Die Farbe und Glanz sollen bleiben“): Seitenschrift, Gewicht, Größe und Zeilenhöhe aus der h1-Regel oben, nur der
+   Goldverlauf je Modus (--mh-gold) und der Glanzschatten (--mh-gold-sh) bleiben */
+.masthead h1{justify-self:start;background-image:var(--mh-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:var(--mh-gold-sh)}
 @media (forced-colors:active){.masthead h1{background:none;-webkit-text-fill-color:CanvasText;color:CanvasText;filter:none}}
 .masthead .switch{color:var(--mh-muted)}
 .masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
