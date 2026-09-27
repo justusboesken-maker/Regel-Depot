@@ -268,7 +268,7 @@
      Ein einzelner verspäteter oder ausgelassener Lauf und die Nachtpause zählen also nicht. */
   function priceProblem() {
     var r = lastRun(), up = D.state && D.state.updated ? Date.parse(D.state.updated) : NaN, where = ' Details unter „Signale“ bei „Letzte Läufe“.';
-    if (r && !r.ok) return 'Die letzte Aktualisierung der Kursdaten ist fehlgeschlagen (' + ((STEPS && STEPS[r.step]) || r.step || 'Lauf') + ', ' + dtDE(r.t) + ').' + where;
+    if (r && !r.ok) { var et = (r.errors && r.errors.length ? r.errors.join(' · ') : '') || r.summary || ''; if (et.length > 160) et = et.slice(0, 157) + '…'; return 'Die letzte Aktualisierung der Kursdaten ist fehlgeschlagen (' + ((STEPS && STEPS[r.step]) || r.step || 'Lauf') + ', ' + dtDE(r.t) + (et ? ': ' + et : '') + ').' + where; }
     if (!(up > 0)) return 'Der Zeitpunkt der letzten Aktualisierung der Kursdaten ist unbekannt.';
     var now = Date.now(), u = new Date(up), missed = 0, day = Date.UTC(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate()), hh, t;
     for (; day <= now && missed < 2; day += 864e5) for (hh = 5; hh <= 21 && missed < 2; hh++) { t = day + hh * 3600e3 + 7 * 60e3; if (t > up && t + 3600e3 <= now) missed++; }
@@ -281,8 +281,7 @@
     var g = $('globalBanner'); g.textContent = '';
     var r = lastRun(), age = r ? ENG.daysBetween(r.t.slice(0, 10), todayISO()) : null;
     if (D.errors.length) { var b0 = el('div', 'banner bad'); b0.appendChild(el('b', null, 'Ein Teil der Daten konnte nicht geladen werden')); b0.appendChild(el('span', null, D.errors.join(' · '))); g.appendChild(b0); }
-    /* Fehlgeschlagener letzter Lauf: früher rot in der Zeile unter dem Titel, seit 26.09.2026 (Zeile entfällt, Wunsch Justus) als Hinweis nur im Fehlerfall */
-    if (r && !r.ok) { var b3 = el('div', 'banner bad'), et = (r.errors && r.errors.length ? r.errors.join(' · ') : '') || r.summary || ''; b3.appendChild(el('b', null, 'Letzter automatischer Lauf mit Fehlern')); b3.appendChild(el('span', null, ((STEPS && STEPS[r.step]) || r.step || 'Lauf') + ', ' + dtDE(r.t) + (et ? ': ' + (et.length > 180 ? et.slice(0, 177) + '…' : et) : '') + '. Details unter „Signale“ › „Letzte Läufe“.')); g.appendChild(b3); }
+    /* Fehlgeschlagener letzter Lauf: kein roter Hinweis oben mehr (Justus 27.09.2026: „wird ja schon unten angezeigt“), nur die Fußzeile (renderFoot) */
     if (age != null && age > 8) { var b1 = el('div', 'banner'); b1.appendChild(el('b', null, 'Die automatischen Läufe sind seit ' + age + ' Tagen ausgeblieben')); b1.appendChild(el('span', null, 'Die Kurse und Signale sind möglicherweise veraltet. Prüfe bei GitHub unter „Actions“, ob der Workflow „Regel-Depot Update“ läuft.')); g.appendChild(b1); }
     if (!Mo.ready && !STORE.corruptInfo()) { var b2 = el('div', 'banner info'); b2.appendChild(el('b', null, 'Depotdaten fehlen in diesem Browser')); b2.appendChild(el('span', null, 'Importiere deine Depot-Datei unter „Einstellungen“ (oder trage Käufe von Hand ein). Kurse und Signale funktionieren auch ohne Depot.'));
       var acts = el('div', 'actions'); var btn = el('a', 'btn sm', 'Zu den Einstellungen'); btn.href = '#einstellungen'; acts.appendChild(btn); b2.appendChild(acts); g.appendChild(b2); }
