@@ -424,7 +424,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
    (102 px vom Chart bis zu den Ringen), dann mit Linie Positionen und Buchungen (je 80 px vom Inhalt darüber bis zur Linie); auf schmalen
    Bildschirmen weniger. Der Abstand über dem Titel „Depot“ ist seit den eigenen Seiten derselbe wie auf allen Seiten (.wrap>section). */
 #depot>#perfCard{border-top:0;padding-top:16px} /* erster Block unter „Depot“ */
-#depot>#alloc{margin-top:clamp(16px,5vw,54px)} /* keine Linie zwischen Depotentwicklung und Portfolio/Ziel */
+#depot>#alloc{margin-top:0;padding-top:0} /* keine Linie zwischen Depotentwicklung und Portfolio/Ziel; die Ringe dicht unter dem Chart (Justus 27.09.2026: „weniger Abstand“, sichtbar etwa 75 statt 149 px) */
 #depot>#posCard{margin-top:clamp(16px,5vw,54px)}
 #depot>#txCard{margin-top:clamp(16px,5vw,54px)}
 /* Rebalancing, Signale, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
