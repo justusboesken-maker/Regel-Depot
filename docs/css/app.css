@@ -196,8 +196,16 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
    über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
 .scard .cchart{position:relative;min-width:0;align-self:start;margin-top:6px} /* 6 px mehr über dem Chart: Platz für die Zeile .crd (22 px) unter der Box darüber */
-.scard .crd{position:absolute;left:0;right:0;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
+.scard .crd{position:absolute;left:0;right:30px;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
 .scard .crd b{font-weight:600;color:var(--ink)}
+/* Knopf „Großansicht“ oben rechts am kleinen Chart (app.js renderStatus, Justus 27.09.2026): schlicht, gedämpft, beim Darüberfahren dunkler.
+   Er steht in der Zeile über dem Chart (rechts neben .crd), bündig mit dessen rechter Kante, und verdeckt so nichts vom Verlauf; auf
+   Touch-Geräten ist die Tippfläche größer als das Zeichen */
+.scard .cbig{position:absolute;right:0;bottom:100%;width:24px;height:24px;padding:0;border:0;border-radius:6px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer;z-index:1}
+.scard .cbig svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:1.6;stroke-linecap:round;stroke-linejoin:round}
+.scard .cbig:hover{background:var(--surface-2);color:var(--ink)}
+.scard .cbig:focus-visible{outline:2px solid var(--accent);outline-offset:1px}
+@media (pointer:coarse){.scard .cbig::after{content:"";position:absolute;inset:-8px -6px -4px}}
 .scard .nextact{font-size:13px;color:var(--ink-2)}
 .scard dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:13.5px}
 .scard dt{color:var(--muted)}
