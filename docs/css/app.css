@@ -39,11 +39,12 @@
 *{box-sizing:border-box}
 html{scroll-padding-top:56px}
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px)}
-/* Breite: bis 1600px, darüber zentriert (Justus 26.09.2026: „etwas zu viel Rand“, vorher 1400px) */
-.wrap{max-width:1600px;margin:0 auto;padding-inline:16px;padding-block:0 64px}
+/* Breite: bis 1520px, darüber zentriert (Justus 26.09.2026: „etwas zu viel Rand“ bei 1400px; 27.09.2026: „etwas zentrierter, mehr Rand“, vorher 1600px).
+   Seitenrand wächst mit der Fensterbreite: 16px (Handy), 24–40px (Tablet), 40–64px (Desktop); die Navigation zieht bündig mit. */
+.wrap{max-width:1520px;margin:0 auto;padding-inline:16px;padding-block:0 64px}
 .wrap.hdr{padding-block:0}
-@media (min-width:640px){.wrap{padding-inline:20px}}
-@media (min-width:1200px){.wrap{padding-inline:clamp(24px,2.5vw,48px)}}
+@media (min-width:640px){.wrap{padding-inline:clamp(24px,3vw,40px)}}
+@media (min-width:1200px){.wrap{padding-inline:clamp(40px,3.5vw,64px)}}
 a{color:var(--accent);text-underline-offset:2px}
 h1,h2,h3,h4{font-weight:600;letter-spacing:-.01em;text-wrap:balance;margin:0}
 h1{font-size:clamp(26px,4vw,36px);line-height:1.1}
@@ -84,8 +85,9 @@ p{margin:0}
 .switch input:checked+.track::after{transform:translateX(14px)}
 .switch input:focus-visible+.track{outline:2px solid var(--accent);outline-offset:2px}
 nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:color-mix(in srgb,var(--bg) 92%,transparent);backdrop-filter:blur(6px);border-bottom:1px solid var(--rule);margin-bottom:18px}
-nav.toc .in{max-width:1600px;margin:0 auto;padding-inline:16px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
-@media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(24px,2.5vw,48px) - 10px)}}
+nav.toc .in{max-width:1520px;margin:0 auto;padding-inline:16px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
+@media (min-width:640px){nav.toc .in{padding-inline:calc(clamp(24px,3vw,40px) - 10px)}}
+@media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(40px,3.5vw,64px) - 10px)}}
 nav.toc a{flex:0 0 auto;padding:10px 10px;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
 nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-bottom-color:var(--rule-strong);outline:none}
 nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:var(--bad-ink);font-size:11px;font-weight:700;text-align:center;line-height:18px}
