@@ -881,8 +881,11 @@
      „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
      (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
      immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. Signale (data-remember="0" im HTML) ist beim Laden immer eingeklappt
-     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. */
+     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. Führt ein Menüpunkt,
+     Link oder Push dorthin, verschwindet „#signale“ danach wieder aus der Adresse, sonst würde jedes Neuladen den Abschnitt wieder öffnen. */
   function remembers(sec) { return sec.getAttribute('data-remember') !== '0'; }
+  function forgetsHash(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; return !!sec && !remembers(sec); }
+  function clearHash() { try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* still */ } }
   function setSec(sec, open, save) {
     sec.classList.toggle('folded', !open);
     var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -899,8 +902,8 @@
       b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
       setSec(sec, remembers(sec) && s['sec-' + sec.id] === 1, false);
     });
-    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : ''; if (id) openSecFor(document.getElementById(id)); }, true);
-    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } }
+    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : '', t = id ? document.getElementById(id) : null; if (!t) return; openSecFor(t); if (forgetsHash(t)) setTimeout(clearHash, 0); /* nach dem Sprung */ }, true);
+    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } if (forgetsHash(t)) clearHash(); }
     window.addEventListener('hashchange', fromHash); fromHash();
   }
   function renderRunLog() {
