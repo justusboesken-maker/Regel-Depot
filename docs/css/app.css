@@ -168,7 +168,7 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard .sub{font-size:12.5px;color:var(--muted)}
 .scard .stbox{display:grid;justify-items:end;gap:4px;flex:1 1 0} /* nimmt nur den Platz neben dem vollen Namen; der Name bricht erst um, wenn auch „Investiert“ und „seit Kaufsignal …“ nicht mehr daneben passen (27.09.2026) */
 /* „seit Kaufsignal TT.MM.JJ“ bzw. „seit Verkaufssignal TT.MM.JJ“ und darunter die Prozentzahl seit dem Signal (app.js renderStatus), ungefärbt (Justus 27.09.2026) */
-.scard .since{font-size:12px;color:var(--muted);text-align:right}
+.scard .since{font-size:13.5px;color:var(--muted);text-align:right} /* 13,5 statt 12 px (Justus 27.09.2026) */
 .scard .since>span{display:block;white-space:nowrap}
 .scard .since>.sl{white-space:normal} /* „seit Kaufsignal“ bleibt zusammen, das Datum rutscht bei Platzmangel in die nächste Zeile (statt dass der Name umbricht) */
 .scard .since .sp{font-weight:600;font-variant-numeric:tabular-nums}
