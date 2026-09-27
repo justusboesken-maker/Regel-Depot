@@ -319,12 +319,8 @@
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
       var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a);
-      /* Knopf „Großansicht“ oben rechts am kleinen Chart (Justus 27.09.2026), zusätzlich zu Doppelklick, Doppeltippen und Eingabetaste; er sitzt in
-         der Zeile über dem Chart (app.css .cbig), damit er nichts vom Verlauf verdeckt. Mit der Tastatur geöffnet, kehrt der Fokus zu ihm zurück. */
-      var cb = el('button', 'cbig'); cb.type = 'button'; cb.id = 'cbig-' + a; cb.setAttribute('aria-label', 'Großansicht ' + m.name + ' öffnen'); cb.title = 'Großansicht (auch per Doppelklick auf den Chart)';
-      cb.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M9.5 2.5h4v4M13.5 2.5 9.2 6.8M6.5 13.5h-4v-4M2.5 13.5l4.3-4.3"/></svg>';
-      cb.addEventListener('click', function (e) { if (!BIG.a) openBig(a, e.detail === 0, 'cbig-' + a); });
-      cw.appendChild(cr); cw.appendChild(cb); cw.appendChild(ch); card.appendChild(cw);
+      /* Kein eigener Knopf „Großansicht“ mehr (Justus 27.09.2026): geöffnet wird sie per Doppelklick, Doppeltippen oder Eingabetaste auf dem Chart */
+      cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
@@ -346,13 +342,12 @@
     if (mx > 0) hs.forEach(function (h) { h.style.minHeight = mx + 'px'; });
   }
   /* ---------- Großansicht ---------- */
-  var BIG = { a: null, range: null, t0: 0, key: false, back: null };
-  /* Schließen: wurde die Großansicht mit der Tastatur geöffnet, geht der Fokus zurück an den Chart oder an den Knopf „Großansicht“ (BIG.back),
-     auch wenn die Karte inzwischen neu gezeichnet wurde */
+  var BIG = { a: null, range: null, t0: 0, key: false };
+  /* Schließen: wurde die Großansicht mit der Tastatur geöffnet, geht der Fokus zurück an den Chart (auch wenn die Karte inzwischen neu gezeichnet wurde) */
   function closeBig() {
-    var mo = $('bigModal'); if (!mo) return; var a = BIG.a, key = BIG.key, bid = BIG.back;
-    mo.hidden = true; document.body.style.overflow = ''; BIG.a = null; BIG.key = false; BIG.back = null;
-    var back = key && a && ((bid && $(bid)) || $('ch-' + a)); if (back) { try { back.focus(); } catch (e) { /* still */ } }
+    var mo = $('bigModal'); if (!mo) return; var a = BIG.a, key = BIG.key;
+    mo.hidden = true; document.body.style.overflow = ''; BIG.a = null; BIG.key = false;
+    var back = key && a && $('ch-' + a); if (back) { try { back.focus(); } catch (e) { /* still */ } }
   }
   /* Klicks direkt nach dem Öffnen (zweiter Tipp eines Doppeltippens) schließen nicht gleich wieder */
   function closeBigClick() { if (performance.now() - BIG.t0 > 400) closeBig(); }
@@ -383,9 +378,9 @@
     else if (!e.shiftKey && cur === last) { e.preventDefault(); first.focus(); }
   }
   document.addEventListener('keydown', trapFocus);
-  function openBig(a, key, back) {
+  function openBig(a, key) {
     var Mo = model(), mo = $('bigModal'), box = $('bigBox'); if (!mo) return;
-    BIG.a = a; BIG.key = !!key; BIG.back = back || null; BIG.t0 = performance.now(); if (BIG.range == null) BIG.range = VIEW.range;
+    BIG.a = a; BIG.key = !!key; BIG.t0 = performance.now(); if (BIG.range == null) BIG.range = VIEW.range;
     box.textContent = '';
     var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch;
     var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); hd.appendChild(tl);
