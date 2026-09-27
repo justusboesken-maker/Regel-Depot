@@ -165,18 +165,18 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard .fig .fv{font-size:clamp(26px,calc(1.6vw + 10px),30px);font-weight:600;letter-spacing:-.01em;color:var(--ink)}
 @media (max-width:980px){.scard .fig .fv{font-size:30px}} /* Status-Spalten (Justus 27.09.2026): die große Zahl wächst mit der Fensterbreite (26 → 30 px bis 1250 px), damit Kurs und „zum SMA50“ in einer Zeile bleiben */
 .scard .fig .fd{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
-/* Kopf der Status-Karte beim Darüberfahren über den Chart (app.js figHover): Wert und Abstand in einer Zeile, der Abstand wird bei
-   Platzmangel mit „…“ gekürzt; die Höhe hält app.js fest, damit Karte und Chart nicht springen */
-.scard .fig.hov{display:grid;grid-template-columns:auto minmax(0,1fr);column-gap:10px;row-gap:2px;align-items:baseline;overflow:hidden}
-.scard .fig.hov .fl{grid-column:1/-1}
-.scard .fig.hov .fd{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .scard .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
 .scard .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .scard .act b{font-size:15.5px}
 .scard .act.buy{background:var(--good-bg)} .scard .act.buy b{color:var(--good)}
 .scard .act.sell{background:var(--bad-bg)} .scard .act.sell b{color:var(--bad)}
 .scard .act span{font-size:13px;color:var(--ink-2)}
-.scard .cchart{min-width:0;align-self:start}
+/* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
+   unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
+   über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
+.scard .cchart{position:relative;min-width:0;align-self:start}
+.scard .crd{position:absolute;left:0;right:0;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
+.scard .crd b{font-weight:600;color:var(--ink)}
 .scard .nextact{font-size:13px;color:var(--ink-2)}
 .scard dl{display:grid;grid-template-columns:auto 1fr;gap:4px 14px;margin:0;font-size:13.5px}
 .scard dt{color:var(--muted)}
