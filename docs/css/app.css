@@ -257,7 +257,6 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard .chart{touch-action:manipulation}
 .chart.loading{opacity:.55}
 .splitcharts{display:grid;gap:10px}
-.splitbox .subhd{margin:0 0 2px}
 /* Vergleich mit Buy & Hold: Drawdown-Chart und Kennzahlen */
 .perfdd{display:grid;gap:6px}
 .ddtab{font-size:13px;width:auto;min-width:min(100%,560px)}
@@ -377,7 +376,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .donut figcaption{font-size:13px;color:var(--ink-2);text-align:center}
 .donut figcaption b{color:var(--ink);font-weight:600}
 .donut .tip{min-width:170px}
-.perf-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px}
+.perf-head{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px 12px} /* ohne Überschrift „Depotentwicklung“: Knöpfe rechts */
 /* Depot offen wie Status und Regeln (Justus 27.09.2026): keine Kästen, die Blöcke nur durch Linien getrennt,
    der Inhalt bündig mit dem Abschnittstitel */
 #depot{row-gap:0}

@@ -459,7 +459,7 @@
     renderTx(Mo);
   }
   function renderAlloc(Mo, tot, cashT, miss) {
-    var al = $('alloc'); al.textContent = ''; al.appendChild(el('p', 'subhd', 'Aufteilung: Portfolio und Ziel')); /* „Portfolio“ statt „Ist“ (Justus 27.09.2026) */
+    var al = $('alloc'); al.textContent = ''; /* ohne Unterüberschrift (Justus 27.09.2026: im Depot nur noch „Buchungen“) */
     if (miss && miss.length) { al.appendChild(el('p', 'small muted', 'Keine Aufteilung, solange der Euro-Kurs für ' + miss.map(function (a) { return CFG.assets[a].name; }).join(' und ') + ' fehlt: Der Wert ' + (miss.length > 1 ? 'dieser Positionen' : 'dieser Position') + ' ist unbekannt.')); return; }
     if (!(tot > 0)) { al.appendChild(el('p', 'small muted', 'Noch keine Werte.')); return; }
     var ist = { btc: Mo.pos.btc.val || 0, ftse: Mo.pos.ftse.val || 0, gold: Mo.pos.gold.val || 0, cash: cashT };
@@ -784,7 +784,7 @@
       aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
     var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
-    ddBox.appendChild(el('p', 'subhd', 'Drawdown: Rückgang vom bisherigen Höchststand' + (w.cut ? ' im Zeitraum' : ''))); ddBox.appendChild(ddCh); box.appendChild(ddBox);
+    ddBox.appendChild(ddCh); box.appendChild(ddBox); /* ohne Unterüberschrift (Justus 27.09.2026); „Drawdown“ steht in der Werte-Zeile */
     CH.pctChart(ddCh, w.dates, [
       { vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
       { vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }

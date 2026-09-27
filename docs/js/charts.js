@@ -387,10 +387,11 @@
     var wrap = el('div', 'splitcharts'); host.appendChild(wrap);
     /* Werte-Zeile statt Legende: Namen der Linien mit ihren Werten am gewählten Tag (ohne Zeiger: letzter Stand) */
     var G = syncGroup(leg);
-    function block(title, ser, height, hero) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
+    /* ohne Überschriften „Depot gesamt“ und „Bausteine“ (Justus 27.09.2026); die Werte-Zeile nennt die Linien */
+    function block(ser, height, hero) { var b = el('div', 'splitbox'); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
     var narrow = (host.clientWidth || 700) < 560;
-    block('Depot gesamt', total, narrow ? 210 : 250, true);
-    block('Bausteine', parts, narrow ? 200 : 220);
+    block(total, narrow ? 210 : 250, true);
+    block(parts, narrow ? 200 : 220);
     G.reset();
     if (cap) cap.textContent = capText || '';
   }
