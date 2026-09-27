@@ -401,6 +401,9 @@
       card.appendChild(top);
       /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, solange die Seite nicht neu geladen wird */
       var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('details', 'act ' + act.cls), sm = el('summary'); sm.appendChild(el('b', null, act.title)); ab.appendChild(sm); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : '')));
+      /* Steuerhinweis zum Verkauf in der Handlung (Justus 27.09.2026: „den Hinweis in Verkaufen einbauen“), vorher ein eigener Kasten unter dem
+         Chart; ein Warnhinweis (Pauschbetrag oder Freigrenze überschritten) behält sein Warnsymbol (app.css .atax) */
+      if (act.tax) { var tx = el('p', 'atax' + (act.tax.level === 'warn' ? ' warn' : '')); if (act.tax.level === 'warn') tx.innerHTML = ICON.warn; tx.appendChild(el('span', null, act.tax.text)); ab.appendChild(tx); }
       if (ACT_OPEN[a]) ab.open = true; ab.addEventListener('toggle', function () { ACT_OPEN[a] = ab.open; }); mid.appendChild(ab);
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
@@ -409,7 +412,6 @@
       cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
-      if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
       if (st && st.fallback && st.src && !st.preliminary) bot.appendChild(el('p', 'small muted', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt') + ' (Hauptquelle nicht erreichbar)'));
       if (st && st.preliminary) bot.appendChild(el('p', 'small muted', 'Vorläufiger Wochenschluss (' + (st.prelimLabel || 'aus dem aktuellen Kurs vom ' + dDE(st.preliminary)) + '); der endgültige Schluss folgt mit einem der nächsten Läufe und wird gemeldet, wenn sich die Regel dadurch ändert.'));
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
