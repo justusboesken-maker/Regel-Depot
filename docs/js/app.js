@@ -286,27 +286,37 @@
   }
   function edgeLines(a, x) {
     var m = CFG.assets[a], rule = m.rule, L = x.last, edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
-    /* Liegen Schluss und Schwelle weniger als zwei Anzeige-Einheiten auseinander, zwei Stellen mehr, sonst sähen beide gleich aus */
-    var fine = Math.abs(x.diff) < 2 * Math.pow(10, -m.dec), dec = fine ? m.dec + 2 : m.dec, f = Math.pow(10, dec);
-    function U(v) { return de(v, dec) + ' $'; } /* kein Umbruch vor „$“ und „%“ */
-    function P(v, d) { return pctPlain(v, d).replace(' %', ' %'); }
+    function R(v, d) { return +de(v, d).replace(/\./g, '').replace(',', '.'); } /* die Zahl so, wie sie angezeigt wird */
+    /* Nachkommastellen: so wenige wie möglich, so viele wie nötig, damit Schluss und Schwelle verschieden aussehen und der angezeigte
+       Schluss auf der richtigen Seite von „ab X“ / „bis Y“ steht. Für „was wäre, wenn“ der erste Anzeigewert jenseits der Schwelle: „ab X“ darüber,
+       „bis Y“ darunter; beides stimmt auch am angezeigten Wert selbst (Prüfung 27.09.2026) */
+    var decs = m.dec === 0 ? [0, 2, 4] : [m.dec, m.dec + 2], dec, f, upV, dnV; /* Dollarbeträge mit 0, 2 oder 4 Stellen, nie mit einer oder drei */
+    for (var di = 0; di < decs.length; di++) {
+      dec = decs[di]; f = Math.pow(10, dec); upV = (Math.floor(x.thr * f + 1e-6) + 1) / f; dnV = (Math.ceil(x.thr * f - 1e-6) - 1) / f;
+      var rc = R(x.c, dec);
+      if (x.side === 0 || (rc !== R(x.thr, dec) && (x.side > 0 ? rc > dnV : rc < upV))) break;
+    }
+    function U(v) { return de(v, dec) + '\u00a0$'; } /* kein Umbruch vor „$“ und „%“ */
+    function P(v, d) { return pctPlain(v, d).replace(' %', '\u00a0%'); }
     function stw(v) { return v === 1 ? 'investiert' : 'auf Cash'; }
     function sig(v) { return v === 1 ? 'Kaufsignal' : 'Verkaufssignal'; }
     function run(o) { return o.up === 1 ? 'erste Schluss über dem SMA50' : o.up > 1 ? o.up + '. Schluss in Folge über dem SMA50' : o.dn === 1 ? 'erste Schluss unter dem SMA50' : o.dn > 1 ? o.dn + '. Schluss in Folge unter dem SMA50' : null; }
-    /* Schwelle im Text auf den nächsten Anzeigewert gerundet („rund“, außer sie liegt genau darauf), damit Schluss, Schwelle und Abstand zusammenpassen. Für „was wäre, wenn“ der
-       erste Anzeigewert jenseits der Schwelle: „ab X“ darüber, „bis Y“ darunter; beides stimmt auch am angezeigten Wert selbst (Prüfung 27.09.2026) */
-    var exact = Math.abs(x.thr * f - Math.round(x.thr * f)) < 1e-6, T = (exact ? '' : 'rund ') + U(x.thr), upV = (Math.floor(x.thr * f + 1e-6) + 1) / f, dnV = (Math.ceil(x.thr * f - 1e-6) - 1) / f;
-    /* Abstand aus den angezeigten Zahlen, damit „Schluss minus Schwelle“ im Text aufgeht */
-    var gd = Math.abs(Math.round(x.thr * f) - Math.round(x.c * f)) / f, gap = gd > 0 ? 'nur ' + U(gd) : 'weniger als ' + U(1 / f);
-    var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? P(rp, 2) : 'weniger als 0,01 %';
-    var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' dieser Woche von ' + T + ' (' + P(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
-      : 'Schwelle dieser Woche von ' + T + ', ab der ein Schluss über dem SMA50 liegt';
-    var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + U(x.c) + (x.side === 0 ? ' genau auf der Schwelle dieser Woche von ' + T + ', also genau auf dem SMA50. '
+    /* Schwelle auf den nächsten Anzeigewert gerundet („rund“, außer sie liegt genau darauf), Abstand aus den angezeigten Zahlen, damit
+       „Schluss minus Schwelle“ im Text aufgeht. „für diesen Schluss“: die Schwelle der gebuchten Woche, nicht die der laufenden (Kursbox) */
+    var exact = Math.abs(x.thr * f - Math.round(x.thr * f)) < 1e-6, T = (!exact || (x.side !== 0 && R(x.c, dec) === R(x.thr, dec)) ? 'rund ' : '') + U(x.thr);
+    var gd = Math.round(Math.abs(R(x.thr, dec) - R(x.c, dec)) * f) / f, gap = gd > 0 ? 'nur ' + U(gd) : 'weniger als ' + U(1 / f);
+    var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? P(rp, 2) : 'weniger als 0,01\u00a0%';
+    var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' für diesen Schluss von ' + T + ' (' + P(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
+      : 'Schwelle für diesen Schluss von ' + T + ', oberhalb der ein Schluss über dem SMA50 liegt';
+    var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + U(x.c) + (x.side === 0 ? ' genau auf der Schwelle für diesen Schluss von ' + T + ', also genau auf dem SMA50. '
       : ' ' + gap + ' (' + rel + ') ' + (x.side > 0 ? 'über' : 'unter') + ' der ' + where + '. ');
     if (L.changed) p1 += x.band ? 'Das hat das ' + sig(L.st) + ' ausgelöst.' : 'Das war der ' + run(L) + ' und hat das ' + sig(L.st) + ' ausgelöst.';
     else if (x.band) p1 += 'Deshalb gab es kein ' + sig(1 - x.prev) + ', die Regel bleibt ' + stw(L.st) + '.';
     else if (x.side === 0) p1 += 'Ein Schluss genau auf dem SMA50 setzt beide Serien zurück, die Regel bleibt ' + stw(L.st) + '.';
     else p1 += 'Das war der ' + run(L) + (L.st === 1 && L.dn > 0 ? '; ein Verkaufssignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge unter dem SMA50' : L.st === 0 && L.up > 0 ? '; ein Kaufsignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge über dem SMA50' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
+    /* Die Schwelle verschiebt sich jede Woche: die der laufenden Woche, dieselbe Zahl wie in der Kursbox darüber (ENG.flipThreshold wie ruleNow) */
+    var ft = ENG.flipThreshold(C[a].E, rule);
+    if (ft && ft.thr > 0) p1 += ' Für die laufende Woche liegt die ' + (x.band ? (L.st === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') : 'Schwelle') + ' bei ' + usd(a, ft.thr).replace(/ \$$/, '\u00a0$') + '.';
     var p2 = x.alt.map(function (o) {
       var pre = x.side === 0 ? (o.above ? 'Ein Schluss knapp darüber' : 'Ein Schluss knapp darunter') : 'Ein Schluss ' + (o.above ? 'ab ' + U(upV) : 'bis ' + U(dnV));
       if (o.changed) return pre + ' hätte das ' + sig(o.st) + ' ausgelöst' + (x.band ? '' : ' (' + run(o) + ')') + '.';
@@ -324,7 +334,7 @@
     if (ph) p3 += ' Gerechnet ist mit ' + ph + '.';
     if (st && st.preliminary) p3 += ' Der Schluss ist noch vorläufig; ändert der endgültige Schluss die Regel, meldet die Seite das unter „Signale“ und als Push-Nachricht.';
     else if (m.signal && m.signal.keepBooked) p3 += ' Ein gebuchter Schluss bleibt gebucht, auch wenn eine Quelle ihn später leicht anders angibt.';
-    else p3 += ' Liefert die Quelle diesen Schluss später so anders, dass die Regel kippt, steht das mit dem nächsten Wochenschluss unter „Signale“, als Push-Nachricht, wenn die Regel danach anders steht als vorher.';
+    else p3 += ' Liefert die Quelle diesen Schluss später so anders, dass die Regel kippt, steht das mit dem nächsten Wochenschluss unter „Signale“ und, wenn die Regel danach anders steht als vorher, auch als Push-Nachricht.';
     return [[p1, ''], [p2, 'alt'], [p3, 'why']];
   }
   function renderStatus(Mo) {
