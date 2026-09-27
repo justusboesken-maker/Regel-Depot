@@ -289,8 +289,6 @@
   }
 
   /* ---------- Status-Karten ---------- */
-  var ACT_OPEN = {}; /* aufgeklappte Handlungs-Boxen je Baustein, nur bis zum Neuladen */
-  var EDGE_OPEN = {}; /* aufgeklappte Grenzfall-Erklärungen je Baustein und Woche, nur bis zum Neuladen */
   /* Grenzfall zum Aufklappen (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): Schluss, Schwelle und Abstand der
      letzten Woche, was die Regel daraus gemacht hat und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (ENG.edgeCase);
      dazu, warum das zählt, mit welcher Quelle gerechnet ist und was mit einem später anderen Schluss passiert. Liefert Absätze [Text, Klasse]. */
@@ -400,13 +398,13 @@
       if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
       var edgeBox = null;
       if (ti.edge) {
-        /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche (ti.edge setzt ti.ec voraus) */
-        var ex = edgeLines(a, ti.ec), ek = a + ':' + ti.ec.k;
+        /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche (foldSet, ti.edge setzt ti.ec voraus) */
+        var ex = edgeLines(a, ti.ec), ek = 'edge-' + a + ':' + ti.ec.k, eo = !!foldState()[ek];
         var eb = el('button', 'chip c-warn tog'); eb.type = 'button'; eb.innerHTML = ICON.warn; eb.appendChild(document.createTextNode('Grenzfall'));
         edgeBox = el('div', 'edgex'); edgeBox.id = 'edgex-' + a; ex.forEach(function (q) { edgeBox.appendChild(el('p', q[1] || null, q[0])); });
-        eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[ek])); edgeBox.hidden = !EDGE_OPEN[ek];
+        eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(eo)); edgeBox.hidden = !eo;
         eb.title = 'Erklärung zum Grenzfall ein- oder ausklappen';
-        eb.addEventListener('click', function () { var o = edgeBox.hidden; edgeBox.hidden = !o; eb.setAttribute('aria-expanded', String(o)); EDGE_OPEN[ek] = o; });
+        eb.addEventListener('click', function () { var o = edgeBox.hidden; edgeBox.hidden = !o; eb.setAttribute('aria-expanded', String(o)); foldSet(ek, o); });
         row.appendChild(eb);
       }
       if (a === 'gold' && D.state && D.state.cross && D.state.cross.goldf && D.state.cross.goldf.st != null && D.state.cross.goldf.st !== L.st) row.appendChild(chip('info', 'COMEX-Future: ' + (D.state.cross.goldf.st === 1 ? 'investiert' : 'Cash')));
@@ -415,12 +413,12 @@
       if (row.childNodes.length) top.appendChild(row);
       if (edgeBox) top.appendChild(edgeBox);
       card.appendChild(top);
-      /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, solange die Seite nicht neu geladen wird */
+      /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, auch nach dem Neuladen, bis eine Stunde ohne Benutzung (foldSet) */
       var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('details', 'act ' + act.cls), sm = el('summary'); sm.appendChild(el('b', null, act.title)); ab.appendChild(sm); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : '')));
       /* Steuerhinweis zum Verkauf in der Handlung (Justus 27.09.2026: „den Hinweis in Verkaufen einbauen“), vorher ein eigener Kasten unter dem
          Chart; ein Warnhinweis (Pauschbetrag oder Freigrenze überschritten) behält sein Warnsymbol (app.css .atax) */
       if (act.tax) { var tx = el('p', 'atax' + (act.tax.level === 'warn' ? ' warn' : '')); if (act.tax.level === 'warn') tx.innerHTML = ICON.warn; tx.appendChild(el('span', null, act.tax.text)); ab.appendChild(tx); }
-      if (ACT_OPEN[a]) ab.open = true; ab.addEventListener('toggle', function () { ACT_OPEN[a] = ab.open; }); mid.appendChild(ab);
+      var ak = 'act-' + a; if (foldState()[ak]) ab.open = true; ab.addEventListener('toggle', function () { foldSet(ak, ab.open); }); mid.appendChild(ab);
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
       var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a);
@@ -993,15 +991,16 @@
       .filter(function (o) { return !!o.d; }).sort(function (x, y) { return x.d - y.d; }).filter(function (o) { return !seen[o.id + o.label] && (seen[o.id + o.label] = 1); }).slice(0, 6).forEach(function (o) { var r = el('div'); r.appendChild(el('span', null, o.label)); r.appendChild(el('b', null, o.d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr')); host.appendChild(r); });
   }
   var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE und Gold', 'sa-close': 'Samstag: fehlende Schlüsse', 'so-warn': 'Vorwarnung Bitcoin', 'mo-close': 'Wochenschluss Bitcoin', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'live': 'Kurs-Ticker', 'early-warn': 'Vorwarnung (Woche endet vorzeitig)', 'early-close': 'Vorgezogener Wochenschluss', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push', 'test-sources': 'Quellen-Test' };
-  /* Ein- und ausklappbare Karten (Käufe/Verkäufe, Push, Letzte Läufe); der Zustand wird je Browser gemerkt */
+  /* Auf- und Zuklappen (Justus 27.09.2026: „ausgeklappt bleiben, auch nach dem Aktualisieren; erst nach einer Stunde Nichtbenutzung wieder
+     einklappen“). Alle Klappen merken sich ihren Zustand in diesem Browser (regelDepot.fold): Knöpfe mit data-fold (Buchungen, Hinweise, Letzte
+     Läufe, Push-Nachrichten), die Bereiche <details class="box"> unter Depot und Einstellungen (box-<id>), die Handlungs-Boxen der Status-Karten
+     (act-<Baustein>) und die Grenzfall-Erklärungen (edge-<Baustein>:<Woche>). Nach einer Stunde ohne Benutzung der Seite (PAGE_IDLE, gemessen
+     wie bei der zuletzt geöffneten Seite) gilt wieder der Grundzustand, beim Laden wie bei der Rückkehr in die noch geöffnete App (foldReset). */
   var FOLD_KEY = 'regelDepot.fold';
   function foldState() { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { return {}; } }
-  /* data-remember="0": der Zustand gilt nur bis zum Neuladen, danach wieder wie data-open (z. B. „Hinweise“ unter Rebalancing, Justus 27.09.2026:
-     standardmäßig eingeklappt) */
-  var FOLD_MEM = {};
-  function foldStore(btn) { return btn.getAttribute('data-remember') === '0' ? FOLD_MEM : foldState(); }
+  function foldSet(key, open) { var s = foldState(); s[key] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
   function applyFold(btn) {
-    var key = btn.getAttribute('data-fold'), s = foldStore(btn), open = s[key] == null ? btn.getAttribute('data-open') !== '0' : !!s[key];
+    var key = btn.getAttribute('data-fold'), s = foldState(), open = s[key] == null ? btn.getAttribute('data-open') !== '0' : !!s[key];
     var body = document.getElementById(btn.getAttribute('aria-controls'));
     btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.textContent = open ? 'Einklappen' : 'Ausklappen';
     if (body) body.hidden = !open;
@@ -1012,9 +1011,21 @@
     var list = (root || document).querySelectorAll('button[data-fold]');
     for (var i = 0; i < list.length; i++) { (function (btn) {
       if (btn.getAttribute('data-wired')) return; btn.setAttribute('data-wired', '1');
-      btn.addEventListener('click', function () { var s = foldStore(btn); s[btn.getAttribute('data-fold')] = btn.getAttribute('aria-expanded') === 'true' ? 0 : 1; if (s !== FOLD_MEM) { try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } } applyFold(btn); });
+      btn.addEventListener('click', function () { foldSet(btn.getAttribute('data-fold'), btn.getAttribute('aria-expanded') !== 'true'); applyFold(btn); });
       applyFold(btn);
     })(list[i]); }
+  }
+  function wireBoxes() {
+    Array.prototype.forEach.call(document.querySelectorAll('details.box[id]'), function (d) {
+      var k = 'box-' + d.id, s = foldState(); d.setAttribute('data-def', d.open ? '1' : '0'); if (s[k] != null) d.open = !!s[k];
+      d.addEventListener('toggle', function () { foldSet(k, d.open); });
+    });
+  }
+  /* Grundzustand: gemerkte Zustände löschen, Knöpfe und Bereiche zurücksetzen; die Status-Karten zeichnet schedule() neu */
+  function foldReset() {
+    try { localStorage.removeItem(FOLD_KEY); } catch (e) { /* still */ }
+    Array.prototype.forEach.call(document.querySelectorAll('button[data-fold]'), applyFold);
+    Array.prototype.forEach.call(document.querySelectorAll('details.box[data-def]'), function (d) { d.open = d.getAttribute('data-def') === '1'; });
   }
   /* Eigene Seiten (Justus 27.09.2026: „jeder Bereich eine eigene Seite, nicht alles auf einer Seite“): Status, Depot, Rebalancing, Signale,
      Einstellungen und Regeln sind je eine Seite; sie ersetzen die früher einklappbaren Abschnitte. Die Adresse bestimmt, welcher Abschnitt
@@ -1052,10 +1063,14 @@
     if (changed) schedule();
   }
   function route(user) {
-    var id = (location.hash || '').slice(1), t = null, last = null;
-    if (!id && !user) { /* Start ohne „#“: zuletzt geöffnete Seite, wenn vor weniger als einer Stunde benutzt; Adresse passend setzen (Neuladen, Zurück) */
-      last = pageMem();
-      if (pageFresh(last) && last.page !== 'status') { id = last.page; try { history.replaceState(history.state, '', '#' + id); } catch (e) { /* still */ } }
+    var id = (location.hash || '').slice(1), t = null, last = null, nt = '';
+    if (!user) {
+      last = pageMem(); try { var ne = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null; nt = ne ? ne.type : ''; } catch (e) { nt = ''; }
+      /* Start ohne „#“: zuletzt geöffnete Seite, wenn vor weniger als einer Stunde benutzt; Adresse passend setzen (Neuladen, Zurück) */
+      if (!id) { if (pageFresh(last) && last.page !== 'status') { id = last.page; try { history.replaceState(history.state, '', '#' + id); } catch (e) { /* still */ } } }
+      /* Neu geladen (auch ein vom Browser verworfener Tab) nach mehr als einer Stunde ohne Benutzung: wieder Status, wie bei der Rückkehr in die
+         offene App; Links, Lesezeichen und Push mit „#“ (Navigation, kein Neuladen) behalten ihr Ziel */
+      else if ((nt === 'reload' || nt === 'back_forward') && !pageFresh(last)) { id = 'status'; try { history.replaceState(history.state, '', '#status'); } catch (e) { /* still */ } }
     }
     try { t = id ? document.getElementById(decodeURIComponent(id)) : null; } catch (e) { t = null; }
     var sec = t && t.closest ? t.closest('.wrap > section') : null;
@@ -1076,8 +1091,11 @@
     document.addEventListener('visibilitychange', function () {
       if (document.hidden) { savePage(); return; }
       var m = pageMem();
-      if (PAGE && PAGE !== 'status' && m && !pageFresh(m)) { try { history.replaceState(history.state, '', '#status'); } catch (e) { /* still */ } showPage('status', null, true); }
-      else savePage();
+      if (m && !pageFresh(m)) {
+        foldReset();
+        if (PAGE && PAGE !== 'status') { try { history.replaceState(history.state, '', '#status'); } catch (e) { /* still */ } showPage('status', null, true); }
+        else { savePage(); schedule(); }
+      } else savePage();
     });
     route(false);
   }
@@ -1636,7 +1654,8 @@
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'pushsubscriptionchange' && READY) pushInit().then(schedule); });
 
   /* Formulare und Sichern/Import sofort bedienbar, unabhängig davon, ob die Kursdaten laden */
-  wireData(); wireForms(); wireFolds(); wirePages(); renderOffline();
+  if (!pageFresh(pageMem())) { try { localStorage.removeItem(FOLD_KEY); } catch (e) { /* still */ } } /* länger als eine Stunde nicht benutzt: Klappen im Grundzustand */
+  wireData(); wireForms(); wireFolds(); wireBoxes(); wirePages(); renderOffline();
   var loaded = false;
   loadAll().then(function (N) { applyLoaded(N); loaded = true; READY = true; STORE.setAssets(A.concat(ALTS.map(function (x) { return x.id; }))); return pushInit(); }).then(function () { renderAll(); if (PAGE_TARGET) { try { PAGE_TARGET.scrollIntoView(); } catch (e) { /* still */ } PAGE_TARGET = null; } else restoreScroll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; refreshBrowserLive(); })
     .catch(function (e) {
