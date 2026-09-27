@@ -288,6 +288,17 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .rule-rd.rd-mid .rd-l,.rule-rd.rd-wide .rd-l{min-width:0}
 .rule-rd.rd-wide .rd-h b{display:inline;margin-right:10px}
 .rule-rd.rd-two .rd-n{white-space:normal;min-height:3em}
+/* Großansicht (Justus 27.09.2026: „Die Schrift soll deutlich größer sein. Nutze auch den freien Platz nach rechts“): Werte-Zeile 13,5 → 18 px;
+   rd-line (charts.js fitMode: Datum, Abstand, Schluss und SMA50 passen zusammen in eine Zeile, Abstand 32 px) = zwei Zeilen, der Regelstand darunter */
+.bigchart .rule-rd{font-size:18px;gap:5px;margin-bottom:10px}
+.bigchart .rule-rd .rd-row{gap:4px 24px}
+.bigchart .rule-rd i{width:22px}
+.rule-rd.rd-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 32px}
+.rule-rd.rd-line .rd-h{display:flex;flex-wrap:nowrap;align-items:baseline;gap:0 12px;min-height:0;overflow:visible}
+.rule-rd.rd-line .rd-h b{display:inline;margin-right:0}
+.rule-rd.rd-line .rd-row{flex-wrap:nowrap;overflow:visible}
+.rule-rd.rd-line .rd-n{flex-basis:100%}
+@media (max-width:560px){.bigchart .rule-rd{font-size:16px}}
 @media (max-width:560px){#perfLegend.readout .rd-h{min-height:var(--rdh,3em)}.readout .rd-long{display:none}.readout .rd-short{display:inline}}
 .cap{font-size:13px;color:var(--muted)}
 .subhd{font-size:12px;font-weight:600;letter-spacing:.06em;text-transform:uppercase;color:var(--muted)}
