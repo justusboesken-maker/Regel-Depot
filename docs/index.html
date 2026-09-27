@@ -27,7 +27,7 @@
   </header>
 </div></div>
 <nav class="toc" aria-label="Abschnitte"><div class="in">
-  <a href="#status">Status</a><a href="#depot">Depot</a><a href="#signale">Signale<span class="cnt" id="navCnt" hidden></span></a><a href="#rebalancing">Rebalancing</a><a href="#einstellungen">Einstellungen</a><a href="#regeln">Regeln</a>
+  <a href="#status">Status</a><a href="#depot">Depot</a><a href="#rebalancing">Rebalancing</a><a href="#signale">Signale<span class="cnt" id="navCnt" hidden></span></a><a href="#einstellungen">Einstellungen</a><a href="#regeln">Regeln</a>
 </div></nav>
 <div class="wrap">
 
@@ -47,21 +47,20 @@
 <section id="depot" aria-labelledby="h-depot">
   <h2 class="eyebrow sec" id="h-depot">Depot</h2>
   <div id="depotBanner"></div>
-  <div class="card pad alloc" id="alloc"></div>
   <div class="card chartcard" id="perfCard">
-    <div class="perf-head"><p class="subhd">Depotentwicklung</p>
+    <div class="perf-head">
       <div class="controls"><div class="seg" id="perfRange" role="group" aria-label="Zeitraum"></div><div class="seg" id="perfSeg" role="group" aria-label="Ansicht"><button type="button" data-m="gewinn" aria-pressed="true">Gewinn</button><button type="button" data-m="wert" aria-pressed="false">Wert</button><button type="button" data-m="vergleich" aria-pressed="false" title="Dein Depot seit dem Regelstart gegen Buy &amp; Hold 50/30/20, in Prozent, mit Drawdown">Vergleich</button></div></div></div>
     <div class="chart-legend" id="perfLegend"></div>
     <div class="chart" id="chPerf" role="img" aria-label="Gewinn oder Verlust des Depots und der Bausteine"></div>
     <div class="perfdd" id="perfDD" hidden></div>
     <p class="cap" id="perfCap"></p>
   </div>
+  <div class="card pad alloc" id="alloc"></div>
   <div class="card" id="posCard">
-    <div class="pad" style="padding-bottom:6px"><p class="subhd">Positionen</p></div>
     <div class="tablewrap" id="posTable"></div>
   </div>
-  <div class="card">
-    <div class="pad cardhead tight"><p class="subhd">Buchungen und Kauflose</p><div class="row"><button type="button" class="fold plain" id="btnNotes" aria-pressed="false">Notizen</button><button type="button" class="fold" data-fold="tx2" aria-controls="txTable" aria-expanded="false" data-open="0">Ausklappen</button></div></div>
+  <div class="card" id="txCard">
+    <div class="pad cardhead tight"><p class="subhd">Buchungen</p><div class="row"><button type="button" class="fold plain" id="btnNotes" aria-pressed="false">Notizen</button><button type="button" class="fold" data-fold="tx2" aria-controls="txTable" aria-expanded="false" data-open="0">Ausklappen</button></div></div>
     <div class="tablewrap" id="txTable"></div>
   </div>
   <details class="box" id="accBox">
@@ -100,6 +99,13 @@
   </details>
 </section>
 
+<section id="rebalancing" class="sfold folded" aria-labelledby="h-reb">
+  <h2 class="eyebrow sec" id="h-reb">Rebalancing <span id="rebDate">30.12.2026</span></h2>
+  <div id="rebBanner"></div>
+  <div class="grid2" id="rebCards"></div>
+  <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
+</section>
+
 <section id="signale" class="sfold folded" data-remember="0" aria-labelledby="h-signale">
   <h2 class="eyebrow sec" id="h-signale">Signale</h2>
   <div class="grid2">
@@ -117,13 +123,6 @@
       </div>
     </div>
   </div>
-</section>
-
-<section id="rebalancing" class="sfold folded" aria-labelledby="h-reb">
-  <h2 class="eyebrow sec" id="h-reb">Rebalancing <span id="rebDate">30.12.2026</span></h2>
-  <div id="rebBanner"></div>
-  <div class="grid2" id="rebCards"></div>
-  <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
 </section>
 
 <section id="einstellungen" class="sfold folded" aria-labelledby="h-set">

@@ -98,15 +98,16 @@ nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px
 section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
 section>*{min-width:0}
 /* Abschnittstitel: eine kompakte Zeile statt Überschrift plus Einleitung */
-h2.eyebrow.sec{font-size:13px;letter-spacing:.1em;color:var(--ink-2);margin:0;padding-bottom:8px;border-bottom:1px solid var(--rule)}
-h2.eyebrow.sec span{color:var(--muted);font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:8px}
+h2.eyebrow.sec{font-size:20px;letter-spacing:.08em;color:var(--ink-2);margin:0;padding-bottom:10px;border-bottom:1px solid var(--rule)} /* Abschnittsüberschriften deutlich größer: 20 statt 13 px, auf dem Handy 18 px (Justus 27.09.2026) */
+h2.eyebrow.sec span{color:var(--muted);font-size:14px;font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:10px}
+@media (max-width:640px){h2.eyebrow.sec{font-size:18px} h2.eyebrow.sec span{display:block;margin:2px 0 0}} /* Zusatz wie „30.12.2026 · noch 94 Tage“ passt auf dem Handy nicht daneben: linksbündig darunter */
 /* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen, Regeln. Der Titel ist ein Knopf mit Pfeil rechts,
    eingeklappt bleiben nur Titel und Fußtext sichtbar (app.js wireSections) */
 section.sfold.folded>*:not(h2):not(footer){display:none!important}
 h2.eyebrow.sec .secfold{-webkit-appearance:none;appearance:none;display:block;width:100%;position:relative;margin:0;padding:0 28px 0 0;border:0;border-radius:0;background:none;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;text-align:left;cursor:pointer}
 h2.eyebrow.sec .secfold:hover{color:var(--ink)}
 h2.eyebrow.sec .secfold:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
-h2.eyebrow.sec .secfold .chev{position:absolute;right:6px;top:50%;width:8px;height:8px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-75%) rotate(45deg);transition:transform .15s}
+h2.eyebrow.sec .secfold .chev{position:absolute;right:6px;top:50%;width:10px;height:10px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-75%) rotate(45deg);transition:transform .15s}
 section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-45deg)}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);min-width:0}
 .pad{padding:16px 18px}
@@ -151,6 +152,9 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* Status-Karten */
 .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
+/* Mehr Abstand über „Status“ (Justus 27.09.2026): ab etwa 1070 px Breite 32 px zusätzlich, schmaler weniger (mind. 12 px). Als padding, weil ein
+   margin mit dem Abstand unter der Navigation verschmelzen würde; scroll-margin um denselben Betrag kleiner, damit das Sprungziel gleich bleibt */
+#status{--stx:clamp(12px,3vw,32px);padding-top:calc(24px + var(--stx));scroll-margin-top:calc(52px - var(--stx))}
 #status>.toolbar{justify-content:flex-end}
 /* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
    die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
@@ -171,13 +175,12 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .aic svg{width:100%;height:100%;display:block;overflow:visible}
 .scard .hd .aic{width:29px;height:29px}
 .scard .sub{font-size:12.5px;color:var(--muted)}
-.scard .stbox{display:grid;justify-items:end;gap:4px;flex:1 1 0} /* nimmt nur den Platz neben dem vollen Namen; der Name bricht erst um, wenn auch „Investiert“ und „seit Signal …“ nicht mehr daneben passen (27.09.2026) */
-/* „seit Signal TT.MM.JJ“ und darunter die Prozentzahl seit dem Signal (app.js renderStatus), aus Sicht der Regel grün oder rot wie in der Großansicht */
-.scard .since{font-size:12px;color:var(--muted);text-align:right}
+.scard .stbox{display:grid;justify-items:end;gap:4px;flex:1 1 0} /* nimmt nur den Platz neben dem vollen Namen; der Name bricht erst um, wenn auch „Investiert“ und „seit Kaufsignal …“ nicht mehr daneben passen (27.09.2026) */
+/* „seit Kaufsignal TT.MM.JJ“ bzw. „seit Verkaufssignal TT.MM.JJ“ und darunter die Prozentzahl seit dem Signal (app.js renderStatus), ungefärbt (Justus 27.09.2026) */
+.scard .since{font-size:13.5px;color:var(--muted);text-align:right} /* 13,5 statt 12 px (Justus 27.09.2026) */
 .scard .since>span{display:block;white-space:nowrap}
+.scard .since>.sl{white-space:normal} /* „seit Kaufsignal“ bleibt zusammen, das Datum rutscht bei Platzmangel in die nächste Zeile (statt dass der Name umbricht) */
 .scard .since .sp{font-weight:600;font-variant-numeric:tabular-nums}
-.scard .since .sp.good{color:var(--good)}
-.scard .since .sp.bad{color:var(--bad)}
 .scard .fig{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
 .scard .fig .fl{font-size:12.5px;color:var(--muted);flex-basis:100%}
 .scard .fig .fv{font-size:clamp(26px,calc(1.6vw + 10px),30px);font-weight:600;letter-spacing:-.01em;color:var(--ink)}
@@ -204,8 +207,8 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard details.act>span{display:block;margin-top:3px}
 /* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
-   über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
-.scard .cchart{position:relative;min-width:0;align-self:start;margin-top:6px} /* 6 px mehr über dem Chart: Platz für die Zeile .crd (22 px) unter der Box darüber */
+   über dem Chart (40 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
+.scard .cchart{position:relative;min-width:0;align-self:start;margin-top:20px} /* 20 px zusätzlich zum Zeilenabstand: 40 px über dem Chart, Platz für die Zeile .crd mit Luft zur Box darüber (Justus 27.09.2026, vorher 26 px) */
 .scard .crd{position:absolute;left:0;right:0;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
 .scard .crd b{font-weight:600;color:var(--ink)}
 .scard .nextact{font-size:13px;color:var(--ink-2)}
@@ -265,7 +268,6 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard .chart{touch-action:manipulation}
 .chart.loading{opacity:.55}
 .splitcharts{display:grid;gap:10px}
-.splitbox .subhd{margin:0 0 2px}
 /* Vergleich mit Buy & Hold: Drawdown-Chart und Kennzahlen */
 .perfdd{display:grid;gap:6px}
 .ddtab{font-size:13px;width:auto;min-width:min(100%,560px)}
@@ -372,9 +374,6 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .donuts{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:8px 24px;align-items:start}
 .donut{position:relative;display:grid;justify-items:center;gap:4px;margin:0;min-width:0}
 .donut svg{width:100%;max-width:300px;height:auto;display:block;overflow:visible}
-.dlegend{display:flex;flex-wrap:wrap;justify-content:center;gap:4px 14px;font-size:12.5px;color:var(--ink-2);margin-top:4px}
-.dlegend span{display:inline-flex;align-items:center;gap:6px;white-space:nowrap}
-.dlegend .aic{width:15px;height:15px}
 .alloc td .sub{display:block;font-size:12px;color:var(--muted)}
 .alloc td .dm{display:none}
 @media (max-width:480px){
@@ -385,14 +384,14 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 .donut figcaption{font-size:13px;color:var(--ink-2);text-align:center}
 .donut figcaption b{color:var(--ink);font-weight:600}
 .donut .tip{min-width:170px}
-.perf-head{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:8px 12px}
+.perf-head{display:flex;flex-wrap:wrap;justify-content:flex-end;align-items:center;gap:8px 12px} /* ohne Überschrift „Depotentwicklung“: Knöpfe rechts */
 /* Depot offen wie Status und Regeln (Justus 27.09.2026): keine Kästen, die Blöcke nur durch Linien getrennt,
    der Inhalt bündig mit dem Abschnittstitel */
 #depot{row-gap:0}
 #depot>.card,#depot>details.box{background:none;border:0;border-radius:0;box-shadow:none}
 #depot>#depotBanner:not(:empty){padding-top:16px}
 #depot>.card{padding:22px 0 26px;border-top:1px solid var(--rule)}
-#depot>#alloc{border-top:0;padding-top:16px}
+#depot>#alloc{border-top:0}
 #depot>.card>.pad{padding:0 0 6px}
 #depot table th:first-child,#depot table td:first-child{padding-left:0}
 #depot table th:last-child,#depot table td:last-child{padding-right:0}
@@ -407,17 +406,20 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 #depot details.box>summary{padding:15px 0}
 #depot details.box>summary:focus-visible{border-radius:4px}
 #depot details.box .body{padding:4px 0 22px}
-/* Mehr Abstand über „Depot“ und über „Depotentwicklung“ (Justus 27.09.2026): ab etwa 1100 px Breite 95 px vom Status bis zur
-   Überschrift „Depot“ und 80 px von der Aufteilung bis zur Linie über „Depotentwicklung“, auf schmalen Bildschirmen weniger.
-   Über „Positionen“ ebenso 80 px von der Depotentwicklung bis zur Linie (Justus 27.09.2026, vorher 26 px).
+/* Abstände im Depot (Justus 27.09.2026): ab etwa 1100 px Breite 95 px vom Status bis zur Überschrift „Depot“. Reihenfolge seit 27.09.2026:
+   Depotentwicklung (direkt unter „Depot“, 16 px), darunter ohne Linie Portfolio/Ziel (102 px vom Chart bis zu den Ringen), dann mit Linie
+   Positionen und Buchungen (je 80 px vom Inhalt darüber bis zur Linie); auf schmalen Bildschirmen weniger.
    Als margin, damit die Sprungziele im Menü gleich bleiben. */
 #depot{margin-top:clamp(24px,6vw,65px)}
-#depot>#perfCard{margin-top:clamp(16px,5vw,54px)}
-#depot>#posCard{margin-top:clamp(12px,calc(5vw - 8px),46px)} /* 8 px weniger: die Bildunterschrift des Charts darüber bringt eigenen Abstand mit */
-/* Signale, Rebalancing, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
-   der Inhalt bündig mit dem Abschnittstitel. Abstand über „Signale“ wie über „Depot“; nach einem aufgeklappten Abschnitt
-   derselbe Abstand bis zum nächsten Titel, eingeklappt bleiben die Titel dicht beieinander (Titel springen beim Aufklappen nicht) */
-#signale{margin-top:clamp(24px,6vw,65px)}
+#depot>#perfCard{border-top:0;padding-top:16px} /* erster Block unter „Depot“ */
+#depot>#alloc{margin-top:clamp(16px,5vw,54px)} /* keine Linie zwischen Depotentwicklung und Portfolio/Ziel */
+#depot>#posCard{margin-top:clamp(16px,5vw,54px)}
+#depot>#txCard{margin-top:clamp(16px,5vw,54px)}
+/* Rebalancing, Signale, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
+   der Inhalt bündig mit dem Abschnittstitel. Abstand über „Rebalancing“ (seit 27.09.2026 der erste Abschnitt nach dem Depot, vor
+   „Signale“) wie über „Depot“; nach einem aufgeklappten Abschnitt derselbe Abstand bis zum nächsten Titel, eingeklappt bleiben die
+   Titel dicht beieinander (Titel springen beim Aufklappen nicht) */
+#rebalancing{margin-top:clamp(24px,6vw,65px)}
 #signale:not(.folded),#rebalancing:not(.folded),#einstellungen:not(.folded){padding-bottom:calc(6px + clamp(24px,6vw,65px))}
 #signale .card,#rebalancing .card,#regeln>.card{background:none;border:0;border-radius:0;box-shadow:none}
 /* Signale: zwei offene Spalten mit Linie in der Mitte (bis 980 px untereinander), in einer Spalte die Blöcke durch eine Linie getrennt.
@@ -580,3 +582,17 @@ td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 /* Beimischung (ETH, SOL) in der Positionstabelle: leise Unterzeilen */
 tr.altrow td{font-size:12.5px;color:var(--muted);padding-top:4px;padding-bottom:6px}
 tr.altrow .tag{font-size:10.5px;padding:1px 6px}
+/* Positionen-Tabelle etwas größer (Justus 27.09.2026): Zeilen 14,5 px statt 13,5 px, Spaltenköpfe 12 px statt 11,5 px; Unterzeilen,
+   davon-Zeilen, Markierungen (investiert, Cash, live) und Icons im selben Verhältnis. Dafür 9 px statt 11 px Innenabstand links und rechts
+   in den Zellen, damit die zehn Spalten weiter so früh nebeneinander passen wie vorher (Namen einzeilig ab etwa 1440 px Fensterbreite,
+   gemessen mit Arial-Breiten). Die Buchungstabelle bleibt wie sie ist. */
+#posTable table{font-size:14.5px}
+#posTable th,#posTable td{padding-left:9px;padding-right:9px}
+#depot #posTable th:first-child,#depot #posTable td:first-child{padding-left:0}
+#depot #posTable th:last-child,#depot #posTable td:last-child{padding-right:0}
+#posTable thead th{font-size:12px}
+#posTable td .sub{font-size:12.5px}
+#posTable tr.altrow td{font-size:13px}
+#posTable .tag{font-size:12px}
+#posTable tr.altrow .tag{font-size:11px}
+#posTable td .aic{width:17px;height:17px}

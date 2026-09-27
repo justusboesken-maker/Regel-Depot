@@ -291,7 +291,7 @@
         var tx = mk('text', { x: (cx + rr * s).toFixed(1), y: (cy - rr * c + 4).toFixed(1), 'text-anchor': anchor, 'font-size': 14, fill: css('--ink-2') }, svg); tx.textContent = pctPlain(q.v / tot, 0); } }); }
     var t1 = mk('text', { x: cx, y: cy - 6, 'text-anchor': 'middle', 'font-size': 14, fill: css('--muted') }, svg); t1.textContent = title;
     var t2 = mk('text', { x: cx, y: cy + 15, 'text-anchor': 'middle', 'font-size': 17, 'font-weight': 600, fill: css('--ink') }, svg); t2.textContent = eur(total);
-    var cap = el('figcaption'); cap.appendChild(el('b', null, title)); if (sub) cap.appendChild(document.createTextNode(' · ' + sub)); fig.appendChild(cap);
+    if (sub) { var cap = el('figcaption'); cap.appendChild(el('b', null, title)); cap.appendChild(document.createTextNode(' · ' + sub)); fig.appendChild(cap); } /* ohne sub keine Beschriftung unter dem Ring (Depot seit 27.09.2026) */
     return fig;
   }
 
@@ -387,10 +387,11 @@
     var wrap = el('div', 'splitcharts'); host.appendChild(wrap);
     /* Werte-Zeile statt Legende: Namen der Linien mit ihren Werten am gewählten Tag (ohne Zeiger: letzter Stand) */
     var G = syncGroup(leg);
-    function block(title, ser, height, hero) { var b = el('div', 'splitbox'); b.appendChild(el('p', 'subhd', title)); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
+    /* ohne Überschriften „Depot gesamt“ und „Bausteine“ (Justus 27.09.2026); die Werte-Zeile nennt die Linien */
+    function block(ser, height, hero) { var b = el('div', 'splitbox'); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
     var narrow = (host.clientWidth || 700) < 560;
-    block('Depot gesamt', total, narrow ? 210 : 250, true);
-    block('Bausteine', parts, narrow ? 200 : 220);
+    block(total, narrow ? 210 : 250, true);
+    block(parts, narrow ? 200 : 220);
     G.reset();
     if (cap) cap.textContent = capText || '';
   }

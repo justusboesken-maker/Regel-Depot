@@ -3,11 +3,12 @@
   'use strict';
   var A = ['ftse', 'btc', 'gold'];
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
-  /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable */
-  function aicon(a) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(k) : ''; return s; }
+  /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable.
+     square: statt des Icons das Quadrat wie bei Cash in der Farbe des Bausteins (im Bereich „Depot“, Justus 27.09.2026) */
+  function aicon(a, square) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(square ? 'cash' : k) : ''; return s; }
   var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in der Legende; die Ringe folgen RING_ORDER */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
-  var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Ist/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
+  var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Portfolio/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
   var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
   var F = window.FMT, de = F.de, eur = F.eur, sgnEur = F.sgnEur, pct = F.pct, pctPlain = F.pctPlain, dDE = F.dDE, dShort = F.dShort, dtDE = F.dtDE;
   var el = CH.el, css = CH.css;
@@ -211,13 +212,13 @@
   /* Performance seit dem letzten Regel-Signal (Justus 26.09.2026): Kursveränderung des Signalkurses in $ vom Schluss der Signalwoche bis zum
      aktuellen Kurs wie bei „Aktuell“ (ohne aktuellen Kurs der letzte Wochenschluss). Aus Sicht der Regel gefärbt: nach einem Kauf Gewinn grün,
      Verlust rot; nach einem Verkauf fallender Kurs grün („Verlust vermieden“), steigender rot („Anstieg verpasst“). Unter 0,05 % neutral.
-     Beschriftung „Performance seit Signal TT.MM.JJJJ“ (Justus 26.09.2026, statt „seit Kauf/Verkauf“). */
+     Beschriftung „Performance seit Kaufsignal/Verkaufssignal TT.MM.JJJJ“ (Justus 27.09.2026; vorher „seit Signal“, davor „seit Kauf/Verkauf“). */
   function perfSince(a, lp) {
     var L = C[a].E.last, ls = L && L.lastSwitch; if (!ls || !(ls.c > 0)) return null;
     var now = lp && lp.usd > 0 ? lp.usd : L.c; if (!(now > 0)) return null;
     var r = now / ls.c - 1; if (Math.abs(r) < 0.0005) r = 0;
     var good = r === 0 ? null : ls.to === 1 ? r > 0 : r < 0;
-    return { label: 'Performance seit Signal ' + dDE(ls.d), r: r, from: ls.c, to: now,
+    return { label: 'Performance seit ' + (ls.to === 1 ? 'Kaufsignal' : 'Verkaufssignal') + ' ' + dDE(ls.d), r: r, from: ls.c, to: now,
       text: pct(r, 1) + (ls.to === 1 || r === 0 ? '' : r < 0 ? ' · Verlust vermieden' : ' · Anstieg verpasst'), cls: good == null ? '' : good ? 'good' : 'bad' };
   }
   function thresholdInfo(a) {
@@ -243,13 +244,19 @@
 
   /* ---------- Kopf, Banner, Zu tun ---------- */
   function lastRun() { return D.runs && D.runs.length ? D.runs[0] : null; }
-  /* Kopfbereich: FTSE-Wochenschlüsse der letzten fünf Jahre (log.) als zarte Linie im Hintergrund (Justus 26.09.2026, Entwurf 7); Farben kommen aus dem CSS (--mh-deco) */
+  /* Kopfbereich: FTSE-Wochenschlüsse (log.) als zarte Linie im Hintergrund (Justus 26.09.2026, Entwurf 7); Farben kommen aus dem CSS (--mh-deco).
+     Linkes Ende (Justus 27.09.2026): Die Linie beginnt am tiefsten Wochenschluss der letzten sieben Jahre (derzeit Corona-Tief März 2020) und
+     dieser Punkt liegt genau auf der Unterkante. So setzt sich der echte Verlauf nach links fort und endet bündig mit dem Bereich darunter,
+     ohne senkrechtes Stück. Liegt das Tief weniger als drei Jahre zurück, wie früher die letzten fünf Jahre mit etwas Abstand nach unten. */
   function drawMasthead() {
     var svg = $('mhDeco'); if (!svg) return;
-    var S = C.ftse && C.ftse.S, c = S && S.c ? S.c.slice(-260).filter(function (v) { return v > 0; }) : [];
+    var S = C.ftse && C.ftse.S, all = S && S.c ? S.c.filter(function (v) { return v > 0; }) : [];
+    var win = all.slice(-364), s0 = 0; win.forEach(function (v, i) { if (v < win[s0]) s0 = i; });
+    var flush = win.length - 1 - s0 >= 156, c = flush ? win.slice(s0) : all.slice(-260);
     if (c.length < 10) { svg.textContent = ''; return; }
     var lo = Infinity, hi = -Infinity; c.forEach(function (v) { var l = Math.log(v); if (l < lo) lo = l; if (l > hi) hi = l; });
-    var W = 1000, H = 200, n = c.length, d = c.map(function (v, i) { return (i ? 'L' : 'M') + (i / (n - 1) * W).toFixed(1) + ',' + (H - 8 - (hi > lo ? (Math.log(v) - lo) / (hi - lo) : 0.5) * (H - 24)).toFixed(1); }).join('');
+    var W = 1000, H = 200, top = 16, bot = flush ? 0 : 8, n = c.length;
+    var d = c.map(function (v, i) { return (i ? 'L' : 'M') + (i / (n - 1) * W).toFixed(1) + ',' + (H - bot - (hi > lo ? (Math.log(v) - lo) / (hi - lo) : 0.5) * (H - top - bot)).toFixed(1); }).join('');
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none');
     svg.innerHTML = '<defs><linearGradient id="mhFill" x1="0" y1="0" x2="0" y2="1"><stop class="s0" offset="0"/><stop class="s1" offset="1"/></linearGradient></defs>'
       + '<path d="' + d + 'L' + W + ',' + H + 'L0,' + H + 'Z" fill="url(#mhFill)"/><path class="ln" d="' + d + '" vector-effect="non-scaling-stroke"/>';
@@ -349,14 +356,14 @@
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp);
-      /* Unter dem Regelstand „seit Signal TT.MM.JJ“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“), darunter in einer eigenen Zeile die
-         Kursveränderung seit dem Schluss der Signalwoche bis zum aktuellen Kurs wie in der Kursbox. Gerechnet und gefärbt wie „Performance seit
-         Signal“ in der Großansicht (perfSince): nach einem Kaufsignal Anstieg grün, Rückgang rot; nach einem Verkaufssignal Rückgang grün
-         („Verlust vermieden“), Anstieg rot („Anstieg verpasst“); unter 0,05 % neutral. Die Deutung steht im Tooltip und für Screenreader. */
-      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', null, 'seit Signal ' + dYY(ls.d)));
+      /* Unter dem Regelstand „seit Kaufsignal TT.MM.JJ“ bzw. „seit Verkaufssignal TT.MM.JJ“ (Justus 27.09.2026, vorher „seit Signal“), darunter in
+         einer eigenen Zeile die Kursveränderung seit dem Schluss der Signalwoche bis zum aktuellen Kurs wie in der Kursbox, gerechnet wie
+         „Performance seit …“ in der Großansicht (perfSince). Die Zahl ist nicht gefärbt (Justus 27.09.2026); die Deutung („Verlust vermieden“,
+         „Anstieg verpasst“ …) steht im Tooltip und für Screenreader. */
+      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', 'sl', 'seit\u00a0' + (ls.to === 1 ? 'Kaufsignal' : 'Verkaufssignal') + ' ' + dYY(ls.d))); /* bricht bei Platzmangel nur vor dem Datum um, damit der Name einzeilig bleibt */
         if (pf) {
           var why = pf.r === 0 ? '' : ls.to === 1 ? (pf.r > 0 ? 'Anstieg seit dem Kauf' : 'Rückgang seit dem Kauf') : (pf.r < 0 ? 'Verlust vermieden' : 'Anstieg verpasst');
-          var sp = el('span', 'sp' + (pf.cls ? ' ' + pf.cls : ''), pct(pf.r, 1)); if (why) sp.appendChild(el('span', 'sr-only', ' (' + why + ')'));
+          var sp = el('span', 'sp', pct(pf.r, 1)); if (why) sp.appendChild(el('span', 'sr-only', ' (' + why + ')'));
           sn.appendChild(document.createTextNode(' ')); sn.appendChild(sp);
           sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to) + (why ? ' · ' + why : '');
         }
@@ -397,7 +404,9 @@
       if (ACT_OPEN[a]) ab.open = true; ab.addEventListener('toggle', function () { ACT_OPEN[a] = ab.open; }); mid.appendChild(ab);
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
-      var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
+      var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a);
+      /* Kein eigener Knopf „Großansicht“ mehr (Justus 27.09.2026): geöffnet wird sie per Doppelklick, Doppeltippen oder Eingabetaste auf dem Chart */
+      cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
       if (act.tax) { var tb = el('div', act.tax.level === 'warn' ? 'warnbox' : 'infobox'); if (act.tax.level === 'warn') tb.innerHTML = ICON.warn; tb.appendChild(el('span', null, act.tax.text)); bot.appendChild(tb); }
@@ -409,7 +418,7 @@
     evenHeads(); drawCharts();
     if (keepFocus) { var nf = host.querySelector('button.tog[aria-controls="' + keepFocus + '"]'); if (nf) nf.focus({ preventScroll: true }); }
   }
-  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit Signal … %“
+  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit …signal … %“
      oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder
      Größenänderung (resize), weil die Karten erst ab 4 px Breitenänderung neu gezeichnet werden. */
   function evenHeads() {
@@ -524,19 +533,19 @@
     var pt = $('posTable'); pt.textContent = ''; var t = el('table'), th = el('thead'), tr = el('tr');
     ['Position', 'Regel', 'Bestand', 'Kurs', 'Wert', 'Cash', 'Summe', 'Anteil mit Cash', 'Zielgewicht', 'Abweichung'].forEach(function (h, i) { var c = el('th', i > 1 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody');
-    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = aicon(a); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
+    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = aicon(a, true); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
       var st = C[a].E.last.st; var c1 = el('td'); c1.appendChild(el('span', 'tag ' + (st === 1 ? 'ok' : ''), st === 1 ? 'investiert' : 'Cash')); r.appendChild(c1);
       var bc = el('td', 'n', P.u > 0 ? units(a, P.uBtc != null ? P.uBtc : P.u) : '–'); var withAlts = a === 'btc' && P.alts && P.alts.some(function (x) { return x.u > 1e-12; }); if (withAlts) bc.appendChild(el('span', 'sub', '+ Beimischung (davon-Zeilen)')); r.appendChild(bc); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.stale) { var sg = el('span', 'tag', 'Stand ' + dShort(pxo.d)); sg.title = 'Lang & Schwarz war beim letzten Lauf nicht erreichbar; das ist der letzte L&S-Kurs'; pxc.appendChild(sg); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } if (P.missing) { pxc.textContent = ''; var mt = el('span', 'tag bad', 'Kurs fehlt'); mt.title = 'Für diese Position liegt noch kein Euro-Kurs vor'; pxc.appendChild(mt); } r.appendChild(pxc); var vc = el('td', 'n', P.val == null ? '–' : eur(P.val)); if (withAlts && P.val != null) vc.appendChild(el('span', 'sub', 'inkl. Beimischung')); r.appendChild(vc); r.appendChild(el('td', 'n', eur(P.cash)));
       var sum = P.val == null ? null : P.val + P.cash; r.appendChild(el('td', 'n', sum == null ? '–' : eur(sum))); r.appendChild(el('td', 'n', full && tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', full ? sgnEur(sum - tot * CFG.assets[a].w) : '–')); tb.appendChild(r);
       /* Beimischung: steckt schon im Wert und in der Summe der Bitcoin-Zeile, deshalb hier nur „davon“ ohne eigene Summe und eigenen Anteil */
-      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(aicon('alt')); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
+      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(aicon('alt', true)); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
         ar.appendChild(el('td', 'n', units(x.id, x.u))); var apx = el('td', 'n', x.px ? eur(x.px, 2) + ' ' : 'Kurs fehlt noch'); if (x.px && x.live) apx.appendChild(el('span', 'tag', 'live')); ar.appendChild(apx); ar.appendChild(el('td', 'n', x.val != null ? 'davon ' + eur(x.val) : '–')); for (var ci = 0; ci < 5; ci++) ar.appendChild(el('td', 'n', '')); tb.appendChild(ar); }); });
     t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td', 'n', full ? eur(inv) : '–')); fr.appendChild(el('td', 'n', eur(cashT))); fr.appendChild(el('td', 'n', full ? eur(tot) : '–')); fr.appendChild(el('td', 'n', full ? '100 %' : '–')); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
     pt.appendChild(t);
     renderTx(Mo);
   }
   function renderAlloc(Mo, tot, cashT, miss) {
-    var al = $('alloc'); al.textContent = ''; al.appendChild(el('p', 'subhd', 'Aufteilung: Ist und Ziel'));
+    var al = $('alloc'); al.textContent = ''; /* ohne Unterüberschrift (Justus 27.09.2026: im Depot nur noch „Buchungen“) */
     if (miss && miss.length) { al.appendChild(el('p', 'small muted', 'Keine Aufteilung, solange der Euro-Kurs für ' + miss.map(function (a) { return CFG.assets[a].name; }).join(' und ') + ' fehlt: Der Wert ' + (miss.length > 1 ? 'dieser Positionen' : 'dieser Position') + ' ist unbekannt.')); return; }
     if (!(tot > 0)) { al.appendChild(el('p', 'small muted', 'Noch keine Werte.')); return; }
     var ist = { btc: Mo.pos.btc.val || 0, ftse: Mo.pos.ftse.val || 0, gold: Mo.pos.gold.val || 0, cash: cashT };
@@ -545,7 +554,7 @@
     var withAlts = hasAlts(Mo);
     function parts(o, which) { return CAT.map(function (c) { var note = null; var label = c.k === 'btc' && withAlts ? 'Krypto (Bitcoin + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') + ')' : c.label; if (which === 'ziel' && c.k === 'cash' && outs.length) note = 'Anteil von ' + outs.join(' und ') + ', Regel auf Cash'; if (which === 'ist' && c.k === 'cash') { var bits = A.filter(function (a) { return Mo.pos[a].cash > 0.5; }).map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }); if (bits.length) note = 'davon ' + bits.join(', '); } return { k: c.k, label: label, color: c.color, v: o[c.k], note: note }; }); }
     /* Ringe nach Bausteinen in fester Reihenfolge (RING_ORDER) ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts; je Baustein erst
-       die Position, dann sein Cash; direkt aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Ist und Ziel immer an derselben Stelle (Justus 27.09.2026). */
+       die Position, dann sein Cash; direkt aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Portfolio und Ziel immer an derselben Stelle (Justus 27.09.2026). */
     function ring(which, ps) {
       var out = [];
       RING_ORDER.forEach(function (a) {
@@ -558,13 +567,14 @@
       return out;
     }
     var wrap = el('div', 'donuts');
-    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, '')); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
-    d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
-    d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
+    /* Ringe ohne Beschriftung und Legende darunter (Justus 27.09.2026: „Portfolio · was gerade im Depot liegt“, „Ziel · laut Regeln“ und die
+       Zeile mit Farben, Anteilen und Beträgen entfallen); Name und Summe stehen in der Mitte, die Anteile am Ring, Details im Tooltip */
+    d1.appendChild(CH.donut('Portfolio', null, ring('ist', pi), tot, Math.PI));
+    d2.appendChild(CH.donut('Ziel', null, ring('ziel', pz), tot, Math.PI));
     wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
-    al.appendChild(el('p', 'small muted', 'Ziel 50 / 30 / 20 (FTSE / Bitcoin / Gold). ' + (outs.length ? outs.join(' und ') + (outs.length > 1 ? ' stehen' : ' steht') + ' laut Regel auf Cash, deshalb zählt ' + (outs.length > 1 ? 'ihr Anteil' : 'sein Anteil') + ' im Ziel als Cash. Abweichungen je Position stehen in der Tabelle unten.' : 'Alle drei Regeln sind investiert.')));
+    /* ohne Satz „Ziel 50 / 30 / 20 …“ unter den Ringen (Justus 27.09.2026); warum ein Anteil im Ziel als Cash zählt, zeigt der Tooltip des Ziel-Rings */
   }
   var pendingDelete = null;
   /* Buchungen und Kauflose in einer Tabelle: jede Buchung mit dem, was heute daraus geworden ist (Restbestand nach FIFO, Wert, Gewinn, steuerliche Lage) */
@@ -581,7 +591,7 @@
     list.forEach(function (x) {
       var r = el('tr'), a = x.a, P = posOf(Mo, a) || { px: null }, cashMove = x.type === 'einzahlung' || x.type === 'auszahlung';
       r.appendChild(el('td', null, dDE(x.d)));
-      var c1 = el('td'), sw = aicon(a); c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
+      var c1 = el('td'), sw = aicon(a, true); c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
       if (x.note) { if (SHOW_NOTES) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } else { c1.title = x.note; var ni = el('span', 'noteic', 'i'); ni.setAttribute('aria-label', 'Notiz: ' + x.note); c1.appendChild(ni); } }
       r.appendChild(c1);
       r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : x.type === 'umbuchung' ? 'Umbuchung' : 'Auszahlung'));
@@ -861,7 +871,7 @@
       aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
     var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
-    ddBox.appendChild(el('p', 'subhd', 'Drawdown: Rückgang vom bisherigen Höchststand' + (w.cut ? ' im Zeitraum' : ''))); ddBox.appendChild(ddCh); box.appendChild(ddBox);
+    ddBox.appendChild(ddCh); box.appendChild(ddBox); /* ohne Unterüberschrift (Justus 27.09.2026); „Drawdown“ steht in der Werte-Zeile */
     CH.pctChart(ddCh, w.dates, [
       { vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
       { vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
@@ -959,8 +969,11 @@
      „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
      (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
      immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. Signale (data-remember="0" im HTML) ist beim Laden immer eingeklappt
-     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. */
+     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. Führt ein Menüpunkt,
+     Link oder Push dorthin, verschwindet „#signale“ danach wieder aus der Adresse, sonst würde jedes Neuladen den Abschnitt wieder öffnen. */
   function remembers(sec) { return sec.getAttribute('data-remember') !== '0'; }
+  function forgetsHash(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; return !!sec && !remembers(sec); }
+  function clearHash() { try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* still */ } }
   function setSec(sec, open, save) {
     sec.classList.toggle('folded', !open);
     var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
@@ -977,8 +990,8 @@
       b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
       setSec(sec, remembers(sec) && s['sec-' + sec.id] === 1, false);
     });
-    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : ''; if (id) openSecFor(document.getElementById(id)); }, true);
-    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } }
+    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : '', t = id ? document.getElementById(id) : null; if (!t) return; openSecFor(t); if (forgetsHash(t)) setTimeout(clearHash, 0); /* nach dem Sprung */ }, true);
+    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } if (forgetsHash(t)) clearHash(); }
     window.addEventListener('hashchange', fromHash); fromHash();
   }
   function renderRunLog() {
