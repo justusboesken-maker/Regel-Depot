@@ -40,7 +40,7 @@
   --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:linear-gradient(180deg,#8C6A1F 0%,#C9A043 24%,#FBEFB5 40%,#E3BD5A 50%,#A87C24 61%,#F0D27F 71%,#C79A35 80%,#7D5C17 100%); --mh-gold-sh:drop-shadow(0 1px 1px rgba(0,0,0,.55));
 }
 *{box-sizing:border-box}
-html{scroll-padding-top:56px}
+html{scroll-padding-top:66px} /* Menüleiste 10 px höher seit 27.09.2026 (vorher 56 px) */
 body{margin:0;background:var(--bg);color:var(--ink);font-family:var(--sans);font-size:15px;line-height:1.5;-webkit-font-smoothing:antialiased;padding-top:env(safe-area-inset-top,0px)}
 /* Breite: bis 1520px, darüber zentriert (Justus 26.09.2026: „etwas zu viel Rand“ bei 1400px; 27.09.2026: „etwas zentrierter, mehr Rand“, vorher 1600px).
    Seitenrand wächst mit der Fensterbreite: 16px (Handy), 24–40px (Tablet), 40–64px (Desktop); die Navigation zieht bündig mit. */
@@ -96,13 +96,14 @@ nav.toc{position:sticky;top:env(safe-area-inset-top,0px);z-index:6;background:co
 nav.toc .in{max-width:1520px;margin:0 auto;padding-inline:16px;display:flex;gap:2px;overflow-x:auto;scrollbar-width:none}
 @media (min-width:640px){nav.toc .in{padding-inline:calc(clamp(24px,3vw,40px) - 10px)}}
 @media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(40px,3.5vw,64px) - 10px)}}
-nav.toc a{flex:0 0 auto;padding:10px 10px;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
+nav.toc a{flex:0 0 auto;padding:13px 12px;font-size:16px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent} /* Menü größer (Justus 27.09.2026, vorher 13,5 px und 10 px Innenabstand) */
+@media (max-width:640px){nav.toc a{padding:12px 9px;font-size:15px}} /* schmal etwas kleiner, damit die Leiste nicht viel weiter seitlich scrollt */
 nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-bottom-color:var(--rule-strong);outline:none}
 nav.toc a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)} /* aktuelle Seite */
 nav.toc a[aria-current="page"]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px} /* Tastaturfokus auch auf der aktuellen Seite sichtbar */
-nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:var(--bad-ink);font-size:11px;font-weight:700;text-align:center;line-height:18px}
+nav.toc a .cnt{display:inline-block;min-width:20px;padding:0 6px;margin-left:6px;border-radius:10px;background:var(--bad);color:var(--bad-ink);font-size:12px;font-weight:700;text-align:center;line-height:20px}
 
-section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
+section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:62px;min-width:0}
 section>*{min-width:0}
 /* Abschnittstitel: eine kompakte Zeile statt Überschrift plus Einleitung */
 /* Abschnittstitel sichtbar entfernt (Justus 27.09.2026: „diese Überschriften sollen weg“; seit den eigenen Seiten nennt das Menü die Seite):
@@ -169,7 +170,7 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .rules{--sgap:clamp(56px,calc(2.85vw + 25px),70px)}
 .scards{--sgap:clamp(56px,calc(2.85vw + 25px),68px)} /* Status-Spalten: Abstand höchstens 68 px (Justus 27.09.2026) */
 .scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
-.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:20px;scroll-margin-top:60px} /* Abstand zwischen den Blöcken 20 px, vorher 30 px (Justus 27.09.2026) */
+.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:20px;scroll-margin-top:70px} /* Abstand zwischen den Blöcken 20 px, vorher 30 px (Justus 27.09.2026) */
 .scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
 .card.scard{background:none;border:0;border-radius:0;box-shadow:none}
 .scards .scard+.scard::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
