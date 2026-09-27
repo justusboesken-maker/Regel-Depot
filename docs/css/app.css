@@ -11,7 +11,7 @@
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
-  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08; --mh-gold:#9A7425;
+  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08; --mh-gold:#9A7425; --mh-t-reb:#23858A; --mh-t-sig:#A36E12; --mh-t-set:#657C9B; --mh-t-rul:#2071FF;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
@@ -25,7 +25,7 @@
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763;
+    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763; --mh-t-reb:#70D6DB; --mh-t-sig:#F0C477; --mh-t-set:#B4BFCE; --mh-t-rul:#8BB5FF;
   }
 }
 :root[data-theme="dark"]{
@@ -37,7 +37,7 @@
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763;
+  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763; --mh-t-reb:#70D6DB; --mh-t-sig:#F0C477; --mh-t-set:#B4BFCE; --mh-t-rul:#8BB5FF;
 }
 *{box-sizing:border-box}
 html{scroll-padding-top:66px} /* Menüleiste 10 px höher seit 27.09.2026 (vorher 56 px) */
@@ -73,7 +73,14 @@ p{margin:0}
    Seit 27.09.2026 ohne Glanz (Justus: „weiterhin selbe Farbe aber ohne Glanz“): einfarbiges Gold je Modus (--mh-gold), der Durchschnitt des
    früheren Verlaufs im Bereich der Buchstaben (hell etwas dunkler für mindestens 3:1 Kontrast), ohne Glanzstreifen und Schatten */
 .masthead h1{justify-self:start}
-html[data-page="depot"] .masthead h1{color:var(--mh-gold)} /* Titel in der normalen Schriftfarbe (dunkel: weiß), nur auf der Seite „Depot“ in Gold (Justus 27.09.2026) */
+/* Titelfarbe je Seite (Justus 27.09.2026): Status in der normalen Schriftfarbe (dunkel weiß), Depot Gold, Rebalancing #70D6DB, Signale #F0C477,
+   Einstellungen #B4BFCE, Regeln #8BB5FF. So im dunklen Modus; im hellen Modus derselbe Farbton dunkler (--mh-t-*), damit der Titel auf dem
+   hellen Kopfbereich mindestens 3,3:1 Kontrast hat. data-page setzt app.js showPage, beim Laden schon das Skript im Kopf der index.html */
+html[data-page="depot"] .masthead h1{color:var(--mh-gold)}
+html[data-page="rebalancing"] .masthead h1{color:var(--mh-t-reb)}
+html[data-page="signale"] .masthead h1{color:var(--mh-t-sig)}
+html[data-page="einstellungen"] .masthead h1{color:var(--mh-t-set)}
+html[data-page="regeln"] .masthead h1{color:var(--mh-t-rul)}
 @media (forced-colors:active){.masthead h1{color:CanvasText}}
 .masthead .switch{color:var(--mh-muted)}
 .masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
