@@ -146,6 +146,9 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 
 /* Status-Karten */
 .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
+/* Mehr Abstand über „Status“ (Justus 27.09.2026): ab etwa 1070 px Breite 32 px zusätzlich, schmaler weniger (mind. 12 px). Als padding, weil ein
+   margin mit dem Abstand unter der Navigation verschmelzen würde; scroll-margin um denselben Betrag kleiner, damit das Sprungziel gleich bleibt */
+#status{--stx:clamp(12px,3vw,32px);padding-top:calc(24px + var(--stx));scroll-margin-top:calc(52px - var(--stx))}
 #status>.toolbar{justify-content:flex-end}
 /* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
    die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
