@@ -11,7 +11,7 @@
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
-  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08;
+  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08; --mh-gold:linear-gradient(180deg,#5E430B 0%,#8E6718 24%,#D8B25A 40%,#A7791F 50%,#6F4F0F 61%,#B98D30 71%,#8A6418 80%,#4E3708 100%); --mh-gold-sh:drop-shadow(0 1px 0 rgba(255,255,255,.75));
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
@@ -25,7 +25,7 @@
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09;
+    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:linear-gradient(180deg,#8C6A1F 0%,#C9A043 24%,#FBEFB5 40%,#E3BD5A 50%,#A87C24 61%,#F0D27F 71%,#C79A35 80%,#7D5C17 100%); --mh-gold-sh:drop-shadow(0 1px 1px rgba(0,0,0,.55));
   }
 }
 :root[data-theme="dark"]{
@@ -37,7 +37,7 @@
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09;
+  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:linear-gradient(180deg,#8C6A1F 0%,#C9A043 24%,#FBEFB5 40%,#E3BD5A 50%,#A87C24 61%,#F0D27F 71%,#C79A35 80%,#7D5C17 100%); --mh-gold-sh:drop-shadow(0 1px 1px rgba(0,0,0,.55));
 }
 *{box-sizing:border-box}
 html{scroll-padding-top:56px}
@@ -68,6 +68,11 @@ p{margin:0}
 .masthead{position:relative;background:var(--mh-bg);border-bottom:1px solid var(--mh-line);overflow:hidden}
 .masthead .wrap.hdr{position:relative;z-index:1}
 .masthead .top{padding-block:20px 24px}
+/* Titel „Investus“ in Schreibschrift und poliertem Gold (Justus 27.09.2026, Entwurf G): Snell Roundhand fett ist auf Mac und iPhone
+   vorinstalliert, anderswo greift eine ähnliche Schreibschrift; Goldverlauf je Modus (--mh-gold). Zeilenhöhe wie beim bisherigen Titel, damit
+   der Kopf gleich hoch bleibt; Innenabstand mit gleich großem negativem Rand, damit auch Schwünge außerhalb der Zeile den Verlauf bekommen */
+.masthead h1{justify-self:start;font-family:"Snell Roundhand","Apple Chancery","Segoe Script","URW Chancery L","TeX Gyre Chorus",cursive;font-weight:700;font-size:clamp(36px,5.56vw,50px);line-height:.79;letter-spacing:0;padding:.3em .45em .3em .3em;margin:-.3em -.45em -.3em -.3em;background-image:var(--mh-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:var(--mh-gold-sh)}
+@media (forced-colors:active){.masthead h1{background:none;-webkit-text-fill-color:CanvasText;color:CanvasText;filter:none}}
 .masthead .switch{color:var(--mh-muted)}
 .masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
 .masthead .switch input:not(:checked)+.track::after{background:#fff}
