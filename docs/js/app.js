@@ -222,13 +222,13 @@
   }
   function thresholdInfo(a) {
     var E = C[a].E, L = E.last, r = CFG.assets[a].rule, nx = E.next, t = {}, edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
+    /* Grenzfall: Abstand des Schlusses zur Schwelle dieser Woche, dasselbe Maß wie die Erklärung (ENG.edgeCase) und der Lauf (update.mjs);
+       beim Band die Schwelle des Zustands vor der Woche, sodass auch ein knapp ausgelöstes Signal als Grenzfall gilt (27.09.2026) */
+    var ec = ENG.edgeCase(C[a].S, r); t.ec = ec; t.edge = !!ec && Math.abs(ec.rel) < edgePct;
     if (r.type === 'band') {
-      var thr = L.st === 1 ? L.m * (1 - r.p) : L.m * (1 + r.p);
-      t.edge = Math.abs(L.c / thr - 1) < edgePct;
       t.text = L.st === 1 ? ['Verkaufssignal, wenn ein Wochenschluss unter ', usd(a, nx.bandDown), ' fällt (3 % unter dem SMA50).'] : ['Kaufsignal, wenn ein Wochenschluss über ', usd(a, nx.bandUp), ' liegt (3 % über dem SMA50).'];
       return t;
     }
-    t.edge = Math.abs(L.dist) < edgePct;
     var need = L.st === 1 ? r.n - L.dn : r.n - L.up;
     if (L.st === 1) t.text = need <= 1 ? ['Ein Wochenschluss unter ', usd(a, nx.above), ' löst das Verkaufssignal aus.'] : ['Verkaufssignal erst nach ' + need + ' Schlüssen in Folge unter dem SMA50. Nächste Woche liegt die Grenze bei ', usd(a, nx.above), '.'];
     else t.text = need <= 1 ? ['Ein Wochenschluss über ', usd(a, nx.above), ' löst das Kaufsignal aus.'] : ['Kaufsignal nach ' + need + ' Schlüssen in Folge über dem SMA50. Nächste Woche liegt die Grenze bei ', usd(a, nx.above), '.'];
@@ -267,38 +267,61 @@
 
   /* ---------- Status-Karten ---------- */
   var ACT_OPEN = {}; /* aufgeklappte Handlungs-Boxen je Baustein, nur bis zum Neuladen */
-  var EDGE_OPEN = {}; /* aufgeklappte Grenzfall-Erklärungen je Baustein, nur bis zum Neuladen */
+  var EDGE_OPEN = {}; /* aufgeklappte Grenzfall-Erklärungen je Baustein und Woche, nur bis zum Neuladen */
   /* Grenzfall zum Aufklappen (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): Schluss, Schwelle und Abstand der
      letzten Woche, was die Regel daraus gemacht hat und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (ENG.edgeCase);
-     dazu, warum das zählt, und mit welcher Quelle gerechnet ist. Liefert Absätze [Text, Klasse] oder null. */
-  var SRC_NAME = { alphavantage: 'Alpha Vantage', coinbase: 'Coinbase', eodhd: 'EODHD', kraken: 'Kraken', lbma: 'LBMA', ls: 'Lang & Schwarz', stooq: 'Stooq', yahoo: 'Yahoo Finance' };
-  function edgeLines(a) {
-    var m = CFG.assets[a], rule = m.rule, x = ENG.edgeCase(C[a].S, rule); if (!x) return null;
-    var unit = Math.pow(10, -m.dec), L = x.last, T = usd(a, x.thr), edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
+     dazu, warum das zählt, mit welcher Quelle gerechnet ist und was mit einem später anderen Schluss passiert. Liefert Absätze [Text, Klasse]. */
+  var SRC_NAME = { alphavantage: 'Alpha Vantage', coinbase: 'Coinbase', eodhd: 'EODHD', kraken: 'Kraken', 'ls-tc.de': 'Lang & Schwarz', stooq: 'Stooq', yahoo: 'Yahoo Finance', 'gold-api.com': 'gold-api.com', 'goldprice.org': 'goldprice.org' };
+  /* Quelle des Schlusses als lesbarer Satzteil im Dativ („Gerechnet ist mit …“) statt der internen Kennung aus state.json */
+  function srcPhrase(src) {
+    src = String(src || ''); var w = src.split(' '), first = w[0], m = /Schlusskurs (\d{4}-\d{2}-\d{2}) von (\S+)/.exec(src);
+    if (first === 'lbma') return 'dem LBMA-Nachmittagsfixing';
+    if (first === 'Spotpreis') return 'dem Spotpreis von ' + (w[1] || 'gold-api.com') + ' (vorläufig, das LBMA-Fixing fehlt noch)';
+    if (/spot/.test(src) && SRC_NAME[first]) return 'dem Spotpreis von ' + SRC_NAME[first];
+    if (!SRC_NAME[first]) return src ? 'der Quelle „' + first + '“' : null;
+    return m ? 'Kursen von ' + SRC_NAME[first] + '; der Schluss vom ' + dShort(m[1]) + ' kommt von ' + (SRC_NAME[m[2].toLowerCase()] || m[2]) : 'dem Schluss von ' + SRC_NAME[first];
+  }
+  function edgeLines(a, x) {
+    var m = CFG.assets[a], rule = m.rule, L = x.last, f = Math.pow(10, m.dec), edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
+    function U(v) { return usd(a, v).replace(/ \$$/, ' $'); } /* kein Umbruch vor „$“ */
     function stw(v) { return v === 1 ? 'investiert' : 'auf Cash'; }
     function sig(v) { return v === 1 ? 'Kaufsignal' : 'Verkaufssignal'; }
     function run(o) { return o.up > 0 ? o.up + '. Schluss in Folge über dem SMA50' : o.dn > 0 ? o.dn + '. Schluss in Folge unter dem SMA50' : null; }
-    var gap = Math.abs(x.diff) >= unit / 2 ? usd(a, Math.abs(x.diff)) : 'weniger als ' + usd(a, unit), rel = Math.abs(x.rel) >= 0.00005 ? pctPlain(Math.abs(x.rel), 2) : 'unter 0,01 %';
-    var thrName = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' von ' + T + ' (' + pctPlain(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)' : null;
-    var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + usd(a, x.c) + (x.diff === 0 ? ' genau auf der ' + (x.band ? thrName : 'Schwelle von ' + T + ', also auf dem SMA50')
-      : ' nur ' + gap + ' (' + rel + ') ' + (x.diff > 0 ? 'über' : 'unter') + (x.band ? ' der ' + thrName : ' dem SMA50 (Schwelle ' + T + ')')) + '. ';
+    /* Schwelle so gerundet, dass „Ein Schluss über/unter X“ stimmt: über → aufrunden, unter → abrunden (Prüfung 27.09.2026) */
+    var tv = x.side > 0 ? Math.floor(x.thr * f + 1e-9) / f : x.side < 0 ? Math.ceil(x.thr * f - 1e-9) / f : x.thr, T = U(tv);
+    var gap = Math.abs(x.diff) >= 0.5 / f ? 'nur ' + U(Math.abs(x.diff)) : 'weniger als ' + U(1 / f);
+    var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? pctPlain(rp, 2).replace(' %', ' %') : 'unter 0,01 %';
+    var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' dieser Woche von ' + T + ' (' + pctPlain(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
+      : 'Schwelle dieser Woche von ' + T + ', ab der ein Schluss über dem SMA50 liegt';
+    var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + U(x.c) + (x.side === 0 ? ' genau auf der Schwelle dieser Woche von ' + T + ', also genau auf dem SMA50. '
+      : ' ' + gap + ' (' + rel + ') ' + (x.side > 0 ? 'über' : 'unter') + ' der ' + where + '. ');
     if (L.changed) p1 += x.band ? 'Das hat das ' + sig(L.st) + ' ausgelöst.' : 'Das war der ' + run(L) + ' und hat das ' + sig(L.st) + ' ausgelöst.';
     else if (x.band) p1 += 'Deshalb gab es kein ' + sig(1 - x.prev) + ', die Regel bleibt ' + stw(L.st) + '.';
-    else if (run(L)) p1 += 'Das war der ' + run(L) + ((L.st === 1 && L.dn > 0) || (L.st === 0 && L.up > 0) ? '; ein ' + sig(1 - L.st) + ' gibt es erst nach ' + rule.n + ' in Folge' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
-    else p1 += 'Damit beginnen beide Serien neu, die Regel bleibt ' + stw(L.st) + '.';
+    else if (x.side === 0) p1 += 'Ein Schluss genau auf dem SMA50 setzt beide Serien zurück, die Regel bleibt ' + stw(L.st) + '.';
+    else p1 += 'Das war der ' + run(L) + (L.st === 1 && L.dn > 0 ? '; ein Verkaufssignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge unter dem SMA50' : L.st === 0 && L.up > 0 ? '; ein Kaufsignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge über dem SMA50' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
     var p2 = x.alt.map(function (o) {
-      var pre = 'Ein Schluss ' + (o.above ? 'über ' : 'unter ') + T;
+      var pre = x.side === 0 ? (o.above ? 'Ein Schluss knapp darüber' : 'Ein Schluss knapp darunter') : 'Ein Schluss ' + (o.above ? 'über ' : 'unter ') + T;
       if (o.changed) return pre + ' hätte das ' + sig(o.st) + ' ausgelöst' + (x.band ? '' : ' (' + run(o) + ')') + '.';
       if (L.changed || x.band) return pre + ' hätte kein Signal ausgelöst, die Regel wäre ' + stw(o.st) + ' geblieben.';
-      return pre + ' wäre der ' + run(o) + ' gewesen' + ((L.up > 0 && o.dn > 0) || (L.dn > 0 && o.up > 0) ? ' und hätte die Serie ' + (L.up > 0 ? 'über' : 'unter') + ' dem SMA50 beendet' : '') + '; die Regel wäre trotzdem ' + stw(o.st) + ' geblieben.';
+      var ended = (L.up > 1 && o.dn > 0) || (L.dn > 1 && o.up > 0), away = (o.st === 1 && o.dn > 0) || (o.st === 0 && o.up > 0);
+      return pre + ' wäre der ' + run(o) + ' gewesen' + (ended ? ' und hätte die Serie ' + (L.up > 1 ? 'über' : 'unter') + ' dem SMA50 beendet' : '') + '; die Regel wäre ' + (away ? 'trotzdem ' : '') + stw(o.st) + ' geblieben.';
     }).join(' ');
-    var st = D.state && D.state.assets && D.state.assets[a], src = st && st.src ? String(st.src).replace(/ adjclose/, ' bereinigt').replace(/^(\S+)/, function (w) { return SRC_NAME[w] || w; }) : null;
-    var p3 = 'Grenzfall heißt: weniger als ' + pctPlain(edgePct, 1) + ' Abstand zur Schwelle. So knapp können schon kleine Unterschiede zwischen Kursquellen oder eine spätere Korrektur des Schlusskurses das Ergebnis drehen. ' +
-      (src ? 'Gerechnet ist mit ' + src + '. ' : '') + 'Ändert eine Korrektur die Regel, meldet die Seite das unter „Signale“ und als Push-Nachricht.';
+    /* Warum das zählt und was mit einem später anderen Schluss passiert (update.mjs): vorläufig → der endgültige ersetzt ihn, mit Nachricht;
+       Bitcoin und Gold → gebucht bleibt gebucht (keepBooked); FTSE → eine Revision fällt beim nächsten Wochenschluss auf */
+    var flips = x.alt.some(function (o) { return o.st !== L.st || o.changed !== L.changed; });
+    var st = D.state && D.state.assets && D.state.assets[a], ph = st && st.src ? srcPhrase(st.src) : null;
+    var p3 = 'Grenzfall heißt: weniger als ' + pctPlain(edgePct, 1) + ' Abstand zur Schwelle. ' + (flips ? 'Bei so wenig Abstand kann schon ein etwas anderer Kurs, etwa von einem anderen Anbieter, das Ergebnis drehen.' : 'Ein etwas anderer Kurs hätte hier nur die Zählung geändert, nicht die Regel.');
+    if (ph) p3 += ' Gerechnet ist mit ' + ph + '.';
+    if (st && st.preliminary) p3 += ' Der Schluss ist noch vorläufig; ändert der endgültige Schluss die Regel, meldet die Seite das unter „Signale“ und als Push-Nachricht.';
+    else if (m.signal && m.signal.keepBooked) p3 += ' Ein gebuchter Schluss bleibt gebucht, auch wenn eine Quelle ihn später leicht anders angibt.';
+    else p3 += ' Liefert die Quelle diesen Schluss später anders, fällt das beim nächsten Wochenschluss auf und steht unter „Signale“; dreht sich dadurch die Regel, auch als Push-Nachricht.';
     return [[p1, ''], [p2, 'alt'], [p3, 'why']];
   }
   function renderStatus(Mo) {
-    var host = $('statusCards'); host.textContent = '';
+    var host = $('statusCards');
+    /* Fokus auf einem Grenzfall-Knopf überlebt das Neuzeichnen der Karten (Live-Kurse, Zeitraum, Fenstergröße) */
+    var fe = document.activeElement, keepFocus = fe && host.contains(fe) && fe.matches && fe.matches('button.tog') ? fe.getAttribute('aria-controls') : null;
+    host.textContent = '';
     A.forEach(function (a) {
       var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch, st = D.state && D.state.assets && D.state.assets[a];
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
@@ -333,14 +356,14 @@
       if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
       var edgeBox = null;
       if (ti.edge) {
-        var ex = edgeLines(a);
+        var ex = ti.ec ? edgeLines(a, ti.ec) : null, ek = a + ':' + (ti.ec ? ti.ec.k : '');
         if (!ex) row.appendChild(chip('warn', 'Grenzfall'));
-        else { /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf */
+        else { /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche */
           var eb = el('button', 'chip c-warn tog'); eb.type = 'button'; eb.innerHTML = ICON.warn; eb.appendChild(document.createTextNode('Grenzfall'));
           edgeBox = el('div', 'edgex'); edgeBox.id = 'edgex-' + a; ex.forEach(function (q) { edgeBox.appendChild(el('p', q[1] || null, q[0])); });
-          eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[a])); edgeBox.hidden = !EDGE_OPEN[a];
+          eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[ek])); edgeBox.hidden = !EDGE_OPEN[ek];
           eb.title = 'Erklärung zum Grenzfall ein- oder ausklappen';
-          (function (b, box) { b.addEventListener('click', function () { var o = box.hidden; box.hidden = !o; b.setAttribute('aria-expanded', String(o)); EDGE_OPEN[a] = o; }); })(eb, edgeBox);
+          eb.addEventListener('click', function () { var o = edgeBox.hidden; edgeBox.hidden = !o; eb.setAttribute('aria-expanded', String(o)); EDGE_OPEN[ek] = o; });
           row.appendChild(eb);
         }
       }
@@ -365,6 +388,7 @@
       host.appendChild(card);
     });
     evenHeads(); drawCharts();
+    if (keepFocus) { var nf = host.querySelector('button.tog[aria-controls="' + keepFocus + '"]'); if (nf) nf.focus({ preventScroll: true }); }
   }
   /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit Signal … %“
      oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder

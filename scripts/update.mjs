@@ -399,8 +399,10 @@ function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
     pushEv({ id, kind: net ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': ' + (wasPrelim ? 'Korrektur des Wochenschlusses' : 'Datenrevision'), text: body, c: round(L.c, 4), m: round(L.m, 4) }, net ? { title: name(a) + ': ' + kindT, body } : null);
     note(name(a) + ': ' + kindT + ', Zustand zum ' + ds(prev.d) + ' jetzt ' + stTxt(stPrevNow) + (net ? ', ZUSTAND GEDREHT' : ', unterm Strich unverändert'));
   }
-  const edge = Math.abs(L.c / (c.rule.type === 'band' ? L.m * (L.st === 1 ? 1 - c.rule.p : 1 + c.rule.p) : L.m) - 1) < (CFG.edge ? CFG.edge.pct : 0.005);
-  if (edge && !newSw.length && !flipPrev) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle (SMA50 ' + usd(a, L.m) + '). Quelle: ' + src.src + '.' });
+  /* Grenzfall: Abstand des Schlusses zur Schwelle dieser Woche (ENG.edgeCase), dasselbe Maß wie Chip und Erklärung auf der Seite (27.09.2026);
+     beim Band die Schwelle des Zustands vor der Woche, sodass auch ein knapp ausgelöstes Signal als Grenzfall gilt */
+  const ec = ENG.edgeCase(merged, c.rule), edge = !!ec && Math.abs(ec.rel) < (CFG.edge ? CFG.edge.pct : 0.005);
+  if (edge && !newSw.length && !flipPrev) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle ' + usd(a, ec.thr) + ' (' + (Math.floor(Math.abs(ec.rel) * 1e4) / 100).toFixed(2).replace('.', ',') + ' % Abstand). Quelle: ' + src.src + '.' });
   const prelimNow = srcPrelimK && L.k === srcPrelimK ? src.preliminary : null;
   STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: prelimNow, prelimLabel: prelimNow ? (src.prelimLabel || null) : null });
   RUN.changed = true;

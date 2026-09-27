@@ -352,8 +352,25 @@ test('Grenzfall Band investiert: knapp über der Verkaufsschwelle, darunter wär
   assert.equal(x.alt[0].above, false); assert.equal(x.alt[0].changed, true); assert.equal(x.alt[0].st, 0);
 });
 
-test('Grenzfall genau auf der Schwelle: beide Seiten, zu kurze Reihe ohne Ergebnis', () => {
-  const base = synth(80), S = lastAt(base, RULES.gold, 0), x = ENG.edgeCase(S, RULES.gold);
-  assert.equal(x.diff, 0); assert.equal(x.alt.length, 2); assert.deepEqual(x.alt.map((o) => o.above), [true, false]);
+test('Grenzfall genau auf dem SMA50: Seite aus der Regel selbst, beide Seiten, zu kurze Reihe ohne Ergebnis', () => {
+  /* Ganze Zahlen: Summen und SMA50 sind exakt, der Schluss liegt für evalRule wirklich genau auf dem SMA50 (Gleichstand, A-6) */
+  const S = { k: [], d: [], c: [] }; for (let i = 0; i < 80; i++) { const k = ENG.addDays('2020-01-06', 7 * i); S.k.push(k); S.d.push(ENG.addDays(k, 4)); S.c.push(100); }
+  const x = ENG.edgeCase(S, RULES.gold);
+  assert.equal(x.side, 0); assert.equal(x.last.up, 0); assert.equal(x.last.dn, 0); assert.equal(x.thr, 100);
+  assert.equal(x.alt.length, 2); assert.deepEqual(x.alt.map((o) => o.above), [true, false]);
+  assert.equal(x.alt[0].up, 1); assert.equal(x.alt[1].dn, 1);
   assert.equal(ENG.edgeCase(synth(50), RULES.gold), null);
+});
+
+test('Grenzfall Band: knapp ausgelöstes Kaufsignal misst gegen die Kaufschwelle, darunter wäre die Regel auf Cash geblieben', () => {
+  /* Bitcoin-Reihe endet auf Cash; der letzte Schluss liegt 0,1 % über der Kaufschwelle dieser Woche */
+  const S0 = series('btc'), S = lastAt(S0, RULES.btc, 0.001), x = ENG.edgeCase(S, RULES.btc);
+  assert.equal(x.prev, 0); assert.equal(x.side, 1); assert.equal(x.last.changed, true); assert.equal(x.last.st, 1);
+  assert.ok(x.thr > x.m, 'Kaufschwelle über dem SMA50'); assert.ok(Math.abs(x.rel - 0.001) < 1e-9);
+  assert.equal(x.alt[0].above, false); assert.equal(x.alt[0].changed, false); assert.equal(x.alt[0].st, 0);
+});
+
+test('Grenzfall Seite: side folgt der Regel, rel dem Abstand zur Schwelle', () => {
+  const up = ENG.edgeCase(lastAt(synth(80), RULES.ftse, 0.003), RULES.ftse), dn = ENG.edgeCase(lastAt(synth(80), RULES.ftse, -0.003), RULES.ftse);
+  assert.equal(up.side, 1); assert.equal(dn.side, -1); assert.ok(Math.abs(up.rel - 0.003) < 1e-9); assert.ok(Math.abs(dn.rel + 0.003) < 1e-9);
 });

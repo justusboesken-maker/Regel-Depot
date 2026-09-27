@@ -99,15 +99,18 @@
   /* Grenzfall der letzten Woche erklärt (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): die Schwelle dieser Woche
      aus den 49 Schlüssen davor (dieselbe Zahl wie in Vorwarnung und Signaltext, thresholds), der Abstand des Schlusses dazu, was die Regel daraus
      gemacht hat (last) und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (alt; liegt der Schluss genau auf ihr, beide
-     Seiten). Beim Band gilt die Schwelle des Zustands vor dieser Woche: auf Cash die Kaufschwelle, investiert die Verkaufsschwelle. */
+     Seiten). Beim Band gilt die Schwelle des Zustands vor dieser Woche: auf Cash die Kaufschwelle, investiert die Verkaufsschwelle. side: auf
+     welcher Seite der Schwelle die Regel den Schluss gewertet hat (1 darüber, −1 darunter, 0 genau auf dem SMA50), aus evalRule selbst, damit der
+     Text nie den Zählern widerspricht. rel = Abstand zur Schwelle, dasselbe Maß wie der Grenzfall-Chip (app.js) und der Lauf (update.mjs). */
   function edgeCase(S, rule) {
     var n = S.c.length, i; if (n < 51) return null;
-    var E = evalRule(S, rule), L = E.last, prev = E.st[n - 2]; if (!L || L.m == null || prev == null) return null;
+    var E = evalRule(S, rule), L = E.last, prev = E.st[n - 2];
     var s49 = 0; for (i = n - 50; i < n - 1; i++) s49 += S.c[i];
     var band = rule.type === 'band', T = thresholds(s49, band ? rule.p : 0.03), thr = band ? (prev === 1 ? T.bandDown : T.bandUp) : T.above, c = L.c;
     function alt(price) { var c2 = S.c.slice(); c2[n - 1] = price; var A = evalRule({ k: S.k, d: S.d, c: c2 }, rule).last; return { price: price, above: price > thr, st: A.st, changed: A.changed, up: A.up, dn: A.dn }; }
-    var eps = 1e-7, alts = c > thr ? [alt(thr * (1 - eps))] : c < thr ? [alt(thr * (1 + eps))] : [alt(thr * (1 + eps)), alt(thr * (1 - eps))];
-    return { k: L.k, d: L.d, c: c, m: L.m, thr: thr, diff: c - thr, rel: c / thr - 1, band: band, prev: prev, last: { st: L.st, changed: L.changed, up: L.up, dn: L.dn }, alt: alts };
+    var side = band ? (prev === 0 ? (L.st === 1 ? 1 : -1) : (L.st === 0 ? -1 : 1)) : (L.up > 0 ? 1 : L.dn > 0 ? -1 : 0);
+    var eps = 1e-7, alts = side > 0 ? [alt(thr * (1 - eps))] : side < 0 ? [alt(thr * (1 + eps))] : [alt(thr * (1 + eps)), alt(thr * (1 - eps))];
+    return { k: L.k, d: L.d, c: c, m: L.m, thr: thr, diff: c - thr, rel: c / thr - 1, side: side, band: band, prev: prev, last: { st: L.st, changed: L.changed, up: L.up, dn: L.dn }, alt: alts };
   }
   /* Was wäre, wenn die laufende Woche mit price schließt */
   function whatIf(S, rule, closeDate, price) {
