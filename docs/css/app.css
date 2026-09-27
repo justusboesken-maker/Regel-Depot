@@ -170,11 +170,11 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 /* Name und Icon der Status-Karten größer (Justus 27.09.2026, Variante C: 23 px statt 16,5 px, Icon 29 px statt 20 px; danach Icon
-   „ein wenig kleiner“: 25 px, dann „noch kleiner, die Schrift bleibt gleich groß“: 21 px; danach „nur die Namen wieder etwas größer“: Name bis 25 px, app.js fitNames) */
+   „ein wenig kleiner“: 25 px, dann „noch kleiner, die Schrift bleibt gleich groß“: 21 px; danach „nur die Namen wieder etwas größer“: Name bis 25 px, app.js fitNames; zuletzt „nur die Icons noch ein bisschen kleiner“: 18 px) */
 .scard .hd h3{display:flex;align-items:center;gap:8px;font-size:23px} /* app.js fitNames vergrößert auf bis zu 25 px, wo Platz ist */
 .aic{display:inline-block;flex:0 0 auto;line-height:0}
 .aic svg{width:100%;height:100%;display:block;overflow:visible}
-.scard .hd .aic{width:21px;height:21px}
+.scard .hd .aic{width:18px;height:18px}
 .scard .sub{font-size:12.5px;color:var(--muted)}
 .scard .stbox{display:grid;justify-items:end;gap:4px;flex:1 1 0} /* nimmt nur den Platz neben dem vollen Namen; der Name bricht erst um, wenn auch „Investiert“ und „seit Kaufsignal …“ nicht mehr daneben passen (27.09.2026) */
 /* „seit Kaufsignal TT.MM.JJ“ bzw. „seit Verkaufssignal TT.MM.JJ“ und darunter die Prozentzahl seit dem Signal (app.js renderStatus), ungefärbt (Justus 27.09.2026) */
