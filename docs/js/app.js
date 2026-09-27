@@ -1047,6 +1047,7 @@
   function showPage(id, target, user) {
     if (PAGES.indexOf(id) < 0) id = 'status';
     var changed = id !== PAGE; PAGE = id; savePage();
+    document.documentElement.setAttribute('data-page', id); /* für das CSS: Titel „Investus“ nur auf der Seite Depot in Gold (27.09.2026) */
     if (changed && BIG.a) closeBig();
     PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
     Array.prototype.forEach.call(document.querySelectorAll('nav.toc a[href^="#"]'), function (a) {

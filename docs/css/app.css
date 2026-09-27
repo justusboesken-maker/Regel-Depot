@@ -72,7 +72,8 @@ p{margin:0}
    die von vorher sein. Die Farbe und Glanz sollen bleiben“): Seitenschrift, Gewicht, Größe und Zeilenhöhe aus der h1-Regel oben.
    Seit 27.09.2026 ohne Glanz (Justus: „weiterhin selbe Farbe aber ohne Glanz“): einfarbiges Gold je Modus (--mh-gold), der Durchschnitt des
    früheren Verlaufs im Bereich der Buchstaben (hell etwas dunkler für mindestens 3:1 Kontrast), ohne Glanzstreifen und Schatten */
-.masthead h1{justify-self:start;color:var(--mh-gold)}
+.masthead h1{justify-self:start}
+html[data-page="depot"] .masthead h1{color:var(--mh-gold)} /* Titel in der normalen Schriftfarbe (dunkel: weiß), nur auf der Seite „Depot“ in Gold (Justus 27.09.2026) */
 @media (forced-colors:active){.masthead h1{color:CanvasText}}
 .masthead .switch{color:var(--mh-muted)}
 .masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
