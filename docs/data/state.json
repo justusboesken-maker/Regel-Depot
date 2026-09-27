@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-27T19:16:03.854Z",
+ "updated": "2026-09-27T19:23:32.276Z",
  "assets": {
   "ftse": {
    "k": "2026-09-21",
@@ -134,9 +134,21 @@
    "would": null,
    "text": "Gold steht gerade bei 4.282,90 $ (Spotpreis (gold-api.com)). Schwelle für den Wochenschluss am Freitag: 4.469,21 $, 4,2 % darunter. Schließt die Woche so, bleibt die Regel auf Cash.",
    "src": "gold-api.com XAU/USD spot (Ersatzquelle)"
+  },
+  "btc": {
+   "t": "2026-09-27T19:23:32.276Z",
+   "forWeek": "2026-09-21",
+   "price": 84765.065,
+   "priceTime": "2026-09-27T19:23:32.456Z",
+   "thr": 80435.875,
+   "dist": 0.053822,
+   "level": "switch",
+   "would": 1,
+   "text": "Bitcoin steht gerade bei 84.765 $. Schwelle für den Wochenschluss am Sonntag um 24 Uhr UTC: 80.436 $, 5,4 % darüber. Schließt die Woche so, gibt es ein Kaufsignal (Handel am Montag, 28.09.).",
+   "src": "coinbase BTC-USD spot"
   }
  },
  "queue": [],
- "step": "live",
+ "step": "so-warn",
  "pendingQueue": 0
 }
