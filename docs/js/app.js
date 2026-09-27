@@ -211,13 +211,13 @@
   /* Performance seit dem letzten Regel-Signal (Justus 26.09.2026): Kursveränderung des Signalkurses in $ vom Schluss der Signalwoche bis zum
      aktuellen Kurs wie bei „Aktuell“ (ohne aktuellen Kurs der letzte Wochenschluss). Aus Sicht der Regel gefärbt: nach einem Kauf Gewinn grün,
      Verlust rot; nach einem Verkauf fallender Kurs grün („Verlust vermieden“), steigender rot („Anstieg verpasst“). Unter 0,05 % neutral.
-     Beschriftung „Performance seit Signal TT.MM.JJJJ“ (Justus 26.09.2026, statt „seit Kauf/Verkauf“). */
+     Beschriftung „Performance seit Kaufsignal/Verkaufssignal TT.MM.JJJJ“ (Justus 27.09.2026; vorher „seit Signal“, davor „seit Kauf/Verkauf“). */
   function perfSince(a, lp) {
     var L = C[a].E.last, ls = L && L.lastSwitch; if (!ls || !(ls.c > 0)) return null;
     var now = lp && lp.usd > 0 ? lp.usd : L.c; if (!(now > 0)) return null;
     var r = now / ls.c - 1; if (Math.abs(r) < 0.0005) r = 0;
     var good = r === 0 ? null : ls.to === 1 ? r > 0 : r < 0;
-    return { label: 'Performance seit Signal ' + dDE(ls.d), r: r, from: ls.c, to: now,
+    return { label: 'Performance seit ' + (ls.to === 1 ? 'Kaufsignal' : 'Verkaufssignal') + ' ' + dDE(ls.d), r: r, from: ls.c, to: now,
       text: pct(r, 1) + (ls.to === 1 || r === 0 ? '' : r < 0 ? ' · Verlust vermieden' : ' · Anstieg verpasst'), cls: good == null ? '' : good ? 'good' : 'bad' };
   }
   function thresholdInfo(a) {
@@ -281,14 +281,14 @@
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp);
-      /* Unter dem Regelstand „seit Signal TT.MM.JJ“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“), darunter in einer eigenen Zeile die
-         Kursveränderung seit dem Schluss der Signalwoche bis zum aktuellen Kurs wie in der Kursbox. Gerechnet und gefärbt wie „Performance seit
-         Signal“ in der Großansicht (perfSince): nach einem Kaufsignal Anstieg grün, Rückgang rot; nach einem Verkaufssignal Rückgang grün
-         („Verlust vermieden“), Anstieg rot („Anstieg verpasst“); unter 0,05 % neutral. Die Deutung steht im Tooltip und für Screenreader. */
-      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', null, 'seit Signal ' + dYY(ls.d)));
+      /* Unter dem Regelstand „seit Kaufsignal TT.MM.JJ“ bzw. „seit Verkaufssignal TT.MM.JJ“ (Justus 27.09.2026, vorher „seit Signal“), darunter in
+         einer eigenen Zeile die Kursveränderung seit dem Schluss der Signalwoche bis zum aktuellen Kurs wie in der Kursbox, gerechnet wie
+         „Performance seit …“ in der Großansicht (perfSince). Die Zahl ist nicht gefärbt (Justus 27.09.2026); die Deutung („Verlust vermieden“,
+         „Anstieg verpasst“ …) steht im Tooltip und für Screenreader. */
+      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', 'sl', 'seit\u00a0' + (ls.to === 1 ? 'Kaufsignal' : 'Verkaufssignal') + ' ' + dYY(ls.d))); /* bricht bei Platzmangel nur vor dem Datum um, damit der Name einzeilig bleibt */
         if (pf) {
           var why = pf.r === 0 ? '' : ls.to === 1 ? (pf.r > 0 ? 'Anstieg seit dem Kauf' : 'Rückgang seit dem Kauf') : (pf.r < 0 ? 'Verlust vermieden' : 'Anstieg verpasst');
-          var sp = el('span', 'sp' + (pf.cls ? ' ' + pf.cls : ''), pct(pf.r, 1)); if (why) sp.appendChild(el('span', 'sr-only', ' (' + why + ')'));
+          var sp = el('span', 'sp', pct(pf.r, 1)); if (why) sp.appendChild(el('span', 'sr-only', ' (' + why + ')'));
           sn.appendChild(document.createTextNode(' ')); sn.appendChild(sp);
           sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to) + (why ? ' · ' + why : '');
         }
@@ -335,7 +335,7 @@
     });
     evenHeads(); drawCharts();
   }
-  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit Signal … %“
+  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit …signal … %“
      oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder
      Größenänderung (resize), weil die Karten erst ab 4 px Breitenänderung neu gezeichnet werden. */
   function evenHeads() {
