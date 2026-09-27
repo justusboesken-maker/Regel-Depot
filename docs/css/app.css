@@ -572,7 +572,11 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .rule{padding:4px 0 8px;display:grid;gap:8px;align-content:start;position:relative}
 .card.rule{background:none;border:0;border-radius:0;box-shadow:none}
 .rules .rule+.rule::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
-@media (max-width:980px){.rules{grid-template-columns:minmax(0,1fr);gap:0} .rules .rule{padding:18px 0} .rules .rule:first-child{padding-top:4px} .rules .rule+.rule{border-top:1px solid var(--rule)} .rules .rule+.rule::before{display:none}}
+/* Farbiger Rand über den Regel-Karten wie über den Status-Karten (Justus 27.09.2026: „bei den Regeln unten auch wieder“): 3 px in der Farbe
+   des Bausteins über die ganze Spaltenbreite, mit runden Enden; untereinander (bis 980 px) statt der grauen Linie zwischen den Karten */
+.rules .rule{padding-top:21px}
+.rules .rule::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:2px;background:var(--acol,var(--rule))}
+@media (max-width:980px){.rules{grid-template-columns:minmax(0,1fr);gap:0} .rules .rule{padding:21px 0 18px} .rules .rule+.rule::before{display:none}}
 .rule .formula{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border-radius:6px;padding:8px 10px;color:var(--ink);line-height:1.55}
 footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:grid;gap:6px}
 @media (max-width:640px){
