@@ -128,7 +128,8 @@
   }
 
   /* ---------- Regel-Chart: Wochenschlüsse, SMA50, Band, investierte Phasen, Signale, Abstandsstreifen ----------
-     o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn), phases (false = investierte Phasen nicht hinterlegen)} */
+     o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn), phases (false = investierte Phasen nicht hinterlegen),
+        bare (true = nur Kursverlauf, SMA50 und letzter Punkt: ohne Achsen, Raster, „log. Skala“, Band, Signale und Abstandsstreifen)} */
   function ruleChart(host, o) {
     host.textContent = '';
     var S = o.S, E = o.E, n = S.c.length, rule = o.rule, band = rule.type === 'band', p = band ? rule.p : 0;
@@ -136,7 +137,9 @@
     if (N < 2) { host.appendChild(el('p', 'small muted', 'Zu wenige Wochen.')); return; }
     var col = { line: css(o.color), sma: css('--ink-2'), grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface'), band: css('--band'), buy: css('--sig-buy'), sell: css('--sig-sell'), neg: css('--neg') };
     var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = o.tall ? Math.max(300, Math.min(420, Math.round(W * 0.38))) : (narrow ? 170 : 200), sh = o.tall ? 72 : 54, gap = 8;
-    var m = { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
+    /* o.bare (kleine Charts der Status-Karten, Justus 27.09.2026: „nur noch Verlauf und SMA“): kein Rand rechts für die Preisachse, kein Streifen darunter */
+    var bare = !!o.bare;
+    var m = bare ? { t: 8, r: 6, b: 6, l: 4 } : { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = bare ? m.t + ih + m.b : m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
     for (i = i0; i < n; i++) { var vs = [S.c[i], E.sma[i]]; if (band) vs.push(E.sma[i] * (1 + p), E.sma[i] * (1 - p)); vs.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; }); }
@@ -146,19 +149,21 @@
     function X(k) { return m.l + (k - i0) / (N - 1) * iw; }
     var half = iw / (N - 1) / 2;
     /* investierte Phasen (Serienfarbe, 10 %); o.phases === false: keine Hinterlegung (kleine Charts der Status-Karten, Justus 27.09.2026) */
-    var run = i0; if (o.phases !== false) for (i = i0 + 1; i <= n; i++) { if (i === n || E.st[i] !== E.st[run]) { if (E.st[run] === 1) { var x1 = Math.max(m.l, X(run) - half), x2 = Math.min(m.l + iw, X(i - 1) + half); mk('rect', { x: x1, y: m.t, width: Math.max(1, x2 - x1), height: ih, fill: col.line, 'fill-opacity': 0.1 }, svg); mk('rect', { x: x1, y: st0, width: Math.max(1, x2 - x1), height: sh, fill: col.line, 'fill-opacity': 0.06 }, svg); } run = i; } }
+    var run = i0; if (o.phases !== false && !bare) for (i = i0 + 1; i <= n; i++) { if (i === n || E.st[i] !== E.st[run]) { if (E.st[run] === 1) { var x1 = Math.max(m.l, X(run) - half), x2 = Math.min(m.l + iw, X(i - 1) + half); mk('rect', { x: x1, y: m.t, width: Math.max(1, x2 - x1), height: ih, fill: col.line, 'fill-opacity': 0.1 }, svg); mk('rect', { x: x1, y: st0, width: Math.max(1, x2 - x1), height: sh, fill: col.line, 'fill-opacity': 0.06 }, svg); } run = i; } }
     var g = mk('g', {}, svg);
-    (useLog ? logTicks(ya, yb) : linTicks(ya, yb, 4)).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l + iw + 6, y: y + 4, 'font-size': 11, fill: col.muted }, g); tx.textContent = de(t, t < 10 ? 1 : 0); });
-    mk('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1 }, g);
+    if (!bare) (useLog ? logTicks(ya, yb) : linTicks(ya, yb, 4)).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l + iw + 6, y: y + 4, 'font-size': 11, fill: col.muted }, g); tx.textContent = de(t, t < 10 ? 1 : 0); });
+    if (!bare) mk('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1 }, g);
     /* Band */
-    if (band) { var dB = ''; for (i = i0; i < n; i++) dB += (i === i0 ? 'M' : 'L') + X(i).toFixed(1) + ',' + Y(E.sma[i] * (1 + p)).toFixed(1); for (i = n - 1; i >= i0; i--) dB += 'L' + X(i).toFixed(1) + ',' + Y(E.sma[i] * (1 - p)).toFixed(1); mk('path', { d: dB + 'Z', fill: col.band, stroke: 'none' }, svg); }
+    if (band && !bare) { var dB = ''; for (i = i0; i < n; i++) dB += (i === i0 ? 'M' : 'L') + X(i).toFixed(1) + ',' + Y(E.sma[i] * (1 + p)).toFixed(1); for (i = n - 1; i >= i0; i--) dB += 'L' + X(i).toFixed(1) + ',' + Y(E.sma[i] * (1 - p)).toFixed(1); mk('path', { d: dB + 'Z', fill: col.band, stroke: 'none' }, svg); }
     var dS = '', dC = ''; for (i = i0; i < n; i++) { dS += (i === i0 ? 'M' : 'L') + X(i).toFixed(1) + ',' + Y(E.sma[i]).toFixed(1); dC += (i === i0 ? 'M' : 'L') + X(i).toFixed(1) + ',' + Y(S.c[i]).toFixed(1); }
     mk('path', { d: dS, fill: 'none', stroke: col.sma, 'stroke-width': 1.5, 'stroke-dasharray': '5 4', 'stroke-linejoin': 'round' }, svg);
     mk('path', { d: dC, fill: 'none', stroke: col.line, 'stroke-width': o.thick ? 2.4 : 2, 'stroke-linejoin': 'round', 'stroke-linecap': 'round' }, svg);
     /* Signale */
-    E.sw.forEach(function (s) { if (s.i < i0) return; var x = X(s.i), y = Y(S.c[s.i]), up = s.to === 1, yy = up ? y + 13 : y - 13; var d = up ? 'M' + x + ',' + (yy - 6) + ' L' + (x + 6) + ',' + (yy + 5) + ' L' + (x - 6) + ',' + (yy + 5) + 'Z' : 'M' + x + ',' + (yy + 6) + ' L' + (x + 6) + ',' + (yy - 5) + ' L' + (x - 6) + ',' + (yy - 5) + 'Z'; mk('path', { d: d, fill: up ? col.buy : col.sell, stroke: col.surface, 'stroke-width': 2, 'paint-order': 'stroke' }, svg); });
+    if (!bare) E.sw.forEach(function (s) { if (s.i < i0) return; var x = X(s.i), y = Y(S.c[s.i]), up = s.to === 1, yy = up ? y + 13 : y - 13; var d = up ? 'M' + x + ',' + (yy - 6) + ' L' + (x + 6) + ',' + (yy + 5) + ' L' + (x - 6) + ',' + (yy + 5) + 'Z' : 'M' + x + ',' + (yy + 6) + ' L' + (x + 6) + ',' + (yy - 5) + ' L' + (x - 6) + ',' + (yy - 5) + 'Z'; mk('path', { d: d, fill: up ? col.buy : col.sell, stroke: col.surface, 'stroke-width': 2, 'paint-order': 'stroke' }, svg); });
     mk('circle', { cx: X(n - 1), cy: Y(S.c[n - 1]), r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2 }, svg);
-    if (useLog) { var lg = mk('text', { x: m.l + 4, y: m.t + 11, 'font-size': 10.5, fill: col.muted }, svg); lg.textContent = 'log. Skala'; }
+    if (useLog && !bare) { var lg = mk('text', { x: m.l + 4, y: m.t + 11, 'font-size': 10.5, fill: col.muted }, svg); lg.textContent = 'log. Skala'; }
+    /* Abstandsstreifen und x-Achse: nicht bei o.bare */
+    if (!bare) {
     /* Abstandsstreifen: Abstand zum SMA50 in Prozent, mit Schwelle */
     var dmax = 0.02; for (i = i0; i < n; i++) dmax = Math.max(dmax, Math.abs(S.c[i] / E.sma[i] - 1));
     dmax = Math.min(Math.max(dmax * 1.1, band ? p * 1.6 : 0.03), 1.5);
@@ -182,6 +187,7 @@
     var maxT = Math.max(2, Math.floor(iw / 58)); if (ticks.length > maxT) { var stp = Math.ceil(ticks.length / maxT); ticks = ticks.filter(function (t, k) { return k % stp === 0; }); }
     mk('line', { x1: m.l, x2: m.l + iw, y1: st0 + sh, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1 }, g);
     ticks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: st0 + sh, y2: st0 + sh + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: st0 + sh + 16, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
+    }
     host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
     /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
        im Chart-Container); ohne Zeiger zeigt sie den letzten Wochenschluss */
@@ -189,10 +195,11 @@
        o.onHover(k): meldet beim Darüberfahren die Woche k, ohne Zeiger null (kleine Zahl über dem Chart der Status-Karte, app.js chartHover) */
     var rd = null; if (o.readout !== false) { rd = o.readout || null; if (!rd) { rd = el('div', 'chart-legend readout rule-rd'); host.insertBefore(rd, svg); } else rd.classList.add('readout', 'rule-rd'); }
     var wmax = 0; for (i = i0; i < n; i++) wmax = Math.max(wmax, o.usd(S.c[i]).length, o.usd(E.sma[i]).length); if (rd) rd.style.setProperty('--rdw', (wmax + 0.5) + 'ch');
-    var cross = mk('line', { y1: m.t, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
+    var yEnd = bare ? m.t + ih : st0 + sh; /* Zeigerlinie und Trefferfläche bis zum unteren Rand des Gezeichneten */
+    var cross = mk('line', { y1: m.t, y2: yEnd, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
     var dotC = mk('circle', { r: 4, fill: col.line, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
     var dotS = mk('circle', { r: 3.5, fill: col.sma, stroke: col.surface, 'stroke-width': 2, visibility: 'hidden' }, svg);
-    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: st0 + sh - m.t, fill: 'transparent' }, svg), cur = n - 1;
+    var hit = mk('rect', { x: m.l, y: m.t, width: iw, height: yEnd - m.t, fill: 'transparent' }, svg), cur = n - 1;
     function textAt(k) {
       var sw = E.sw.filter(function (s) { return s.i === k; })[0], note, cls = '';
       if (sw) { note = (sw.to ? '▲ Kaufsignal' : '▼ Verkaufssignal') + ', Handel am ' + dShort(ENG.addDays(S.k[k], 7)); cls = sw.to ? 'sig-buy' : 'sig-sell'; }
