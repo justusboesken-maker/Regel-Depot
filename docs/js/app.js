@@ -487,7 +487,7 @@
     d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
     wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
-    al.appendChild(el('p', 'small muted', 'Ziel 50 / 30 / 20 (FTSE / Bitcoin / Gold). ' + (outs.length ? outs.join(' und ') + (outs.length > 1 ? ' stehen' : ' steht') + ' laut Regel auf Cash, deshalb zählt ' + (outs.length > 1 ? 'ihr Anteil' : 'sein Anteil') + ' im Ziel als Cash. Abweichungen je Position stehen in der Tabelle unten.' : 'Alle drei Regeln sind investiert.')));
+    /* ohne Satz „Ziel 50 / 30 / 20 …“ unter den Ringen (Justus 27.09.2026); warum ein Anteil im Ziel als Cash zählt, zeigt der Tooltip des Ziel-Rings */
   }
   var pendingDelete = null;
   /* Buchungen und Kauflose in einer Tabelle: jede Buchung mit dem, was heute daraus geworden ist (Restbestand nach FIFO, Wert, Gewinn, steuerliche Lage) */
