@@ -14,7 +14,7 @@
 <link rel="icon" href="icons/icon-192.png" type="image/png">
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260927-1140">
+<link rel="stylesheet" href="css/app.css?v=20260927-1223">
 </head>
 <body>
 
@@ -26,7 +26,7 @@
     <h1>Investus</h1>
   </header>
 </div></div>
-<nav class="toc" aria-label="Abschnitte"><div class="in">
+<nav class="toc" aria-label="Seiten"><div class="in">
   <a href="#status">Status</a><a href="#depot">Depot</a><a href="#rebalancing">Rebalancing</a><a href="#signale">Signale<span class="cnt" id="navCnt" hidden></span></a><a href="#einstellungen">Einstellungen</a><a href="#regeln">Regeln</a>
 </div></nav>
 <div class="wrap">
@@ -44,7 +44,7 @@
   <div class="scards" id="statusCards"></div>
 </section>
 
-<section id="depot" aria-labelledby="h-depot">
+<section id="depot" aria-labelledby="h-depot" hidden>
   <h2 class="eyebrow sec" id="h-depot">Depot</h2>
   <div id="depotBanner"></div>
   <div class="card chartcard" id="perfCard">
@@ -99,14 +99,14 @@
   </details>
 </section>
 
-<section id="rebalancing" class="sfold folded" aria-labelledby="h-reb">
+<section id="rebalancing" aria-labelledby="h-reb" hidden>
   <h2 class="eyebrow sec" id="h-reb">Rebalancing <span id="rebDate">30.12.2026</span></h2>
   <div id="rebBanner"></div>
   <div class="grid2" id="rebCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Hinweise</p><div class="notes" id="rebNotes"></div></div>
 </section>
 
-<section id="signale" class="sfold folded" data-remember="0" aria-labelledby="h-signale">
+<section id="signale" aria-labelledby="h-signale" hidden>
   <h2 class="eyebrow sec" id="h-signale">Signale</h2>
   <div class="grid2">
     <div style="display:grid;gap:14px;min-width:0">
@@ -125,7 +125,7 @@
   </div>
 </section>
 
-<section id="einstellungen" class="sfold folded" aria-labelledby="h-set">
+<section id="einstellungen" aria-labelledby="h-set" hidden>
   <h2 class="eyebrow sec" id="h-set">Einstellungen</h2>
   <details class="box" id="dataBox" open>
     <summary>Depotdaten sichern, importieren, zurücksetzen</summary>
@@ -193,23 +193,24 @@
   </details>
 </section>
 
-<section id="regeln" class="sfold folded" aria-labelledby="h-regeln">
+<section id="regeln" aria-labelledby="h-regeln" hidden>
   <h2 class="eyebrow sec" id="h-regeln">Regeln</h2>
   <div class="rules" id="ruleCards"></div>
   <div class="card pad"><p class="subhd" style="margin-bottom:8px">Datenquellen und Ablauf</p><div class="notes" id="srcNotes"></div></div>
-  <footer>
-    <p>Das ist die Ausgabe deiner eigenen Regeln, keine Anlage- und keine Steuerberatung. Steuerwerte sind Schätzungen nach Rechtsstand September 2026. Die geplante Neuregelung für Krypto ist ein Referentenentwurf, noch kein Gesetz.</p>
-    <p id="footSrc"></p>
-  </footer>
 </section>
+
+<footer>
+  <p>Das ist die Ausgabe deiner eigenen Regeln, keine Anlage- und keine Steuerberatung. Steuerwerte sind Schätzungen nach Rechtsstand September 2026. Die geplante Neuregelung für Krypto ist ein Referentenentwurf, noch kein Gesetz.</p>
+  <p id="footSrc"></p>
+</footer>
 </div>
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260927-1140"></script>
-<script src="js/store.js?v=20260927-1140"></script>
-<script src="js/charts.js?v=20260927-1140"></script>
-<script src="js/icons.js?v=20260927-1140"></script>
-<script src="js/app.js?v=20260927-1140"></script>
+<script src="js/engine.js?v=20260927-1223"></script>
+<script src="js/store.js?v=20260927-1223"></script>
+<script src="js/charts.js?v=20260927-1223"></script>
+<script src="js/icons.js?v=20260927-1223"></script>
+<script src="js/app.js?v=20260927-1223"></script>
 </body>
 </html>

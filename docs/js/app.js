@@ -995,34 +995,55 @@
       applyFold(btn);
     })(list[i]); }
   }
-  /* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen und Regeln sind anfangs eingeklappt (Klasse
-     „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
-     (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
-     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. Signale (data-remember="0" im HTML) ist beim Laden immer eingeklappt
-     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. Führt ein Menüpunkt,
-     Link oder Push dorthin, verschwindet „#signale“ danach wieder aus der Adresse, sonst würde jedes Neuladen den Abschnitt wieder öffnen. */
-  function remembers(sec) { return sec.getAttribute('data-remember') !== '0'; }
-  function forgetsHash(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; return !!sec && !remembers(sec); }
-  function clearHash() { try { history.replaceState(history.state, '', location.pathname + location.search); } catch (e) { /* still */ } }
-  function setSec(sec, open, save) {
-    sec.classList.toggle('folded', !open);
-    var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (save && remembers(sec)) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
-  }
-  function openSecFor(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; if (!sec || !sec.classList.contains('folded')) return false; setSec(sec, true, true); return true; }
-  function wireSections() {
-    var s = foldState();
-    Array.prototype.forEach.call(document.querySelectorAll('section.sfold'), function (sec) {
-      var h = sec.querySelector('h2.sec'); if (!h || h.querySelector('.secfold')) return;
-      var b = document.createElement('button'); b.type = 'button'; b.className = 'secfold';
-      while (h.firstChild) b.appendChild(h.firstChild);
-      var ch = document.createElement('i'); ch.className = 'chev'; ch.setAttribute('aria-hidden', 'true'); b.appendChild(ch); h.appendChild(b);
-      b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
-      setSec(sec, remembers(sec) && s['sec-' + sec.id] === 1, false);
+  /* Eigene Seiten (Justus 27.09.2026: „jeder Bereich eine eigene Seite, nicht alles auf einer Seite“): Status, Depot, Rebalancing, Signale,
+     Einstellungen und Regeln sind je eine Seite; sie ersetzen die früher einklappbaren Abschnitte. Die Adresse bestimmt, welcher Abschnitt
+     sichtbar ist (#depot …; ohne oder mit unbekanntem # die Status-Seite). So bleiben Menü, Links, Push-Nachrichten (./#signale), Lesezeichen,
+     Neuladen sowie Zurück und Vor im Browser gültig. Zeigt die Adresse auf eine Stelle innerhalb eines Abschnitts, öffnet dessen Seite und
+     springt dorthin. Nach einem Wechsel wird neu gezeichnet, weil ausgeblendete Charts und Karten ihre Breite nicht kennen. Wechselt man selbst
+     (Menü, Link, Zurück), steht das Fenster oben und der Titel der Seite bekommt den Fokus (für Screenreader). */
+  var PAGES = ['status', 'depot', 'rebalancing', 'signale', 'einstellungen', 'regeln'], PAGE = null, PAGE_TARGET = null; /* Sprungziel beim Laden, nach dem ersten Zeichnen noch einmal ansteuern */
+  function showPage(id, target, user) {
+    if (PAGES.indexOf(id) < 0) id = 'status';
+    var changed = id !== PAGE, name = 'Status'; PAGE = id;
+    if (changed && BIG.a) closeBig();
+    PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
+    Array.prototype.forEach.call(document.querySelectorAll('nav.toc a[href^="#"]'), function (a) {
+      if (a.getAttribute('href') !== '#' + id) { a.removeAttribute('aria-current'); return; }
+      a.setAttribute('aria-current', 'page'); if (a.firstChild) name = a.firstChild.textContent.trim() || name;
+      /* auf dem Handy ist das Menü waagrecht scrollbar: den aktuellen Punkt hineinschieben, ohne das Fenster zu bewegen */
+      var inn = a.parentNode, r = a.getBoundingClientRect(), q = inn.getBoundingClientRect();
+      if (r.left < q.left) inn.scrollLeft += r.left - q.left - 16; else if (r.right > q.right) inn.scrollLeft += r.right - q.right + 16;
     });
-    document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : '', t = id ? document.getElementById(id) : null; if (!t) return; openSecFor(t); if (forgetsHash(t)) setTimeout(clearHash, 0); /* nach dem Sprung */ }, true);
-    function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } if (forgetsHash(t)) clearHash(); }
-    window.addEventListener('hashchange', fromHash); fromHash();
+    document.title = 'Investus · ' + name;
+    PAGE_TARGET = !user && target && target.id !== id ? target : null;
+    if (target && target.id !== id) { try { target.scrollIntoView(); } catch (e) { /* still */ } }
+    else if (user) window.scrollTo(0, 0);
+    if (user) { var h = document.querySelector('#' + id + ' h2'); if (h) { h.setAttribute('tabindex', '-1'); try { h.focus({ preventScroll: true }); } catch (e) { /* still */ } } }
+    if (changed) schedule();
+  }
+  function route(user) {
+    var id = (location.hash || '').slice(1), t = null;
+    try { t = id ? document.getElementById(decodeURIComponent(id)) : null; } catch (e) { t = null; }
+    var sec = t && t.closest ? t.closest('.wrap > section') : null;
+    showPage(sec ? sec.id : 'status', t, user);
+  }
+  function wirePages() {
+    window.addEventListener('hashchange', function () { route(true); });
+    /* Klick auf die schon offene Seite (die Adresse ändert sich nicht, also kein hashchange): wieder nach oben */
+    document.addEventListener('click', function (e) {
+      if (e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return; /* neuer Tab oder neues Fenster bleibt möglich */
+      var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null; if (a && a.getAttribute('href') === location.hash) { e.preventDefault(); route(true); }
+    });
+    /* Neuladen (und Zurück von einer anderen Website): die Seite füllt sich erst nach dem Laden der Daten, deshalb stellt die Seite die
+       Scrollposition selbst wieder her, nach dem ersten Zeichnen (restoreScroll), statt es dem Browser zu überlassen */
+    try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) { /* still */ }
+    window.addEventListener('pagehide', function () { try { sessionStorage.setItem('regelDepot.scroll', JSON.stringify({ page: PAGE, y: Math.round(window.scrollY || 0) })); } catch (e) { /* still */ } });
+    route(false);
+  }
+  function restoreScroll() {
+    var nav = null; try { nav = performance.getEntriesByType ? performance.getEntriesByType('navigation')[0] : null; } catch (e) { /* still */ }
+    if (!nav || (nav.type !== 'reload' && nav.type !== 'back_forward')) return;
+    try { var s = JSON.parse(sessionStorage.getItem('regelDepot.scroll') || 'null'); if (s && s.page === PAGE && s.y > 0) window.scrollTo(0, s.y); } catch (e) { /* still */ }
   }
   function renderRunLog() {
     var host = $('runlog'); host.textContent = '';
@@ -1575,9 +1596,9 @@
   if ('serviceWorker' in navigator && navigator.serviceWorker.addEventListener) navigator.serviceWorker.addEventListener('message', function (e) { if (e.data && e.data.type === 'pushsubscriptionchange' && READY) pushInit().then(schedule); });
 
   /* Formulare und Sichern/Import sofort bedienbar, unabhängig davon, ob die Kursdaten laden */
-  wireData(); wireForms(); wireFolds(); wireSections(); renderOffline();
+  wireData(); wireForms(); wireFolds(); wirePages(); renderOffline();
   var loaded = false;
-  loadAll().then(function (N) { applyLoaded(N); loaded = true; READY = true; STORE.setAssets(A.concat(ALTS.map(function (x) { return x.id; }))); return pushInit(); }).then(function () { renderAll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; refreshBrowserLive(); })
+  loadAll().then(function (N) { applyLoaded(N); loaded = true; READY = true; STORE.setAssets(A.concat(ALTS.map(function (x) { return x.id; }))); return pushInit(); }).then(function () { renderAll(); if (PAGE_TARGET) { try { PAGE_TARGET.scrollIntoView(); } catch (e) { /* still */ } PAGE_TARGET = null; } else restoreScroll(); lastW = cardW(); lastPW = $('chPerf') ? $('chPerf').clientWidth : 0; refreshBrowserLive(); })
     .catch(function (e) {
       console.error(e);
       if (loaded) renderFail(e);

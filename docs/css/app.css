@@ -93,6 +93,8 @@ nav.toc .in{max-width:1520px;margin:0 auto;padding-inline:16px;display:flex;gap:
 @media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(40px,3.5vw,64px) - 10px)}}
 nav.toc a{flex:0 0 auto;padding:10px 10px;font-size:13.5px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent}
 nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-bottom-color:var(--rule-strong);outline:none}
+nav.toc a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)} /* aktuelle Seite */
+nav.toc a[aria-current="page"]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px} /* Tastaturfokus auch auf der aktuellen Seite sichtbar */
 nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px;border-radius:9px;background:var(--bad);color:var(--bad-ink);font-size:11px;font-weight:700;text-align:center;line-height:18px}
 
 section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
@@ -101,14 +103,10 @@ section>*{min-width:0}
 h2.eyebrow.sec{font-size:20px;letter-spacing:.08em;color:var(--ink-2);margin:0;padding-bottom:10px;border-bottom:1px solid var(--rule)} /* Abschnittsüberschriften deutlich größer: 20 statt 13 px, auf dem Handy 18 px (Justus 27.09.2026) */
 h2.eyebrow.sec span{color:var(--muted);font-size:14px;font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:10px}
 @media (max-width:640px){h2.eyebrow.sec{font-size:18px} h2.eyebrow.sec span{display:block;margin:2px 0 0}} /* Zusatz wie „30.12.2026 · noch 94 Tage“ passt auf dem Handy nicht daneben: linksbündig darunter */
-/* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen, Regeln. Der Titel ist ein Knopf mit Pfeil rechts,
-   eingeklappt bleiben nur Titel und Fußtext sichtbar (app.js wireSections) */
-section.sfold.folded>*:not(h2):not(footer){display:none!important}
-h2.eyebrow.sec .secfold{-webkit-appearance:none;appearance:none;display:block;width:100%;position:relative;margin:0;padding:0 28px 0 0;border:0;border-radius:0;background:none;font:inherit;letter-spacing:inherit;text-transform:inherit;color:inherit;text-align:left;cursor:pointer}
-h2.eyebrow.sec .secfold:hover{color:var(--ink)}
-h2.eyebrow.sec .secfold:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
-h2.eyebrow.sec .secfold .chev{position:absolute;right:6px;top:50%;width:10px;height:10px;border-right:2px solid currentColor;border-bottom:2px solid currentColor;transform:translateY(-75%) rotate(45deg);transition:transform .15s}
-section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-45deg)}
+/* Seiten (Justus 27.09.2026): jeder Menüpunkt ist eine eigene Seite, sichtbar ist nur der Abschnitt zur Adresse (#status, #depot …;
+   app.js wirePages). Der Titel bekommt nach einem Seitenwechsel den Fokus (für Screenreader), ohne Rahmen */
+section[hidden]{display:none!important}
+h2.eyebrow.sec:focus{outline:none}
 .card{background:var(--surface);border:1px solid var(--rule);border-radius:10px;box-shadow:var(--shadow);min-width:0}
 .pad{padding:16px 18px}
 .grid2{display:grid;grid-template-columns:repeat(auto-fit,minmax(340px,1fr));gap:14px}
@@ -152,9 +150,10 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 
 /* Status-Karten */
 .toolbar{display:flex;flex-wrap:wrap;justify-content:space-between;align-items:center;gap:10px 16px}
-/* Mehr Abstand über „Status“ (Justus 27.09.2026): ab etwa 1070 px Breite 32 px zusätzlich, schmaler weniger (mind. 12 px). Als padding, weil ein
-   margin mit dem Abstand unter der Navigation verschmelzen würde; scroll-margin um denselben Betrag kleiner, damit das Sprungziel gleich bleibt */
-#status{--stx:clamp(12px,3vw,32px);padding-top:calc(24px + var(--stx));scroll-margin-top:calc(52px - var(--stx))}
+/* Abstand über dem Seitentitel (Justus 27.09.2026, zuerst für „Status“, seit den eigenen Seiten für alle): ab etwa 1070 px Breite 32 px
+   zusätzlich, schmaler weniger (mind. 12 px). Als padding, weil ein margin mit dem Abstand unter der Navigation verschmelzen würde;
+   scroll-margin-top so groß, dass ein Sprung zur Seite (#depot …, auch vom Browser selbst) immer ganz oben landet, mit Kopf und Menü */
+.wrap>section{--stx:clamp(12px,3vw,32px);padding-top:calc(24px + var(--stx));scroll-margin-top:200vh}
 #status>.toolbar{justify-content:flex-end}
 /* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
    die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
@@ -415,21 +414,15 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 #depot details.box>summary{padding:15px 0}
 #depot details.box>summary:focus-visible{border-radius:4px}
 #depot details.box .body{padding:4px 0 22px}
-/* Abstände im Depot (Justus 27.09.2026): ab etwa 1100 px Breite 95 px vom Status bis zur Überschrift „Depot“. Reihenfolge seit 27.09.2026:
-   Depotentwicklung (direkt unter „Depot“, 16 px), darunter ohne Linie Portfolio/Ziel (102 px vom Chart bis zu den Ringen), dann mit Linie
-   Positionen und Buchungen (je 80 px vom Inhalt darüber bis zur Linie); auf schmalen Bildschirmen weniger.
-   Als margin, damit die Sprungziele im Menü gleich bleiben. */
-#depot{margin-top:clamp(24px,6vw,65px)}
+/* Abstände im Depot (Justus 27.09.2026). Reihenfolge: Depotentwicklung (direkt unter „Depot“, 16 px), darunter ohne Linie Portfolio/Ziel
+   (102 px vom Chart bis zu den Ringen), dann mit Linie Positionen und Buchungen (je 80 px vom Inhalt darüber bis zur Linie); auf schmalen
+   Bildschirmen weniger. Der Abstand über dem Titel „Depot“ ist seit den eigenen Seiten derselbe wie auf allen Seiten (.wrap>section). */
 #depot>#perfCard{border-top:0;padding-top:16px} /* erster Block unter „Depot“ */
 #depot>#alloc{margin-top:clamp(16px,5vw,54px)} /* keine Linie zwischen Depotentwicklung und Portfolio/Ziel */
 #depot>#posCard{margin-top:clamp(16px,5vw,54px)}
 #depot>#txCard{margin-top:clamp(16px,5vw,54px)}
 /* Rebalancing, Signale, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
-   der Inhalt bündig mit dem Abschnittstitel. Abstand über „Rebalancing“ (seit 27.09.2026 der erste Abschnitt nach dem Depot, vor
-   „Signale“) wie über „Depot“; nach einem aufgeklappten Abschnitt derselbe Abstand bis zum nächsten Titel, eingeklappt bleiben die
-   Titel dicht beieinander (Titel springen beim Aufklappen nicht) */
-#rebalancing{margin-top:clamp(24px,6vw,65px)}
-#signale:not(.folded),#rebalancing:not(.folded),#einstellungen:not(.folded){padding-bottom:calc(6px + clamp(24px,6vw,65px))}
+   der Inhalt bündig mit dem Abschnittstitel. Abstand über dem Titel wie auf allen Seiten (.wrap>section) */
 #signale .card,#rebalancing .card,#regeln>.card{background:none;border:0;border-radius:0;box-shadow:none}
 /* Signale: zwei offene Spalten mit Linie in der Mitte (bis 980 px untereinander), in einer Spalte die Blöcke durch eine Linie getrennt.
    gap mit !important, weil die linke Spalte in index.html ein style-Attribut mit gap:14px hat */
