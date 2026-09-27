@@ -354,7 +354,7 @@
     BIG.a = a; BIG.key = !!key; BIG.t0 = performance.now(); if (BIG.range == null) BIG.range = VIEW.range;
     box.textContent = '';
     var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch;
-    var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); tl.appendChild(el('p', 'sub muted', m.ruleName + ' · ' + m.signal.label + ' · ' + pctPlain(m.w, 0) + ' des Depots')); hd.appendChild(tl);
+    var hd = el('div', 'bighd'); var tl = el('div'); var h = el('h2'); h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); h.style.setProperty('--acol', 'var(' + COLOR[a] + ')'); tl.appendChild(h); hd.appendChild(tl);
     var right = el('div', 'row'); var stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash' + (ls ? ' seit ' + dDE(ls.d) : ''))); right.appendChild(stp);
     hd.appendChild(right); box.appendChild(hd);
     var cb = el('button', 'bigx'); cb.type = 'button'; cb.setAttribute('aria-label', 'Großansicht schließen'); cb.title = 'Schließen (Esc)'; cb.innerHTML = '<svg viewBox="0 0 16 16" aria-hidden="true" focusable="false"><path d="M3.5 3.5l9 9M12.5 3.5l-9 9"/></svg>'; cb.addEventListener('click', closeBigClick); box.appendChild(cb);
