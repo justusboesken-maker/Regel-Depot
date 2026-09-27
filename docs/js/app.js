@@ -387,9 +387,9 @@
     var S = C[a].S; if (!S || !(S.c[k] > 0)) return;
     r.appendChild(el('b', null, usd(a, S.c[k]))); r.appendChild(el('span', null, dDE(S.d[k])));
   }
-  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: false, onHover: function (k) { chartHover(a, k); } }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); }
+  function drawCharts() { A.forEach(function (a) { var host = $('ch-' + a); if (!host) return; CH.ruleChart(host, { S: C[a].S, E: C[a].E, rule: CFG.assets[a].rule, color: COLOR[a], range: VIEW.range, name: CFG.assets[a].name, usd: function (v) { return usd(a, v); }, thick: a === 'gold', readout: false, phases: false, onHover: function (k) { chartHover(a, k); } }); host.setAttribute('aria-label', (host.getAttribute('aria-label') || CFG.assets[a].name) + '. Doppelklick oder Eingabetaste öffnet die Großansicht.'); }); }
   /* Status-Karten ohne Werte-Zeile über den Charts (Justus 27.09.2026: „Den Part wegmachen“), nur die kleine Zahl beim Darüberfahren (chartHover);
-     die Großansicht behält ihre Werte-Zeile */
+     die Großansicht behält ihre Werte-Zeile. Investierte Phasen sind nur in der Großansicht hinterlegt, nicht in den kleinen Charts (phases: false, Justus 27.09.2026) */
 
   /* ---------- Depot ---------- */
   function renderDepot(Mo) {

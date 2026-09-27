@@ -128,7 +128,7 @@
   }
 
   /* ---------- Regel-Chart: Wochenschlüsse, SMA50, Band, investierte Phasen, Signale, Abstandsstreifen ----------
-     o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn)} */
+     o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn), phases (false = investierte Phasen nicht hinterlegen)} */
   function ruleChart(host, o) {
     host.textContent = '';
     var S = o.S, E = o.E, n = S.c.length, rule = o.rule, band = rule.type === 'band', p = band ? rule.p : 0;
@@ -145,8 +145,8 @@
     else { var pad = (hi - lo) * 0.07; ya = lo - pad; yb = hi + pad; Y = function (v) { return m.t + (1 - (v - ya) / (yb - ya)) * ih; }; }
     function X(k) { return m.l + (k - i0) / (N - 1) * iw; }
     var half = iw / (N - 1) / 2;
-    /* investierte Phasen (Serienfarbe, 10 %) */
-    var run = i0; for (i = i0 + 1; i <= n; i++) { if (i === n || E.st[i] !== E.st[run]) { if (E.st[run] === 1) { var x1 = Math.max(m.l, X(run) - half), x2 = Math.min(m.l + iw, X(i - 1) + half); mk('rect', { x: x1, y: m.t, width: Math.max(1, x2 - x1), height: ih, fill: col.line, 'fill-opacity': 0.1 }, svg); mk('rect', { x: x1, y: st0, width: Math.max(1, x2 - x1), height: sh, fill: col.line, 'fill-opacity': 0.06 }, svg); } run = i; } }
+    /* investierte Phasen (Serienfarbe, 10 %); o.phases === false: keine Hinterlegung (kleine Charts der Status-Karten, Justus 27.09.2026) */
+    var run = i0; if (o.phases !== false) for (i = i0 + 1; i <= n; i++) { if (i === n || E.st[i] !== E.st[run]) { if (E.st[run] === 1) { var x1 = Math.max(m.l, X(run) - half), x2 = Math.min(m.l + iw, X(i - 1) + half); mk('rect', { x: x1, y: m.t, width: Math.max(1, x2 - x1), height: ih, fill: col.line, 'fill-opacity': 0.1 }, svg); mk('rect', { x: x1, y: st0, width: Math.max(1, x2 - x1), height: sh, fill: col.line, 'fill-opacity': 0.06 }, svg); } run = i; } }
     var g = mk('g', {}, svg);
     (useLog ? logTicks(ya, yb) : linTicks(ya, yb, 4)).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l + iw + 6, y: y + 4, 'font-size': 11, fill: col.muted }, g); tx.textContent = de(t, t < 10 ? 1 : 0); });
     mk('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1 }, g);
