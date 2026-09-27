@@ -5,8 +5,9 @@
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
   /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable */
   function aicon(a) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(k) : ''; return s; }
-  var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in Legende und Ringen */
+  var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in der Legende; die Ringe folgen RING_ORDER */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
+  var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Ist/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
   var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
   var F = window.FMT, de = F.de, eur = F.eur, sgnEur = F.sgnEur, pct = F.pct, pctPlain = F.pctPlain, dDE = F.dDE, dShort = F.dShort, dtDE = F.dtDE;
   var el = CH.el, css = CH.css;
@@ -430,11 +431,11 @@
     A.forEach(function (a) { var w = CFG.assets[a].w * tot; if (C[a].E.last.st === 1) ziel[a] += w; else { ziel.cash += w; outs.push(CFG.assets[a].name); } });
     var withAlts = hasAlts(Mo);
     function parts(o, which) { return CAT.map(function (c) { var note = null; var label = c.k === 'btc' && withAlts ? 'Krypto (Bitcoin + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') + ')' : c.label; if (which === 'ziel' && c.k === 'cash' && outs.length) note = 'Anteil von ' + outs.join(' und ') + ', Regel auf Cash'; if (which === 'ist' && c.k === 'cash') { var bits = A.filter(function (a) { return Mo.pos[a].cash > 0.5; }).map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }); if (bits.length) note = 'davon ' + bits.join(', '); } return { k: c.k, label: label, color: c.color, v: o[c.k], note: note }; }); }
-    /* Ringe nach Bausteinen in fester Reihenfolge ab 6 Uhr im Uhrzeigersinn (FTSE links, dann Bitcoin, Gold), je Baustein erst die Position, dann sein Cash; direkt
-       aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Ist und Ziel immer an derselben Stelle (Justus 27.09.2026). */
+    /* Ringe nach Bausteinen in fester Reihenfolge (RING_ORDER) ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts; je Baustein erst
+       die Position, dann sein Cash; direkt aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Ist und Ziel immer an derselben Stelle (Justus 27.09.2026). */
     function ring(which, ps) {
       var out = [];
-      A.forEach(function (a) {
+      RING_ORDER.forEach(function (a) {
         var on = C[a].E.last.st === 1, w = CFG.assets[a].w * tot, cat = ps.filter(function (q) { return q.k === a; })[0];
         var inv = which === 'ist' ? (Mo.pos[a].val || 0) : (on ? w : 0), cash = which === 'ist' ? (Mo.pos[a].cash || 0) : (on ? 0 : w);
         if (inv > 0.5) out.push({ k: a, label: cat.label, color: cat.color, v: inv, note: null });
