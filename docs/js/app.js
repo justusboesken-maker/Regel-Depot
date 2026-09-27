@@ -844,11 +844,13 @@
   /* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen und Regeln sind anfangs eingeklappt (Klasse
      „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
      (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
-     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. */
+     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. Signale (data-remember="0" im HTML) ist beim Laden immer eingeklappt
+     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. */
+  function remembers(sec) { return sec.getAttribute('data-remember') !== '0'; }
   function setSec(sec, open, save) {
     sec.classList.toggle('folded', !open);
     var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (save) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
+    if (save && remembers(sec)) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
   }
   function openSecFor(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; if (!sec || !sec.classList.contains('folded')) return false; setSec(sec, true, true); return true; }
   function wireSections() {
@@ -859,7 +861,7 @@
       while (h.firstChild) b.appendChild(h.firstChild);
       var ch = document.createElement('i'); ch.className = 'chev'; ch.setAttribute('aria-hidden', 'true'); b.appendChild(ch); h.appendChild(b);
       b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
-      setSec(sec, s['sec-' + sec.id] === 1, false);
+      setSec(sec, remembers(sec) && s['sec-' + sec.id] === 1, false);
     });
     document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : ''; if (id) openSecFor(document.getElementById(id)); }, true);
     function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } }
