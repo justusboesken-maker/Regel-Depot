@@ -130,12 +130,13 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 
 /* Live-Block auf den Status-Karten */
 .scard .live{border-radius:8px;padding:9px 12px;background:var(--surface-2);display:grid;gap:3px}
-.scard .live.would{background:var(--warn-bg)}
+.scard .live.would.buy{background:var(--good-bg)} /* Woche schlösse mit Kaufsignal: blassgrün */
+.scard .live.would.sell{background:var(--bad-bg)} /* Woche schlösse mit Verkaufssignal: blassrot */
 .scard .live .lh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .scard .live .ll{font-size:12.5px;color:var(--muted)}
 .scard .live .lv{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
 .scard .live .ld{font-size:13px;color:var(--ink-2)}
-.scard .live.would .ld{color:var(--warn);font-weight:500}
+.scard .live.would .ld{font-weight:500} .scard .live.would.buy .ld{color:var(--good)} .scard .live.would.sell .ld{color:var(--bad)}
 .scard .live .ls{font-size:11.5px;color:var(--muted)}
 
 /* Status-Karten */
@@ -506,7 +507,6 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .bigfacts .bf{display:grid;gap:1px}
 .bigfacts .k{font-size:11.5px;color:var(--muted);font-weight:600;letter-spacing:.04em;text-transform:uppercase}
 .bigfacts .v{font-size:16px;font-weight:600;font-variant-numeric:tabular-nums}
-.bigfacts .bf.hot .v{color:var(--warn)}
 .bigfacts .bf.good .v{color:var(--good)}
 .bigfacts .bf.bad .v{color:var(--bad)}
 .bigchart{background:var(--surface);border:1px solid var(--rule);border-radius:10px;padding:12px 12px 8px}

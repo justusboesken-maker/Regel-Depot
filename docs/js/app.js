@@ -278,7 +278,7 @@
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
       if (lp && rn) {
-        var lv = el('div', 'live' + (rn.would ? ' would' : ''));
+        var lv = el('div', 'live' + (rn.would ? ' would ' + (rn.wouldSt ? 'buy' : 'sell') : '')); /* Kursbox grün bei möglichem Kauf-, rot bei möglichem Verkaufssignal (Justus 27.09.2026) */
         var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : 'Aktuell ' + (lp.t ? new Date(lp.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
         var what = rn.would ? ('Schließt die Woche so: ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal')) : (CFG.assets[a].rule.type === 'confirm' && ((rn.st === 1 && lp.usd < rn.thr) || (rn.st === 0 && lp.usd > rn.thr)) ? 'So wäre das der ' + (lp.usd > rn.thr ? rn.up : rn.dn) + '. Schluss ' + (lp.usd > rn.thr ? 'über' : 'unter') + ' dem SMA50, Signal erst nach ' + CFG.assets[a].rule.n : 'Schließt die Woche so, bleibt die Regel ' + (rn.wouldSt ? 'investiert' : 'auf Cash'));
         lv.appendChild(el('p', 'ld', pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + ' · ' + what + '.'));
@@ -359,7 +359,7 @@
     fact('Wochenschluss ' + dShort(L.d), usd(a, L.c)); fact('SMA50', usd(a, L.m)); fact('Abstand', pct(L.dist, 1)); fact('Serie', streakText(L));
     var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, pf = perfSince(a, lp);
     if (pf) fact(pf.label, pf.text, 'perf ' + pf.cls);
-    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? 'hot' : '');
+    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? (rn.wouldSt ? 'good' : 'bad') : ''); /* wie die Kursbox der Karte: grün Kauf-, rot Verkaufssignal */
     tools.appendChild(facts);
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Zeitraum');
     [[52, '1 J'], [156, '3 J'], [260, '5 J'], [520, '10 J'], [0, 'Max']].forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(BIG.range === r[0])); b.addEventListener('click', function () { BIG.range = r[0]; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBig(a); }); seg.appendChild(b); });
