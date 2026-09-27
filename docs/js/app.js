@@ -277,11 +277,17 @@
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp);
-      /* Unter dem Regelstand „seit Signal TT.MM.JJ ±x,x %“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“): Kursveränderung seit dem Schluss der
-         Signalwoche bis zum aktuellen Kurs wie in der Kursbox, gerechnet wie „Performance seit Signal“ in der Großansicht (perfSince).
-         Datum und Prozentzahl brechen bei Platzmangel getrennt um (app.css .since), damit der Name nicht früher umbricht. */
+      /* Unter dem Regelstand „seit Signal TT.MM.JJ“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“), darunter in einer eigenen Zeile die
+         Kursveränderung seit dem Schluss der Signalwoche bis zum aktuellen Kurs wie in der Kursbox. Gerechnet und gefärbt wie „Performance seit
+         Signal“ in der Großansicht (perfSince): nach einem Kaufsignal Anstieg grün, Rückgang rot; nach einem Verkaufssignal Rückgang grün
+         („Verlust vermieden“), Anstieg rot („Anstieg verpasst“); unter 0,05 % neutral. Die Deutung steht im Tooltip und für Screenreader. */
       if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', null, 'seit Signal ' + dYY(ls.d)));
-        if (pf) { sn.appendChild(document.createTextNode(' ')); sn.appendChild(el('span', 'sp', pct(pf.r, 1))); sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to); }
+        if (pf) {
+          var why = pf.r === 0 ? '' : ls.to === 1 ? (pf.r > 0 ? 'Anstieg seit dem Kauf' : 'Rückgang seit dem Kauf') : (pf.r < 0 ? 'Verlust vermieden' : 'Anstieg verpasst');
+          var sp = el('span', 'sp' + (pf.cls ? ' ' + pf.cls : ''), pct(pf.r, 1)); if (why) sp.appendChild(el('span', 'sr-only', ' (' + why + ')'));
+          sn.appendChild(document.createTextNode(' ')); sn.appendChild(sp);
+          sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to) + (why ? ' · ' + why : '');
+        }
         right.appendChild(sn); }
       hd.appendChild(right);
       top.appendChild(hd);
