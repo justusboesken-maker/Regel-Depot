@@ -249,10 +249,12 @@
     var S = C.ftse && C.ftse.S, c = S && S.c ? S.c.slice(-260).filter(function (v) { return v > 0; }) : [];
     if (c.length < 10) { svg.textContent = ''; return; }
     var lo = Infinity, hi = -Infinity; c.forEach(function (v) { var l = Math.log(v); if (l < lo) lo = l; if (l > hi) hi = l; });
-    var W = 1000, H = 200, n = c.length, d = c.map(function (v, i) { return (i ? 'L' : 'M') + (i / (n - 1) * W).toFixed(1) + ',' + (H - 8 - (hi > lo ? (Math.log(v) - lo) / (hi - lo) : 0.5) * (H - 24)).toFixed(1); }).join('');
+    /* Linkes Ende (Justus 27.09.2026): die Linie läuft senkrecht bis an die Unterkante und schließt bündig mit dem Bereich darunter ab;
+       x beginnt bei 1, damit dieses Stück nicht halb abgeschnitten wird */
+    var W = 1000, H = 200, X0 = 1, n = c.length, d = c.map(function (v, i) { return 'L' + (X0 + i / (n - 1) * (W - X0)).toFixed(1) + ',' + (H - 8 - (hi > lo ? (Math.log(v) - lo) / (hi - lo) : 0.5) * (H - 24)).toFixed(1); }).join('');
     svg.setAttribute('viewBox', '0 0 ' + W + ' ' + H); svg.setAttribute('preserveAspectRatio', 'none');
     svg.innerHTML = '<defs><linearGradient id="mhFill" x1="0" y1="0" x2="0" y2="1"><stop class="s0" offset="0"/><stop class="s1" offset="1"/></linearGradient></defs>'
-      + '<path d="' + d + 'L' + W + ',' + H + 'L0,' + H + 'Z" fill="url(#mhFill)"/><path class="ln" d="' + d + '" vector-effect="non-scaling-stroke"/>';
+      + '<path d="M' + X0 + ',' + H + d + 'L' + W + ',' + H + 'Z" fill="url(#mhFill)"/><path class="ln" d="M' + X0 + ',' + H + d + '" vector-effect="non-scaling-stroke"/>';
   }
   function renderGlobal(Mo) {
     var g = $('globalBanner'); g.textContent = '';
