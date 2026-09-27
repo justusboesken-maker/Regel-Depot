@@ -481,10 +481,11 @@
       return out;
     }
     var wrap = el('div', 'donuts');
-    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, ''), true); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
-    d1.appendChild(CH.donut('Portfolio', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
-    d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
+    /* Ringe ohne Beschriftung und Legende darunter (Justus 27.09.2026: „Portfolio · was gerade im Depot liegt“, „Ziel · laut Regeln“ und die
+       Zeile mit Farben, Anteilen und Beträgen entfallen); Name und Summe stehen in der Mitte, die Anteile am Ring, Details im Tooltip */
+    d1.appendChild(CH.donut('Portfolio', null, ring('ist', pi), tot, Math.PI));
+    d2.appendChild(CH.donut('Ziel', null, ring('ziel', pz), tot, Math.PI));
     wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
     /* ohne Satz „Ziel 50 / 30 / 20 …“ unter den Ringen (Justus 27.09.2026); warum ein Anteil im Ziel als Cash zählt, zeigt der Tooltip des Ziel-Rings */
