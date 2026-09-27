@@ -264,19 +264,13 @@
   }
 
   /* ---------- Status-Karten ---------- */
-  function weeksTable(a, rows) {
-    var S = C[a].S, E = C[a].E, n = S.c.length, t = el('table'), th = el('thead'), tr = el('tr'), cnt = rows || 12;
-    ['Wochenschluss', 'Schluss', 'SMA50', 'Abstand', 'Regel'].forEach(function (h, k) { var c = el('th', k > 0 && k < 4 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
-    var tb = el('tbody'); for (var i = n - 1; i >= Math.max(49, n - cnt); i--) { var r = el('tr'); r.appendChild(el('td', null, dDE(S.d[i]))); r.appendChild(el('td', 'n', usd(a, S.c[i]))); r.appendChild(el('td', 'n', usd(a, E.sma[i]))); r.appendChild(el('td', 'n', pct(S.c[i] / E.sma[i] - 1, 1))); r.appendChild(el('td', null, (E.st[i] === 1 ? 'investiert' : 'Cash') + (CFG.assets[a].rule.type === 'confirm' ? ' · ' + (E.up[i] > 0 ? E.up[i] + '↑' : E.dn[i] > 0 ? E.dn[i] + '↓' : '=') : ''))); tb.appendChild(r); }
-    t.appendChild(tb); return t;
-  }
   function renderStatus(Mo) {
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
       var m = CFG.assets[a], E = C[a].E, L = E.last, ls = L.lastSwitch, st = D.state && D.state.assets && D.state.assets[a];
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
-      h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ und in der Großansicht */ hd.appendChild(left);
+      h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
       var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
       hd.appendChild(right);
       top.appendChild(hd);
@@ -377,7 +371,6 @@
     var sws = E.sw.slice(-8).reverse(); if (!sws.length) swl.appendChild(el('p', 'small muted', 'Noch keine Signale.'));
     sws.forEach(function (sw) { var r = el('div', 'swrow'); r.appendChild(chip(sw.to ? 'buy' : 'sell', sw.to ? 'Kauf' : 'Verkauf')); r.appendChild(el('span', null, dDE(sw.d) + ' · Schluss ' + usd(a, sw.c) + ' · SMA50 ' + usd(a, sw.m) + ' · Handel ' + dShort(nextMonday(sw.d)))); swl.appendChild(r); });
     box.appendChild(swl);
-    var tw = el('div', 'tablewrap'); tw.appendChild(weeksTable(a, 26)); box.appendChild(el('p', 'subhd', 'Letzte 26 Wochen')); box.appendChild(tw);
     mo.hidden = false; document.body.style.overflow = 'hidden';
     drawBig(a); cb.focus();
   }
