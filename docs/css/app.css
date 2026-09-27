@@ -171,11 +171,6 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
 .card.scard{background:none;border:0;border-radius:0;box-shadow:none}
 .scards .scard+.scard::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
-/* Farbiger Rand über den Status-Karten (Justus 27.09.2026: „wieder den farbigen Rand über den Status-Karten“, wie bis zum 26.09. bei den
-   Kästen): 3 px in der Farbe des Bausteins über die ganze Spaltenbreite, mit runden Enden, darunter 18 px Luft bis zum Namen.
-   Untereinander (bis 980 px) ersetzt er die graue Linie zwischen den Karten. */
-.scards .scard{padding-top:21px}
-.scards .scard::after{content:"";position:absolute;left:0;right:0;top:0;height:3px;border-radius:2px;background:var(--acol,var(--rule))}
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
 /* Name und Icon der Status-Karten größer (Justus 27.09.2026, Variante C: 23 px statt 16,5 px, Icon 29 px statt 20 px; danach Icon
@@ -236,7 +231,7 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard .next b{color:var(--ink);font-variant-numeric:tabular-nums}
 .scard details.mini>summary{padding:10px 12px;font-size:13px}
 .scard details.mini .body{padding:0 6px 8px}
-@media (max-width:980px){.scards{grid-template-columns:minmax(0,1fr);gap:0} .scards .scard{grid-row:auto;grid-template-rows:none;padding:21px 0 22px} .scards .scard+.scard::before{display:none}}
+@media (max-width:980px){.scards{grid-template-columns:minmax(0,1fr);gap:0} .scards .scard{grid-row:auto;grid-template-rows:none;padding:22px 0} .scards .scard:first-child{padding-top:4px} .scards .scard+.scard{border-top:1px solid var(--rule)} .scards .scard+.scard::before{display:none}}
 .warnbox{border-radius:8px;padding:9px 12px;background:var(--warn-bg);color:var(--warn);font-size:13px;display:flex;gap:8px;align-items:flex-start}
 .warnbox svg{width:15px;height:15px;flex:0 0 auto;margin-top:1px}
 .infobox{border-radius:8px;padding:9px 12px;background:var(--accent-soft);color:var(--ink);font-size:13px}
