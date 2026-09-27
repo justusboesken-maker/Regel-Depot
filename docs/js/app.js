@@ -261,7 +261,23 @@
     svg.innerHTML = '<defs><linearGradient id="mhFill" x1="0" y1="0" x2="0" y2="1"><stop class="s0" offset="0"/><stop class="s1" offset="1"/></linearGradient></defs>'
       + '<path d="' + d + 'L' + W + ',' + H + 'L0,' + H + 'Z" fill="url(#mhFill)"/><path class="ln" d="' + d + '" vector-effect="non-scaling-stroke"/>';
   }
+  /* Fußzeile nur bei einem Problem mit der letzten Aktualisierung der Kursdaten (Justus 27.09.2026: „nur etwas, wenn es ein Problem gibt“;
+     der Hinweis auf keine Anlageberatung und die Zeile „Wochenhistorie ab … Letzte Aktualisierung …“ entfallen). Problem heißt: der letzte
+     automatische Lauf ist fehlgeschlagen, oder seit der letzten Aktualisierung sind mindestens zwei planmäßige stündliche Läufe (täglich
+     05–21 Uhr UTC zur Minute 7) ohne Ergebnis geblieben, jeder erst eine Stunde nach seiner Zeit gezählt (GitHub startet Läufe oft verspätet).
+     Ein einzelner verspäteter oder ausgelassener Lauf und die Nachtpause zählen also nicht. */
+  function priceProblem() {
+    var r = lastRun(), up = D.state && D.state.updated ? Date.parse(D.state.updated) : NaN, where = ' Details unter „Signale“ bei „Letzte Läufe“.';
+    if (r && !r.ok) return 'Die letzte Aktualisierung der Kursdaten ist fehlgeschlagen (' + ((STEPS && STEPS[r.step]) || r.step || 'Lauf') + ', ' + dtDE(r.t) + ').' + where;
+    if (!(up > 0)) return 'Der Zeitpunkt der letzten Aktualisierung der Kursdaten ist unbekannt.';
+    var now = Date.now(), u = new Date(up), missed = 0, day = Date.UTC(u.getUTCFullYear(), u.getUTCMonth(), u.getUTCDate()), hh, t;
+    for (; day <= now && missed < 2; day += 864e5) for (hh = 5; hh <= 21 && missed < 2; hh++) { t = day + hh * 3600e3 + 7 * 60e3; if (t > up && t + 3600e3 <= now) missed++; }
+    if (missed < 2) return null;
+    return 'Die Kursdaten sind nicht aktuell: letzte Aktualisierung ' + dtDE(D.state.updated) + ', seitdem ist die stündliche Aktualisierung ausgeblieben.' + where;
+  }
+  function renderFoot() { var f = $('foot'), p = $('footSrc'); if (!f || !p) return; var t = priceProblem(); p.textContent = t || ''; f.hidden = !t; }
   function renderGlobal(Mo) {
+    renderFoot();
     var g = $('globalBanner'); g.textContent = '';
     var r = lastRun(), age = r ? ENG.daysBetween(r.t.slice(0, 10), todayISO()) : null;
     if (D.errors.length) { var b0 = el('div', 'banner bad'); b0.appendChild(el('b', null, 'Ein Teil der Daten konnte nicht geladen werden')); b0.appendChild(el('span', null, D.errors.join(' · '))); g.appendChild(b0); }
@@ -1528,7 +1544,6 @@
     var btcT = btcCloseTime(), monAt = ((CFG.push && CFG.push.mondayAt) || '07:53').replace(/^0/, '');
     note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold, ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und Gold, mit Wiederholungen um 20:23 und 22:23 Uhr, in der Nacht um 1:37 Uhr und Samstag 9:23 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen. Der FTSE-Schluss kommt meist schon um 18:47 Uhr von EODHD; fehlt er noch, gilt ein vorläufiger Schluss aus dem aktuellen Kurs, der später bestätigt oder korrigiert wird. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag kurz nach 0 Uhr UTC (' + btcT + ' Uhr) Wochenschluss Bitcoin, Push-Nachrichten dazu um ' + monAt + ' Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Endet die Woche wegen eines Feiertags früher (etwa Gründonnerstag, Gold vor Weihnachten und Neujahr), kommen Vorwarnung um 15:17 Uhr und Wochenschluss ab 18:47 Uhr an diesem letzten Handelstag, Wiederholungen mit den Läufen um 19:37 und 23:37 Uhr; an Halbtagen (London schließt am letzten Geschäftstag vor Weihnachten und vor Neujahr um 12:30 Uhr) für den FTSE um 11:17 und 14:47 Uhr. Alle Zeiten Berliner Zeit, im Sommer wie im Winter (London stellt am selben Tag um). Andere Nachrichten kommen sofort, auch nachts.');
     note('Die Läufe laufen als GitHub Actions in diesem Repo. Sie führen keine Käufe oder Verkäufe aus und kennen deine Depotdaten nicht; die liegen nur in deinem Browser.');
-    $('footSrc').textContent = 'Wochenhistorie ab ' + dDE(C.ftse.S.d[0]) + ' (FTSE), ' + dDE(C.btc.S.d[0]) + ' (Bitcoin), ' + dDE(C.gold.S.d[0]) + ' (Gold). Letzte Aktualisierung der Kursdaten: ' + (D.state && D.state.updated ? dtDE(D.state.updated) : '–') + '.';
   }
 
   /* ---------- Render-Schleife ---------- */

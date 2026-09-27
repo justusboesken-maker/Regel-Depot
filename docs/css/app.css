@@ -577,6 +577,8 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 @media (max-width:980px){.rules{grid-template-columns:minmax(0,1fr);gap:0} .rules .rule{padding:21px 0 18px} .rules .rule+.rule::before{display:none}}
 .rule .formula{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border-radius:6px;padding:8px 10px;color:var(--ink);line-height:1.55}
 footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:grid;gap:6px}
+footer[hidden]{display:none} /* nur bei einem Problem mit der letzten Aktualisierung der Kursdaten sichtbar (app.js renderFoot) */
+#footSrc{color:var(--warn);margin:0}
 @media (max-width:640px){
   .pad{padding:14px}
   .feed .it{grid-template-columns:auto 1fr;padding:12px 14px}
