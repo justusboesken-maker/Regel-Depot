@@ -7,7 +7,7 @@
   function aicon(a) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(k) : ''; return s; }
   var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in der Legende; die Ringe folgen RING_ORDER */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
-  var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Ist/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
+  var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Portfolio/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
   var CFG = null, D = { weekly: {}, eur: null, state: null, events: [], runs: [], errors: [] }, C = {}, VIEW = { range: 156 }, PERF = { mode: 'gewinn', range: 'alles' };
   var F = window.FMT, de = F.de, eur = F.eur, sgnEur = F.sgnEur, pct = F.pct, pctPlain = F.pctPlain, dDE = F.dDE, dShort = F.dShort, dtDE = F.dtDE;
   var el = CH.el, css = CH.css;
@@ -458,7 +458,7 @@
     renderTx(Mo);
   }
   function renderAlloc(Mo, tot, cashT, miss) {
-    var al = $('alloc'); al.textContent = ''; al.appendChild(el('p', 'subhd', 'Aufteilung: Ist und Ziel'));
+    var al = $('alloc'); al.textContent = ''; al.appendChild(el('p', 'subhd', 'Aufteilung: Portfolio und Ziel')); /* „Portfolio“ statt „Ist“ (Justus 27.09.2026) */
     if (miss && miss.length) { al.appendChild(el('p', 'small muted', 'Keine Aufteilung, solange der Euro-Kurs für ' + miss.map(function (a) { return CFG.assets[a].name; }).join(' und ') + ' fehlt: Der Wert ' + (miss.length > 1 ? 'dieser Positionen' : 'dieser Position') + ' ist unbekannt.')); return; }
     if (!(tot > 0)) { al.appendChild(el('p', 'small muted', 'Noch keine Werte.')); return; }
     var ist = { btc: Mo.pos.btc.val || 0, ftse: Mo.pos.ftse.val || 0, gold: Mo.pos.gold.val || 0, cash: cashT };
@@ -467,7 +467,7 @@
     var withAlts = hasAlts(Mo);
     function parts(o, which) { return CAT.map(function (c) { var note = null; var label = c.k === 'btc' && withAlts ? 'Krypto (Bitcoin + ' + Mo.pos.btc.alts.filter(function (x) { return x.u > 1e-12; }).map(function (x) { return x.short; }).join(', ') + ')' : c.label; if (which === 'ziel' && c.k === 'cash' && outs.length) note = 'Anteil von ' + outs.join(' und ') + ', Regel auf Cash'; if (which === 'ist' && c.k === 'cash') { var bits = A.filter(function (a) { return Mo.pos[a].cash > 0.5; }).map(function (a) { return CFG.assets[a].name + ' ' + eur(Mo.pos[a].cash); }); if (bits.length) note = 'davon ' + bits.join(', '); } return { k: c.k, label: label, color: c.color, v: o[c.k], note: note }; }); }
     /* Ringe nach Bausteinen in fester Reihenfolge (RING_ORDER) ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts; je Baustein erst
-       die Position, dann sein Cash; direkt aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Ist und Ziel immer an derselben Stelle (Justus 27.09.2026). */
+       die Position, dann sein Cash; direkt aufeinanderfolgendes Cash wird ein Stück. So steht jeder Baustein in Portfolio und Ziel immer an derselben Stelle (Justus 27.09.2026). */
     function ring(which, ps) {
       var out = [];
       RING_ORDER.forEach(function (a) {
@@ -482,7 +482,7 @@
     var wrap = el('div', 'donuts');
     function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, '')); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
-    d1.appendChild(CH.donut('Ist', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
+    d1.appendChild(CH.donut('Portfolio', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
     d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
     wrap.appendChild(d1); wrap.appendChild(d2);
     al.appendChild(wrap);
