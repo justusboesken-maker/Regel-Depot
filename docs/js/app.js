@@ -1025,13 +1025,17 @@
      Zuletzt geöffnete Seite (Justus 27.09.2026: „springt häufig automatisch auf Status zurück“): Die installierte App und der Browser laden die
      Seite nach dem Wechsel in eine andere App oft neu, und zwar mit der Startadresse ohne „#…“. Deshalb merkt sich die Seite die zuletzt
      geöffnete Seite in diesem Browser (regelDepot.page) und zeigt sie, wenn die Adresse kein „#“ enthält; eine Adresse mit „#“ (Menü, Link,
-     Push, Lesezeichen) und Zurück/Vor gehen vor. */
+     Push, Lesezeichen) und Zurück/Vor gehen vor. Nach einer Stunde ohne Benutzung wieder Status (Justus 27.09.2026): gemerkt wird auch, wann die
+     Seite zuletzt benutzt wurde (Seitenwechsel, Verlassen der App oder des Tabs); beim Start ohne „#“ und bei der Rückkehr in die noch
+     geöffnete App oder den Tab gilt die letzte Seite nur, wenn das weniger als eine Stunde her ist. */
   var PAGES = ['status', 'depot', 'rebalancing', 'signale', 'einstellungen', 'regeln'], PAGE = null, PAGE_TARGET = null; /* Sprungziel beim Laden, nach dem ersten Zeichnen noch einmal ansteuern */
-  var PAGE_KEY = 'regelDepot.page';
+  var PAGE_KEY = 'regelDepot.page', PAGE_IDLE = 60 * 60 * 1000;
+  function pageMem() { try { var o = JSON.parse(localStorage.getItem(PAGE_KEY) || 'null'); return o && typeof o === 'object' && o.page ? o : null; } catch (e) { return null; } }
+  function savePage() { try { localStorage.setItem(PAGE_KEY, JSON.stringify({ page: PAGE, t: Date.now() })); } catch (e) { /* still */ } }
+  function pageFresh(m) { return !!m && PAGES.indexOf(m.page) >= 0 && m.t > 0 && Date.now() - m.t < PAGE_IDLE; }
   function showPage(id, target, user) {
     if (PAGES.indexOf(id) < 0) id = 'status';
-    var changed = id !== PAGE; PAGE = id;
-    try { localStorage.setItem(PAGE_KEY, id); } catch (e) { /* still */ }
+    var changed = id !== PAGE; PAGE = id; savePage();
     if (changed && BIG.a) closeBig();
     PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
     Array.prototype.forEach.call(document.querySelectorAll('nav.toc a[href^="#"]'), function (a) {
@@ -1049,9 +1053,9 @@
   }
   function route(user) {
     var id = (location.hash || '').slice(1), t = null, last = null;
-    if (!id && !user) { /* Start ohne „#“: zuletzt geöffnete Seite, und die Adresse passend setzen (Neuladen, Zurück) */
-      try { last = localStorage.getItem(PAGE_KEY); } catch (e) { last = null; }
-      if (last && last !== 'status' && PAGES.indexOf(last) >= 0) { id = last; try { history.replaceState(history.state, '', '#' + last); } catch (e) { /* still */ } }
+    if (!id && !user) { /* Start ohne „#“: zuletzt geöffnete Seite, wenn vor weniger als einer Stunde benutzt; Adresse passend setzen (Neuladen, Zurück) */
+      last = pageMem();
+      if (pageFresh(last) && last.page !== 'status') { id = last.page; try { history.replaceState(history.state, '', '#' + id); } catch (e) { /* still */ } }
     }
     try { t = id ? document.getElementById(decodeURIComponent(id)) : null; } catch (e) { t = null; }
     var sec = t && t.closest ? t.closest('.wrap > section') : null;
@@ -1067,7 +1071,14 @@
     /* Neuladen (und Zurück von einer anderen Website): die Seite füllt sich erst nach dem Laden der Daten, deshalb stellt die Seite die
        Scrollposition selbst wieder her, nach dem ersten Zeichnen (restoreScroll), statt es dem Browser zu überlassen */
     try { if ('scrollRestoration' in history) history.scrollRestoration = 'manual'; } catch (e) { /* still */ }
-    window.addEventListener('pagehide', function () { try { sessionStorage.setItem('regelDepot.scroll', JSON.stringify({ page: PAGE, y: Math.round(window.scrollY || 0) })); } catch (e) { /* still */ } });
+    window.addEventListener('pagehide', function () { savePage(); try { sessionStorage.setItem('regelDepot.scroll', JSON.stringify({ page: PAGE, y: Math.round(window.scrollY || 0) })); } catch (e) { /* still */ } });
+    /* App oder Tab verlassen: Zeitpunkt merken; zurück nach mehr als einer Stunde: wieder Status */
+    document.addEventListener('visibilitychange', function () {
+      if (document.hidden) { savePage(); return; }
+      var m = pageMem();
+      if (PAGE && PAGE !== 'status' && m && !pageFresh(m)) { try { history.replaceState(history.state, '', '#status'); } catch (e) { /* still */ } showPage('status', null, true); }
+      else savePage();
+    });
     route(false);
   }
   function restoreScroll() {
