@@ -301,8 +301,16 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .rule-rd.rd-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 32px}
 .rule-rd.rd-line .rd-h{display:flex;flex-wrap:nowrap;align-items:baseline;gap:0 12px;min-height:0;overflow:visible}
 .rule-rd.rd-line .rd-h b{display:inline;margin-right:0}
-.rule-rd.rd-line .rd-row{flex-wrap:nowrap;overflow:visible}
+.rule-rd.rd-line .rd-row{flex-wrap:nowrap;overflow:visible;align-items:baseline}
+/* Schluss und SMA50 auf derselben Schriftlinie wie Datum und Regelstand: Beschriftung und Wert nach der Grundlinie, die Farbmarke mittig
+   (ohne das richtete sich die Gruppe nach der textlosen Marke und saß einige Pixel zu tief) */
+.rule-rd.rd-line .rd-i{align-items:baseline}
+.rule-rd.rd-line .rd-i>i{align-self:center}
 .rule-rd.rd-line .rd-n{flex-basis:100%}
+/* rd-one (charts.js fitMode): der Regelstand passt klein in dieselbe Zeile (Justus 27.09.2026: „Regel investiert und Band klein in der gleichen
+   Zeile“); Abstand zwischen Kopf, Werten und Regelstand 28 px, charts.js liest ihn von hier */
+.rule-rd.rd-one{column-gap:28px}
+.rule-rd.rd-one .rd-n{flex-basis:auto;font-size:14px}
 @media (max-width:560px){.bigchart .rule-rd{font-size:16px}}
 @media (max-width:560px){#perfLegend.readout .rd-h{min-height:var(--rdh,3em)}.readout .rd-long{display:none}.readout .rd-short{display:inline}}
 .cap{font-size:13px;color:var(--muted)}
@@ -479,7 +487,8 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 
 /* Großansicht */
 .modal{position:fixed;inset:0;z-index:50;background:rgba(15,23,36,.55);backdrop-filter:blur(3px);overflow:auto;padding:24px 12px;display:grid;align-items:start;justify-items:center}
-.modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;--bgap:clamp(24px,3vw,40px);gap:var(--bgap)}
+/* Großansicht bis 1360 px breit (vorher 1240 px), damit die Werte-Zeile samt Regelstand in eine Zeile passt (Justus 27.09.2026) */
+.modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1360px,100%);padding:18px 20px 22px;display:grid;--bgap:clamp(24px,3vw,40px);gap:var(--bgap)}
 /* Großansicht: mehr Abstand zwischen Chart, Handlung, Grenze und Signalen (Justus 27.09.2026: „noch ein bisschen mehr als B“,
    ab etwa 1330 px Breite 40 px, auf schmalen Bildschirmen weniger, Handy 24 px).
    Kopf → Kennzahlen 40 px, seit die Zeile unter dem Namen entfallen ist, und Kennzahlen → Zeitraum-Leiste 30 px statt 10 px
