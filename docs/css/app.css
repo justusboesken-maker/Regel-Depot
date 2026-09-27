@@ -610,6 +610,7 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:grid;gap:6px}
 footer[hidden]{display:none} /* nur bei einem Problem mit der letzten Aktualisierung der Kursdaten sichtbar (app.js renderFoot) */
 #footSrc{color:var(--warn);margin:0}
+#footSrc.bad{color:var(--bad)} /* fehlgeschlagener Lauf: rot */
 @media (max-width:640px){
   .pad{padding:14px}
   .feed .it{grid-template-columns:auto 1fr;padding:12px 14px}

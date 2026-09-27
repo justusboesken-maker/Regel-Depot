@@ -275,7 +275,8 @@
     if (missed < 2) return null;
     return 'Die Kursdaten sind nicht aktuell: letzte Aktualisierung ' + dtDE(D.state.updated) + ', seitdem ist die stündliche Aktualisierung ausgeblieben.' + where;
   }
-  function renderFoot() { var f = $('foot'), p = $('footSrc'); if (!f || !p) return; var t = priceProblem(); p.textContent = t || ''; f.hidden = !t; }
+  /* rot bei einem fehlgeschlagenen Lauf, gelb, wenn die Aktualisierung nur ausgeblieben ist (Justus 27.09.2026) */
+  function renderFoot() { var f = $('foot'), p = $('footSrc'); if (!f || !p) return; var t = priceProblem(), r = lastRun(); p.textContent = t || ''; p.className = t && r && !r.ok ? 'bad' : ''; f.hidden = !t; }
   function renderGlobal(Mo) {
     renderFoot();
     var g = $('globalBanner'); g.textContent = '';
