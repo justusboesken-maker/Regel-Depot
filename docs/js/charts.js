@@ -211,14 +211,19 @@
        darunter (Großansicht). Die Status-Karten haben seit 27.09.2026 keine Werte-Zeile mehr (o.readout === false). */
     function fitMode() {
       if (!rd) return;
-      rd.classList.remove('rd-wide', 'rd-mid', 'rd-two', 'rd-line');
-      var bw = rd.clientWidth, cx = null, k, T = [], head = 0, note = 0, hb = [], nw = [];
+      rd.classList.remove('rd-wide', 'rd-mid', 'rd-two', 'rd-line', 'rd-one');
+      var bw = rd.clientWidth, cx = null, k, T = [], head = 0, note = 0, hb = [], nw = [], vw = 0;
       if (!bw) return;
       try { cx = document.createElement('canvas').getContext('2d'); } catch (e) { cx = null; }
       if (!cx) return;
       var cs = getComputedStyle(rd), fam = cs.fontSize + ' ' + cs.fontFamily;
       for (k = i0; k < n; k++) T.push(textAt(k));
       cx.font = '600 ' + fam; T.forEach(function (t, j) { hb[j] = cx.measureText(t.head).width; nw[j] = t.noteCls ? cx.measureText(nb(t.note)).width : 0; });
+      /* Reservierte Breite der Werte genau in Pixeln statt in ch (Justus 27.09.2026: „weniger Abstand“ zwischen Beschriftung und Wert); Ziffern sind
+         tabellarisch gleich breit (app.css .rd-v), gemessen wird deshalb mit Nullen */
+      function tw(v) { return cx.measureText(nb(String(v)).replace(/\d/g, '0')).width; }
+      for (k = i0; k < n; k++) vw = Math.max(vw, tw(o.usd(S.c[k])), tw(o.usd(E.sma[k])));
+      rd.style.setProperty('--rdw', Math.ceil(vw + 3) + 'px');
       cx.font = fam; T.forEach(function (t, j) { head = Math.max(head, hb[j] + 10 + cx.measureText(nb(t.extra)).width); note = Math.max(note, t.noteCls ? nw[j] : cx.measureText(nb(t.note)).width); });
       rd.classList.add('rd-mid'); var row = rd.querySelector('.rd-row'), rowW = 0, rowFits = false;
       if (row) { row.style.width = 'max-content'; rowW = row.getBoundingClientRect().width; row.style.width = ''; rowFits = rowW <= row.clientWidth + 0.5; } /* Inhaltsbreite, nicht die des Blocks */
@@ -226,7 +231,15 @@
       if (rowFits) rd.classList.add(head + 2 <= bw ? 'rd-wide' : 'rd-mid');
       /* rd-line (Großansicht, Justus 27.09.2026: „nutze den freien Platz nach rechts“): Datum, Abstand, Schluss und SMA50 passen zusammen in eine
          Zeile (Abstand dazwischen 32 px wie in app.css), der Regelstand steht darunter; gemessen für alle sichtbaren Wochen, damit nichts springt */
-      if (rowFits && head + 32 + rowW + 2 <= bw) rd.classList.add('rd-line');
+      if (rowFits && head + 32 + rowW + 2 <= bw) {
+        rd.classList.add('rd-line');
+        /* rd-one (Justus 27.09.2026: „Regel investiert und Band klein in derselben Zeile“): auch der Regelstand passt in kleinerer Schrift noch in die
+           Zeile, gemessen mit der Schrift von .rd-n in rd-one für alle sichtbaren Wochen */
+        rd.classList.add('rd-one'); var ne = rd.querySelector('.rd-n'), small = 0;
+        if (ne) { var ns = getComputedStyle(ne), nf = ns.fontSize + ' ' + ns.fontFamily; T.forEach(function (t) { cx.font = (t.noteCls ? '600 ' : '') + nf; small = Math.max(small, cx.measureText(nb(t.note)).width); }); }
+        var gp = parseFloat(getComputedStyle(rd).columnGap) || 0; /* Abstand zwischen Kopf, Werten und Regelstand in rd-one (app.css) */
+        if (!ne || head + 2 + gp + rowW + gp + small + 2 > bw) rd.classList.remove('rd-one');
+      }
       if (note + 2 > bw) rd.classList.add('rd-two');
     }
     function show(k) {
