@@ -307,16 +307,17 @@
     var gd = Math.round(Math.abs(R(x.thr, dec) - R(x.c, dec)) * f) / f, gap = gd > 0 ? 'nur ' + U(gd) : 'weniger als ' + U(1 / f);
     var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? P(rp, 2) : 'weniger als 0,01\u00a0%';
     var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' für diesen Schluss von ' + T + ' (' + P(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
-      : 'Schwelle für diesen Schluss von ' + T + ', oberhalb der ein Schluss über dem SMA50 liegt';
+      : 'Schwelle für diesen Schluss von ' + T + ' (darüber liegt ein Schluss über dem SMA50)';
     var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + U(x.c) + (x.side === 0 ? ' genau auf der Schwelle für diesen Schluss von ' + T + ', also genau auf dem SMA50. '
       : ' ' + gap + ' (' + rel + ') ' + (x.side > 0 ? 'über' : 'unter') + ' der ' + where + '. ');
     if (L.changed) p1 += x.band ? 'Das hat das ' + sig(L.st) + ' ausgelöst.' : 'Das war der ' + run(L) + ' und hat das ' + sig(L.st) + ' ausgelöst.';
     else if (x.band) p1 += 'Deshalb gab es kein ' + sig(1 - x.prev) + ', die Regel bleibt ' + stw(L.st) + '.';
     else if (x.side === 0) p1 += 'Ein Schluss genau auf dem SMA50 setzt beide Serien zurück, die Regel bleibt ' + stw(L.st) + '.';
     else p1 += 'Das war der ' + run(L) + (L.st === 1 && L.dn > 0 ? '; ein Verkaufssignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge unter dem SMA50' : L.st === 0 && L.up > 0 ? '; ein Kaufsignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge über dem SMA50' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
-    /* Die Schwelle verschiebt sich jede Woche: die der laufenden Woche, dieselbe Zahl wie in der Kursbox darüber (ENG.flipThreshold wie ruleNow) */
-    var ft = ENG.flipThreshold(C[a].E, rule);
-    if (ft && ft.thr > 0) p1 += ' Für die laufende Woche liegt die ' + (x.band ? (L.st === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') : 'Schwelle') + ' bei ' + usd(a, ft.thr).replace(/ \$$/, '\u00a0$') + '.';
+    /* Die Schwelle verschiebt sich jede Woche: die für den nächsten Wochenschluss, dieselbe Zahl wie in der Kursbox darüber (ENG.flipThreshold wie
+       ruleNow); „nächster Wochenschluss“ statt „laufende Woche“, weil FTSE und Gold am Wochenende schon geschlossen haben (Prüfung 27.09.2026) */
+    var ft = ENG.flipThreshold(C[a].E, rule), fe = ft && ft.thr > 0 && Math.abs(ft.thr * Math.pow(10, m.dec) - Math.round(ft.thr * Math.pow(10, m.dec))) < 1e-6;
+    if (ft && ft.thr > 0) p1 += ' Für den nächsten Wochenschluss liegt die ' + (x.band ? (L.st === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') : 'Schwelle') + ' bei ' + (fe ? '' : 'rund ') + usd(a, ft.thr).replace(/ \$$/, '\u00a0$') + '.';
     var p2 = x.alt.map(function (o) {
       var pre = x.side === 0 ? (o.above ? 'Ein Schluss knapp darüber' : 'Ein Schluss knapp darunter') : 'Ein Schluss ' + (o.above ? 'ab ' + U(upV) : 'bis ' + U(dnV));
       if (o.changed) return pre + ' hätte das ' + sig(o.st) + ' ausgelöst' + (x.band ? '' : ' (' + run(o) + ')') + '.';
