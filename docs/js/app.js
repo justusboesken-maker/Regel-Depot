@@ -1004,17 +1004,16 @@
   var PAGES = ['status', 'depot', 'rebalancing', 'signale', 'einstellungen', 'regeln'], PAGE = null, PAGE_TARGET = null; /* Sprungziel beim Laden, nach dem ersten Zeichnen noch einmal ansteuern */
   function showPage(id, target, user) {
     if (PAGES.indexOf(id) < 0) id = 'status';
-    var changed = id !== PAGE, name = 'Status'; PAGE = id;
+    var changed = id !== PAGE; PAGE = id;
     if (changed && BIG.a) closeBig();
     PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
     Array.prototype.forEach.call(document.querySelectorAll('nav.toc a[href^="#"]'), function (a) {
       if (a.getAttribute('href') !== '#' + id) { a.removeAttribute('aria-current'); return; }
-      a.setAttribute('aria-current', 'page'); if (a.firstChild) name = a.firstChild.textContent.trim() || name;
+      a.setAttribute('aria-current', 'page');
       /* auf dem Handy ist das Menü waagrecht scrollbar: den aktuellen Punkt hineinschieben, ohne das Fenster zu bewegen */
       var inn = a.parentNode, r = a.getBoundingClientRect(), q = inn.getBoundingClientRect();
       if (r.left < q.left) inn.scrollLeft += r.left - q.left - 16; else if (r.right > q.right) inn.scrollLeft += r.right - q.right + 16;
     });
-    document.title = 'Investus · ' + name;
     PAGE_TARGET = !user && target && target.id !== id ? target : null;
     if (target && target.id !== id) { try { target.scrollIntoView(); } catch (e) { /* still */ } }
     else if (user) window.scrollTo(0, 0);
