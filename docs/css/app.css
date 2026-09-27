@@ -6,6 +6,7 @@
   --bg:#F3F5F8; --surface:#FFFFFF; --surface-2:#EDF0F4; --surface-3:#DDE2E9; --ink:#0F1724; --ink-2:#3F4A5A; --muted:#667085;
   --rule:#D8DEE6; --rule-strong:#B9C2CE; --accent:#1B3A6B; --accent-soft:#E4EBF6; --accent-ink:#FFFFFF;
   --good:#0B6B37; --good-bg:#DFF1E6; --warn:#7A5000; --warn-bg:#FAEFD2; --bad:#A8231B; --bad-bg:#FBE4E1; --bad-ink:#FFFFFF;
+  --live-buy-bg:#E4F1EB; --live-buy-ink:#186340; --live-sell-bg:#F6E8E8; --live-sell-ink:#8E2D2B; --live-sub:var(--muted); /* Kursbox bei möglichem Kauf-/Verkaufssignal (Justus 27.09.2026) */
   --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#b98300; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
@@ -20,6 +21,7 @@
     --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
     --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
     --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
+    --live-buy-bg:#33554B; --live-buy-ink:#A9E6C2; --live-sell-bg:#5C4246; --live-sell-ink:#FFBEB9; --live-sub:var(--ink-2);
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
@@ -31,6 +33,7 @@
   --bg:#0E1217; --surface:#151A21; --surface-2:#1C232C; --surface-3:#2A323D; --ink:#E7EBF1; --ink-2:#B6C0CC; --muted:#8C97A6;
   --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
   --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
+  --live-buy-bg:#33554B; --live-buy-ink:#A9E6C2; --live-sell-bg:#5C4246; --live-sell-ink:#FFBEB9; --live-sub:var(--ink-2);
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
@@ -130,14 +133,15 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 
 /* Live-Block auf den Status-Karten */
 .scard .live{border-radius:8px;padding:9px 12px;background:var(--surface-2);display:grid;gap:3px}
-/* Woche schlösse mit Kaufsignal: blassgrün, mit Verkaufssignal: blassrot; blasser als die Kauf-/Verkaufsboxen (65 % Signalfarbe, Rest Fläche; Justus 27.09.2026) */
-.scard .live.would.buy{background:color-mix(in srgb,var(--good-bg) 65%,var(--surface-2))}
-.scard .live.would.sell{background:color-mix(in srgb,var(--bad-bg) 65%,var(--surface-2))}
+/* Woche schlösse mit Kaufsignal: hellgrün, mit Verkaufssignal: hellrot (Farben --live-* oben je Farbschema; Justus 27.09.2026) */
+.scard .live.would.buy{background:var(--live-buy-bg)}
+.scard .live.would.sell{background:var(--live-sell-bg)}
+.scard .live.would .ll,.scard .live.would .ls{color:var(--live-sub)}
 .scard .live .lh{display:flex;justify-content:space-between;align-items:baseline;gap:10px}
 .scard .live .ll{font-size:12.5px;color:var(--muted)}
 .scard .live .lv{font-size:17px;font-weight:600;font-variant-numeric:tabular-nums}
 .scard .live .ld{font-size:13px;color:var(--ink-2)}
-.scard .live.would .ld{font-weight:500} .scard .live.would.buy .ld{color:color-mix(in srgb,var(--good) 75%,var(--ink-2))} .scard .live.would.sell .ld{color:color-mix(in srgb,var(--bad) 75%,var(--ink-2))}
+.scard .live.would .ld{font-weight:500} .scard .live.would.buy .ld{color:var(--live-buy-ink)} .scard .live.would.sell .ld{color:var(--live-sell-ink)}
 .scard .live .ls{font-size:11.5px;color:var(--muted)}
 
 /* Status-Karten */
