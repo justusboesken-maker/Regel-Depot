@@ -807,13 +807,14 @@
     if (r === 'tage') { if (hasDaily()) { grid = 'tag'; from = ENG.addDays(today, -31); } else { note = 'Tageswerte liegen noch nicht vor (kommen mit den nächsten Läufen); gezeigt werden Wochenwerte. '; } }
     else if (r === 'wochen') from = ENG.addDays(today, -364);
     else if (r === 'jahr') from = today.slice(0, 4) + '-01-01';
-    var startD = (CFG.trading && CFG.trading.start) || '2026-09-28';
-    var capText = note + 'Baustein = Position plus Cash, ' + (grid === 'tag' ? 'Tages' : 'Wochen') + 'kurse in Euro, letzter Punkt aktuell. Cash ab dem Regelstart ' + dDE(startD) + ' aus den Buchungen zurückgerechnet und mit ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a. verzinst (geschätzt); Käufe davor gelten als von außen bezahlt. Cash zählt ab dem Stand-Datum aus den Einstellungen' + (Mo.dep.cashDate ? ' (' + dDE(Mo.dep.cashDate) + ')' : '') + ', davor nimmt die Seite kein Cash an. Ein Baustein beginnt mit seiner ersten Buchung.' + (est.length ? ' Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
+    /* Ohne festen Erklärtext unter dem Chart (Justus 27.09.2026: „Baustein = Position plus Cash, … beginnt mit seiner ersten Buchung.“ entfällt);
+       es bleiben nur Hinweise für Sonderfälle: keine Tageswerte, geschätzte Kaufdaten, ausgelassene Punkte (leer: app.css blendet den Absatz aus) */
+    var capText = note + (est.length ? 'Kaufdatum geschätzt: ' + est.join(', ') + '.' : '');
     /* Punkte, an denen für eine gehaltene Position noch kein Euro-Kurs vorliegt (z. B. vor Beginn einer Kursreihe), auslassen statt die
        Position mit 0 € zu zeigen; die Bildunterschrift nennt sie */
     var pts = Mo.ready ? perfSeries(Mo, grid, from) : null, skipped = [];
     if (pts) pts = pts.filter(function (p) { var m = Object.keys(p.parts).some(function (a) { return p.parts[a].missing; }); if (m) skipped.push(p.d); return !m; });
-    if (skipped.length) capText += ' Ausgelassen, weil für eine gehaltene Position noch kein Euro-Kurs vorliegt: ' + (skipped.length === 1 ? 'der Punkt vom ' + dDE(skipped[0]) : skipped.length + ' Punkte vom ' + dDE(skipped[0]) + ' bis ' + dDE(skipped[skipped.length - 1])) + '.';
+    if (skipped.length) capText += (capText ? ' ' : '') + 'Ausgelassen, weil für eine gehaltene Position noch kein Euro-Kurs vorliegt: ' + (skipped.length === 1 ? 'der Punkt vom ' + dDE(skipped[0]) : skipped.length + ' Punkte vom ' + dDE(skipped[0]) + ' bis ' + dDE(skipped[skipped.length - 1])) + '.';
     CH.portfolioSplit(host, leg, cap, pts && pts.length ? pts : null, PERF.mode, series, capText);
     if (!(pts && pts.length >= 2) && skipped.length && cap) cap.textContent = capText;
   }
