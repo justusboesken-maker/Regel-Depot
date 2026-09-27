@@ -271,27 +271,35 @@
   /* Grenzfall zum Aufklappen (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): Schluss, Schwelle und Abstand der
      letzten Woche, was die Regel daraus gemacht hat und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (ENG.edgeCase);
      dazu, warum das zählt, mit welcher Quelle gerechnet ist und was mit einem später anderen Schluss passiert. Liefert Absätze [Text, Klasse]. */
-  var SRC_NAME = { alphavantage: 'Alpha Vantage', coinbase: 'Coinbase', eodhd: 'EODHD', kraken: 'Kraken', 'ls-tc.de': 'Lang & Schwarz', stooq: 'Stooq', yahoo: 'Yahoo Finance', 'gold-api.com': 'gold-api.com', 'goldprice.org': 'goldprice.org' };
-  /* Quelle des Schlusses als lesbarer Satzteil im Dativ („Gerechnet ist mit …“) statt der internen Kennung aus state.json */
+  var SRC_NAME = { alphavantage: 'Alpha Vantage', coinbase: 'Coinbase', eodhd: 'EODHD', kraken: 'Kraken', yahoo: 'Yahoo Finance' };
+  /* Quelle des Schlusses als lesbarer Satzteil im Dativ („Gerechnet ist mit …“) statt der internen Kennung aus state.json (Formen aus
+     scripts/sources.mjs und update.mjs: Anbieter vorn, beim FTSE ggf. „+ Schlusskurs JJJJ-MM-TT von X (…)“ oder „… aus dem X (vorläufig)“) */
   function srcPhrase(src) {
-    src = String(src || ''); var w = src.split(' '), first = w[0], m = /Schlusskurs (\d{4}-\d{2}-\d{2}) von (\S+)/.exec(src);
-    if (first === 'lbma') return 'dem LBMA-Nachmittagsfixing';
-    if (first === 'Spotpreis') return 'dem Spotpreis von ' + (w[1] || 'gold-api.com') + ' (vorläufig, das LBMA-Fixing fehlt noch)';
-    if (/spot/.test(src) && SRC_NAME[first]) return 'dem Spotpreis von ' + SRC_NAME[first];
-    if (!SRC_NAME[first]) return src ? 'der Quelle „' + first + '“' : null;
-    return m ? 'Kursen von ' + SRC_NAME[first] + '; der Schluss vom ' + dShort(m[1]) + ' kommt von ' + (SRC_NAME[m[2].toLowerCase()] || m[2]) : 'dem Schluss von ' + SRC_NAME[first];
+    src = String(src || ''); if (!src) return null;
+    var w = src.split(' '), first = w[0], name = SRC_NAME[first];
+    if (first === 'lbma') return 'dem LBMA-' + (w[2] === 'am' ? 'Vormittags' : 'Nachmittags') + 'fixing';
+    if (first === 'Spotpreis') return 'dem Spotpreis von ' + (w[1] || 'gold-api.com') + ' statt des noch fehlenden LBMA-Fixings';
+    if (!name) return 'der Quelle „' + first + '“';
+    var m = /Schlusskurs (\d{4}-\d{2}-\d{2}) (von|aus dem) (.+?)(?: \(|$)/.exec(src);
+    if (!m) return 'dem Schluss von ' + name;
+    return 'Kursen von ' + name + '; der Schluss vom ' + dShort(m[1]) + ' kommt ' + (m[2] === 'von' ? 'von ' + (SRC_NAME[m[3].toLowerCase()] || m[3]) : 'aus dem ' + m[3]);
   }
   function edgeLines(a, x) {
-    var m = CFG.assets[a], rule = m.rule, L = x.last, f = Math.pow(10, m.dec), edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
-    function U(v) { return usd(a, v).replace(/ \$$/, ' $'); } /* kein Umbruch vor „$“ */
+    var m = CFG.assets[a], rule = m.rule, L = x.last, edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
+    /* Liegen Schluss und Schwelle weniger als zwei Anzeige-Einheiten auseinander, zwei Stellen mehr, sonst sähen beide gleich aus */
+    var fine = Math.abs(x.diff) < 2 * Math.pow(10, -m.dec), dec = fine ? m.dec + 2 : m.dec, f = Math.pow(10, dec);
+    function U(v) { return de(v, dec) + ' $'; } /* kein Umbruch vor „$“ und „%“ */
+    function P(v, d) { return pctPlain(v, d).replace(' %', ' %'); }
     function stw(v) { return v === 1 ? 'investiert' : 'auf Cash'; }
     function sig(v) { return v === 1 ? 'Kaufsignal' : 'Verkaufssignal'; }
-    function run(o) { return o.up > 0 ? o.up + '. Schluss in Folge über dem SMA50' : o.dn > 0 ? o.dn + '. Schluss in Folge unter dem SMA50' : null; }
-    /* Schwelle so gerundet, dass „Ein Schluss über/unter X“ stimmt: über → aufrunden, unter → abrunden (Prüfung 27.09.2026) */
-    var tv = x.side > 0 ? Math.floor(x.thr * f + 1e-9) / f : x.side < 0 ? Math.ceil(x.thr * f - 1e-9) / f : x.thr, T = U(tv);
-    var gap = Math.abs(x.diff) >= 0.5 / f ? 'nur ' + U(Math.abs(x.diff)) : 'weniger als ' + U(1 / f);
-    var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? pctPlain(rp, 2).replace(' %', ' %') : 'unter 0,01 %';
-    var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' dieser Woche von ' + T + ' (' + pctPlain(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
+    function run(o) { return o.up === 1 ? 'erste Schluss über dem SMA50' : o.up > 1 ? o.up + '. Schluss in Folge über dem SMA50' : o.dn === 1 ? 'erste Schluss unter dem SMA50' : o.dn > 1 ? o.dn + '. Schluss in Folge unter dem SMA50' : null; }
+    /* Schwelle im Text auf den nächsten Anzeigewert gerundet („rund“, außer sie liegt genau darauf), damit Schluss, Schwelle und Abstand zusammenpassen. Für „was wäre, wenn“ der
+       erste Anzeigewert jenseits der Schwelle: „ab X“ darüber, „bis Y“ darunter; beides stimmt auch am angezeigten Wert selbst (Prüfung 27.09.2026) */
+    var exact = Math.abs(x.thr * f - Math.round(x.thr * f)) < 1e-6, T = (exact ? '' : 'rund ') + U(x.thr), upV = (Math.floor(x.thr * f + 1e-6) + 1) / f, dnV = (Math.ceil(x.thr * f - 1e-6) - 1) / f;
+    /* Abstand aus den angezeigten Zahlen, damit „Schluss minus Schwelle“ im Text aufgeht */
+    var gd = Math.abs(Math.round(x.thr * f) - Math.round(x.c * f)) / f, gap = gd > 0 ? 'nur ' + U(gd) : 'weniger als ' + U(1 / f);
+    var rp = Math.floor(Math.abs(x.rel) * 1e4) / 1e4, rel = rp >= 0.0001 ? P(rp, 2) : 'weniger als 0,01 %';
+    var where = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' dieser Woche von ' + T + ' (' + P(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)'
       : 'Schwelle dieser Woche von ' + T + ', ab der ein Schluss über dem SMA50 liegt';
     var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + U(x.c) + (x.side === 0 ? ' genau auf der Schwelle dieser Woche von ' + T + ', also genau auf dem SMA50. '
       : ' ' + gap + ' (' + rel + ') ' + (x.side > 0 ? 'über' : 'unter') + ' der ' + where + '. ');
@@ -300,21 +308,23 @@
     else if (x.side === 0) p1 += 'Ein Schluss genau auf dem SMA50 setzt beide Serien zurück, die Regel bleibt ' + stw(L.st) + '.';
     else p1 += 'Das war der ' + run(L) + (L.st === 1 && L.dn > 0 ? '; ein Verkaufssignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge unter dem SMA50' : L.st === 0 && L.up > 0 ? '; ein Kaufsignal gibt es erst nach ' + rule.n + ' Schlüssen in Folge über dem SMA50' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
     var p2 = x.alt.map(function (o) {
-      var pre = x.side === 0 ? (o.above ? 'Ein Schluss knapp darüber' : 'Ein Schluss knapp darunter') : 'Ein Schluss ' + (o.above ? 'über ' : 'unter ') + T;
+      var pre = x.side === 0 ? (o.above ? 'Ein Schluss knapp darüber' : 'Ein Schluss knapp darunter') : 'Ein Schluss ' + (o.above ? 'ab ' + U(upV) : 'bis ' + U(dnV));
       if (o.changed) return pre + ' hätte das ' + sig(o.st) + ' ausgelöst' + (x.band ? '' : ' (' + run(o) + ')') + '.';
       if (L.changed || x.band) return pre + ' hätte kein Signal ausgelöst, die Regel wäre ' + stw(o.st) + ' geblieben.';
       var ended = (L.up > 1 && o.dn > 0) || (L.dn > 1 && o.up > 0), away = (o.st === 1 && o.dn > 0) || (o.st === 0 && o.up > 0);
       return pre + ' wäre der ' + run(o) + ' gewesen' + (ended ? ' und hätte die Serie ' + (L.up > 1 ? 'über' : 'unter') + ' dem SMA50 beendet' : '') + '; die Regel wäre ' + (away ? 'trotzdem ' : '') + stw(o.st) + ' geblieben.';
     }).join(' ');
-    /* Warum das zählt und was mit einem später anderen Schluss passiert (update.mjs): vorläufig → der endgültige ersetzt ihn, mit Nachricht;
-       Bitcoin und Gold → gebucht bleibt gebucht (keepBooked); FTSE → eine Revision fällt beim nächsten Wochenschluss auf */
+    /* Warum das zählt und was mit einem später anderen Schluss passiert (update.mjs): vorläufig → der endgültige ersetzt ihn, mit Nachricht, wenn
+       er die Regel ändert; Bitcoin und Gold → gebucht bleibt gebucht (keepBooked); FTSE → eine Revision, die die Regel kippt, fällt beim nächsten
+       Wochenschluss auf (Push nur, wenn die Regel danach anders steht) */
     var flips = x.alt.some(function (o) { return o.st !== L.st || o.changed !== L.changed; });
     var st = D.state && D.state.assets && D.state.assets[a], ph = st && st.src ? srcPhrase(st.src) : null;
-    var p3 = 'Grenzfall heißt: weniger als ' + pctPlain(edgePct, 1) + ' Abstand zur Schwelle. ' + (flips ? 'Bei so wenig Abstand kann schon ein etwas anderer Kurs, etwa von einem anderen Anbieter, das Ergebnis drehen.' : 'Ein etwas anderer Kurs hätte hier nur die Zählung geändert, nicht die Regel.');
+    var p3 = 'Grenzfall heißt: weniger als ' + P(edgePct, 1) + ' Abstand zur Schwelle. ' + (flips ? 'Bei so wenig Abstand kann schon ein etwas anderer Kurs, etwa von einem anderen Anbieter, das Ergebnis drehen.'
+      : 'Ein etwas anderer Kurs hätte die Regel hier nicht gedreht, aber die Zählung der Schlüsse in Folge geändert und damit, wann frühestens das nächste Signal kommen kann.');
     if (ph) p3 += ' Gerechnet ist mit ' + ph + '.';
     if (st && st.preliminary) p3 += ' Der Schluss ist noch vorläufig; ändert der endgültige Schluss die Regel, meldet die Seite das unter „Signale“ und als Push-Nachricht.';
     else if (m.signal && m.signal.keepBooked) p3 += ' Ein gebuchter Schluss bleibt gebucht, auch wenn eine Quelle ihn später leicht anders angibt.';
-    else p3 += ' Liefert die Quelle diesen Schluss später anders, fällt das beim nächsten Wochenschluss auf und steht unter „Signale“; dreht sich dadurch die Regel, auch als Push-Nachricht.';
+    else p3 += ' Liefert die Quelle diesen Schluss später so anders, dass die Regel kippt, steht das mit dem nächsten Wochenschluss unter „Signale“, als Push-Nachricht, wenn die Regel danach anders steht als vorher.';
     return [[p1, ''], [p2, 'alt'], [p3, 'why']];
   }
   function renderStatus(Mo) {
@@ -356,16 +366,14 @@
       if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
       var edgeBox = null;
       if (ti.edge) {
-        var ex = ti.ec ? edgeLines(a, ti.ec) : null, ek = a + ':' + (ti.ec ? ti.ec.k : '');
-        if (!ex) row.appendChild(chip('warn', 'Grenzfall'));
-        else { /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche */
-          var eb = el('button', 'chip c-warn tog'); eb.type = 'button'; eb.innerHTML = ICON.warn; eb.appendChild(document.createTextNode('Grenzfall'));
-          edgeBox = el('div', 'edgex'); edgeBox.id = 'edgex-' + a; ex.forEach(function (q) { edgeBox.appendChild(el('p', q[1] || null, q[0])); });
-          eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[ek])); edgeBox.hidden = !EDGE_OPEN[ek];
-          eb.title = 'Erklärung zum Grenzfall ein- oder ausklappen';
-          eb.addEventListener('click', function () { var o = edgeBox.hidden; edgeBox.hidden = !o; eb.setAttribute('aria-expanded', String(o)); EDGE_OPEN[ek] = o; });
-          row.appendChild(eb);
-        }
+        /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche (ti.edge setzt ti.ec voraus) */
+        var ex = edgeLines(a, ti.ec), ek = a + ':' + ti.ec.k;
+        var eb = el('button', 'chip c-warn tog'); eb.type = 'button'; eb.innerHTML = ICON.warn; eb.appendChild(document.createTextNode('Grenzfall'));
+        edgeBox = el('div', 'edgex'); edgeBox.id = 'edgex-' + a; ex.forEach(function (q) { edgeBox.appendChild(el('p', q[1] || null, q[0])); });
+        eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[ek])); edgeBox.hidden = !EDGE_OPEN[ek];
+        eb.title = 'Erklärung zum Grenzfall ein- oder ausklappen';
+        eb.addEventListener('click', function () { var o = edgeBox.hidden; edgeBox.hidden = !o; eb.setAttribute('aria-expanded', String(o)); EDGE_OPEN[ek] = o; });
+        row.appendChild(eb);
       }
       if (a === 'gold' && D.state && D.state.cross && D.state.cross.goldf && D.state.cross.goldf.st != null && D.state.cross.goldf.st !== L.st) row.appendChild(chip('info', 'COMEX-Future: ' + (D.state.cross.goldf.st === 1 ? 'investiert' : 'Cash')));
       if (st && st.fallback) row.appendChild(chip('warn', 'Ersatzquelle'));
