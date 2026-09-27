@@ -466,8 +466,9 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;--bgap:clamp(24px,3vw,40px);gap:var(--bgap)}
 /* Großansicht: mehr Abstand zwischen Chart, Handlung, Grenze, Signalen und Tabelle (Justus 27.09.2026: „noch ein bisschen mehr als B“,
    ab etwa 1330 px Breite 40 px, auf schmalen Bildschirmen weniger, Handy 24 px); „Letzte 26 Wochen“ → Tabelle bleibt bei 14 px.
-   Kopf → Kennzahlen 28 px, seit die Zeile unter dem Namen entfallen ist (Justus 27.09.2026: „unter dem Asset-Namen mehr Abstand lassen“) */
-.modalbox>.toolbar{margin-top:calc(28px - var(--bgap))}
+   Kopf → Kennzahlen 28 px, seit die Zeile unter dem Namen entfallen ist, und Kennzahlen → Zeitraum-Leiste 20 px statt 10 px
+   (Justus 27.09.2026: „unter dem Asset-Namen mehr Abstand lassen“, „über der Leiste zur Einstellung des Timeframes ebenfalls“) */
+.modalbox>.toolbar{margin-top:calc(28px - var(--bgap));row-gap:20px}
 .modalbox>.subhd+.tablewrap{margin-top:calc(14px - var(--bgap))}
 .bigx{position:absolute;top:10px;right:10px;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
 .bigx svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
