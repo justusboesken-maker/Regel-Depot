@@ -148,7 +148,7 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .rules{--sgap:clamp(56px,calc(2.85vw + 25px),70px)}
 .scards{--sgap:clamp(56px,calc(2.85vw + 25px),68px)} /* Status-Spalten: Abstand höchstens 68 px (Justus 27.09.2026) */
 .scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
-.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:30px;scroll-margin-top:60px}
+.scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:20px;scroll-margin-top:60px} /* Abstand zwischen den Blöcken 20 px, vorher 30 px (Justus 27.09.2026) */
 .scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
 .card.scard{background:none;border:0;border-radius:0;box-shadow:none}
 .scards .scard+.scard::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
@@ -176,7 +176,7 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 /* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
    über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
-.scard .cchart{position:relative;min-width:0;align-self:start}
+.scard .cchart{position:relative;min-width:0;align-self:start;margin-top:6px} /* 6 px mehr über dem Chart: Platz für die Zeile .crd (22 px) unter der Box darüber */
 .scard .crd{position:absolute;left:0;right:0;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
 .scard .crd b{font-weight:600;color:var(--ink)}
 .scard .nextact{font-size:13px;color:var(--ink-2)}
