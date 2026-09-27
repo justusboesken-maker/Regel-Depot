@@ -100,6 +100,9 @@ nav.toc .in{max-width:1520px;margin:0 auto;padding-inline:16px;display:flex;gap:
 @media (min-width:1200px){nav.toc .in{padding-inline:calc(clamp(40px,3.5vw,64px) - 10px)}}
 nav.toc a{flex:0 0 auto;padding:13px 12px;font-size:16px;color:var(--ink-2);text-decoration:none;border-bottom:2px solid transparent} /* Menü größer (Justus 27.09.2026, vorher 13,5 px und 10 px Innenabstand) */
 @media (max-width:640px){nav.toc a{padding:12px 9px;font-size:15px}} /* schmal etwas kleiner, damit die Leiste nicht viel weiter seitlich scrollt */
+/* Menü mittig (Justus 27.09.2026); über die Außenabstände statt justify-content:center, damit es auf schmalen Bildschirmen, wo die Leiste
+   seitlich scrollt, links beginnt und nichts abgeschnitten wird */
+nav.toc .in>a:first-child{margin-left:auto} nav.toc .in>a:last-child{margin-right:auto}
 nav.toc a:hover,nav.toc a:focus-visible{color:var(--ink);border-bottom-color:var(--rule-strong);outline:none}
 nav.toc a[aria-current="page"]{color:var(--ink);border-bottom-color:var(--accent)} /* aktuelle Seite */
 nav.toc a[aria-current="page"]:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:4px} /* Tastaturfokus auch auf der aktuellen Seite sichtbar */
