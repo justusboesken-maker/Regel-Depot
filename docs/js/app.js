@@ -33,6 +33,7 @@
   };
   function chip(kind, text) { var c = el('span', 'chip c-' + kind); c.innerHTML = ICON[kind === 'buy' ? 'buy' : kind === 'sell' ? 'sell' : kind === 'warn' ? 'warn' : 'info']; c.appendChild(document.createTextNode(text)); return c; }
   function nextMonday(d) { return ENG.addDays(ENG.mondayOf(d), 7); }
+  function dYY(s) { if (!s) return '–'; var p = s.slice(0, 10).split('-'); return p[2] + '.' + p[1] + '.' + p[0].slice(2); } /* TT.MM.JJ */
 
   /* ---------- Daten laden ---------- */
   function getJson(p) { return fetch('data/' + p + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(p + ': HTTP ' + r.status); return r.json(); }); }
@@ -273,7 +274,13 @@
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
-      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
+      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp);
+      /* Unter dem Regelstand „seit Signal TT.MM.JJ ±x,x %“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“): Kursveränderung seit dem Schluss der
+         Signalwoche bis zum aktuellen Kurs wie in der Kursbox, gerechnet wie „Performance seit Signal“ in der Großansicht (perfSince).
+         Datum und Prozentzahl brechen bei Platzmangel getrennt um (app.css .since), damit der Name nicht früher umbricht. */
+      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', null, 'seit Signal ' + dYY(ls.d)));
+        if (pf) { sn.appendChild(document.createTextNode(' ')); sn.appendChild(el('span', 'sp', pct(pf.r, 1))); sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to); }
+        right.appendChild(sn); }
       hd.appendChild(right);
       top.appendChild(hd);
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
@@ -308,7 +315,17 @@
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
-    drawCharts();
+    evenHeads(); drawCharts();
+  }
+  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit Signal … %“
+     oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder
+     Größenänderung (resize), weil die Karten erst ab 4 px Breitenänderung neu gezeichnet werden. */
+  function evenHeads() {
+    var hs = Array.prototype.slice.call(document.querySelectorAll('#statusCards .scard .hd')); if (!hs.length) return;
+    hs.forEach(function (h) { h.style.minHeight = ''; });
+    if (window.matchMedia && window.matchMedia('(max-width:980px)').matches) return;
+    var mx = Math.max.apply(null, hs.map(function (h) { return h.getBoundingClientRect().height; }));
+    if (mx > 0) hs.forEach(function (h) { h.style.minHeight = mx + 'px'; });
   }
   /* ---------- Großansicht ---------- */
   var BIG = { a: null, range: null, t0: 0, key: false };
@@ -1380,7 +1397,7 @@
   $('perfSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.mode = b.getAttribute('data-m'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); });
   (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
-  window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
+  window.addEventListener('resize', function () { evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
   if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBigClick(); });
   /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
   var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
