@@ -309,6 +309,7 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .readout .rd-hero .hs{font-size:13.5px;color:var(--muted)}
 .readout .rd-chips{gap:3px 16px;font-size:13.5px}
 .readout .rd-chips .rd-v{text-align:left;margin-left:2px}
+.readout .rd-chips .rd-i{font-size:15px} /* Bausteine unter der großen Zahl etwas größer (Justus 27.09.2026, 13,5 → 15 px wie die Prozentzahl daneben); „Positionen … · Wert …“ bleibt klein */
 @media (max-width:560px){.readout .rd-hero .hv{font-size:28px}}
 /* Signalcharts: feste Zeilen je nach verfügbarer Breite (charts.js fitMode misst mit der Schrift des Geräts), in allen drei Karten gleich,
    damit die Charts auf gleicher Höhe bleiben und nichts abgeschnitten wird. Grundform (schmal): Datum, Abstand, Schluss, SMA50, Regelstand je
