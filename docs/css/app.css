@@ -574,3 +574,17 @@ td .sub{display:block;font-size:12px;color:var(--muted);font-weight:400}
 /* Beimischung (ETH, SOL) in der Positionstabelle: leise Unterzeilen */
 tr.altrow td{font-size:12.5px;color:var(--muted);padding-top:4px;padding-bottom:6px}
 tr.altrow .tag{font-size:10.5px;padding:1px 6px}
+/* Positionen-Tabelle etwas größer (Justus 27.09.2026): Zeilen 14,5 px statt 13,5 px, Spaltenköpfe 12 px statt 11,5 px; Unterzeilen,
+   davon-Zeilen, Markierungen (investiert, Cash, live) und Icons im selben Verhältnis. Dafür 9 px statt 11 px Innenabstand links und rechts
+   in den Zellen, damit die zehn Spalten weiter so früh nebeneinander passen wie vorher (Namen einzeilig ab etwa 1440 px Fensterbreite,
+   gemessen mit Arial-Breiten). Die Buchungstabelle bleibt wie sie ist. */
+#posTable table{font-size:14.5px}
+#posTable th,#posTable td{padding-left:9px;padding-right:9px}
+#depot #posTable th:first-child,#depot #posTable td:first-child{padding-left:0}
+#depot #posTable th:last-child,#depot #posTable td:last-child{padding-right:0}
+#posTable thead th{font-size:12px}
+#posTable td .sub{font-size:12.5px}
+#posTable tr.altrow td{font-size:13px}
+#posTable .tag{font-size:12px}
+#posTable tr.altrow .tag{font-size:11px}
+#posTable td .aic{width:17px;height:17px}
