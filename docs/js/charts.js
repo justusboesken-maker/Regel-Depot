@@ -129,7 +129,8 @@
 
   /* ---------- Regel-Chart: Wochenschlüsse, SMA50, Band, investierte Phasen, Signale, Abstandsstreifen ----------
      o: {S, E, rule, color (CSS-Variable), dec, range (Wochen, 0 = alles), name, usd(fn), phases (false = investierte Phasen nicht hinterlegen),
-        bare (true = nur Kursverlauf, SMA50 und letzter Punkt: ohne Achsen, Raster, „log. Skala“, Band, Signale und Abstandsstreifen)} */
+        bare (true = nur Kursverlauf, SMA50 und letzter Punkt: ohne Achsen, Raster, „log. Skala“, Band, Signale, investierte Phasen
+        und Abstandsstreifen)} */
   function ruleChart(host, o) {
     host.textContent = '';
     var S = o.S, E = o.E, n = S.c.length, rule = o.rule, band = rule.type === 'band', p = band ? rule.p : 0;
@@ -142,15 +143,16 @@
     var m = bare ? { t: 8, r: 6, b: 6, l: 4 } : { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = bare ? m.t + ih + m.b : m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
-    for (i = i0; i < n; i++) { var vs = [S.c[i], E.sma[i]]; if (band) vs.push(E.sma[i] * (1 + p), E.sma[i] * (1 - p)); vs.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; }); }
+    /* Wertebereich aus Kurs und SMA50, beim Band auch aus den Bandgrenzen; bei o.bare ist das Band nicht zu sehen und zählt nicht mit */
+    for (i = i0; i < n; i++) { var vs = [S.c[i], E.sma[i]]; if (band && !bare) vs.push(E.sma[i] * (1 + p), E.sma[i] * (1 - p)); vs.forEach(function (v) { if (v < lo) lo = v; if (v > hi) hi = v; }); }
     var useLog = hi / lo > 2.2, ya, yb, Y;
     if (useLog) { ya = Math.log10(lo) - 0.03; yb = Math.log10(hi) + 0.03; Y = function (v) { return m.t + (1 - (Math.log10(v) - ya) / (yb - ya)) * ih; }; }
     else { var pad = (hi - lo) * 0.07; ya = lo - pad; yb = hi + pad; Y = function (v) { return m.t + (1 - (v - ya) / (yb - ya)) * ih; }; }
     function X(k) { return m.l + (k - i0) / (N - 1) * iw; }
     var half = iw / (N - 1) / 2;
-    /* investierte Phasen (Serienfarbe, 10 %); o.phases === false: keine Hinterlegung (kleine Charts der Status-Karten, Justus 27.09.2026) */
+    /* investierte Phasen (Serienfarbe, 10 %); o.phases === false oder o.bare: keine Hinterlegung (kleine Charts der Status-Karten, Justus 27.09.2026) */
     var run = i0; if (o.phases !== false && !bare) for (i = i0 + 1; i <= n; i++) { if (i === n || E.st[i] !== E.st[run]) { if (E.st[run] === 1) { var x1 = Math.max(m.l, X(run) - half), x2 = Math.min(m.l + iw, X(i - 1) + half); mk('rect', { x: x1, y: m.t, width: Math.max(1, x2 - x1), height: ih, fill: col.line, 'fill-opacity': 0.1 }, svg); mk('rect', { x: x1, y: st0, width: Math.max(1, x2 - x1), height: sh, fill: col.line, 'fill-opacity': 0.06 }, svg); } run = i; } }
-    var g = mk('g', {}, svg);
+    var g = bare ? null : mk('g', {}, svg); /* Raster und Achsen; bei o.bare gibt es keine */
     if (!bare) (useLog ? logTicks(ya, yb) : linTicks(ya, yb, 4)).forEach(function (t) { var y = Y(t); if (y < m.t - 0.5 || y > m.t + ih + 0.5) return; mk('line', { x1: m.l, x2: m.l + iw, y1: y, y2: y, stroke: col.grid, 'stroke-width': 1 }, g); var tx = mk('text', { x: m.l + iw + 6, y: y + 4, 'font-size': 11, fill: col.muted }, g); tx.textContent = de(t, t < 10 ? 1 : 0); });
     if (!bare) mk('line', { x1: m.l, x2: m.l + iw, y1: m.t + ih, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1 }, g);
     /* Band */
@@ -164,29 +166,29 @@
     if (useLog && !bare) { var lg = mk('text', { x: m.l + 4, y: m.t + 11, 'font-size': 10.5, fill: col.muted }, svg); lg.textContent = 'log. Skala'; }
     /* Abstandsstreifen und x-Achse: nicht bei o.bare */
     if (!bare) {
-    /* Abstandsstreifen: Abstand zum SMA50 in Prozent, mit Schwelle */
-    var dmax = 0.02; for (i = i0; i < n; i++) dmax = Math.max(dmax, Math.abs(S.c[i] / E.sma[i] - 1));
-    dmax = Math.min(Math.max(dmax * 1.1, band ? p * 1.6 : 0.03), 1.5);
-    function YS(v) { return st0 + sh / 2 - (v / dmax) * (sh / 2); }
-    var dA = 'M' + X(i0).toFixed(1) + ',' + YS(0).toFixed(1); for (i = i0; i < n; i++) dA += 'L' + X(i).toFixed(1) + ',' + YS(Math.max(-dmax, Math.min(dmax, S.c[i] / E.sma[i] - 1))).toFixed(1); dA += 'L' + X(n - 1).toFixed(1) + ',' + YS(0).toFixed(1) + 'Z';
-    var clipId = 'cp' + Math.random().toString(36).slice(2, 8);
-    var defs = mk('defs', {}, svg), cpP = mk('clipPath', { id: clipId + 'p' }, defs); mk('rect', { x: m.l, y: st0, width: iw, height: sh / 2 }, cpP); var cpN = mk('clipPath', { id: clipId + 'n' }, defs); mk('rect', { x: m.l, y: st0 + sh / 2, width: iw, height: sh / 2 }, cpN);
-    mk('path', { d: dA, fill: col.line, 'fill-opacity': 0.35, 'clip-path': 'url(#' + clipId + 'p)' }, svg);
-    mk('path', { d: dA, fill: col.neg, 'fill-opacity': 0.35, 'clip-path': 'url(#' + clipId + 'n)' }, svg);
-    mk('line', { x1: m.l, x2: m.l + iw, y1: YS(0), y2: YS(0), stroke: col.axis, 'stroke-width': 1 }, svg);
-    if (band) { [p, -p].forEach(function (v) { mk('line', { x1: m.l, x2: m.l + iw, y1: YS(v), y2: YS(v), stroke: col.sma, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg); }); }
-    var lv = band && (YS(0) - YS(p)) >= 11 ? p : dmax * 0.7;
-    var l1 = mk('text', { x: m.l + iw + 6, y: YS(lv) + 4, 'font-size': 10.5, fill: col.muted }, svg); l1.textContent = '+' + de(lv * 100, 0) + ' %';
-    var l2 = mk('text', { x: m.l + iw + 6, y: YS(-lv) + 4, 'font-size': 10.5, fill: col.muted }, svg); l2.textContent = '−' + de(lv * 100, 0) + ' %';
-    var l0 = mk('text', { x: m.l + iw + 6, y: YS(0) + 4, 'font-size': 10.5, fill: col.muted }, svg); l0.textContent = 'SMA';
-    /* x-Achse */
-    var ticks = [], prev = null;
-    for (i = i0; i < n; i++) { var d = S.d[i], yr = d.slice(0, 4), mo = +d.slice(5, 7);
-      if (N > 110) { if (prev !== yr) { if (prev !== null) ticks.push({ i: i, l: yr }); prev = yr; } }
-      else { var q = yr + '-' + Math.floor((mo - 1) / 3); if (prev !== q) { if (prev !== null) ticks.push({ i: i, l: ['Jan', 'Apr', 'Jul', 'Okt'][Math.floor((mo - 1) / 3)] + ' ' + yr.slice(2) }); prev = q; } } }
-    var maxT = Math.max(2, Math.floor(iw / 58)); if (ticks.length > maxT) { var stp = Math.ceil(ticks.length / maxT); ticks = ticks.filter(function (t, k) { return k % stp === 0; }); }
-    mk('line', { x1: m.l, x2: m.l + iw, y1: st0 + sh, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1 }, g);
-    ticks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: st0 + sh, y2: st0 + sh + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: st0 + sh + 16, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
+      /* Abstandsstreifen: Abstand zum SMA50 in Prozent, mit Schwelle */
+      var dmax = 0.02; for (i = i0; i < n; i++) dmax = Math.max(dmax, Math.abs(S.c[i] / E.sma[i] - 1));
+      dmax = Math.min(Math.max(dmax * 1.1, band ? p * 1.6 : 0.03), 1.5);
+      var YS = function (v) { return st0 + sh / 2 - (v / dmax) * (sh / 2); };
+      var dA = 'M' + X(i0).toFixed(1) + ',' + YS(0).toFixed(1); for (i = i0; i < n; i++) dA += 'L' + X(i).toFixed(1) + ',' + YS(Math.max(-dmax, Math.min(dmax, S.c[i] / E.sma[i] - 1))).toFixed(1); dA += 'L' + X(n - 1).toFixed(1) + ',' + YS(0).toFixed(1) + 'Z';
+      var clipId = 'cp' + Math.random().toString(36).slice(2, 8);
+      var defs = mk('defs', {}, svg), cpP = mk('clipPath', { id: clipId + 'p' }, defs); mk('rect', { x: m.l, y: st0, width: iw, height: sh / 2 }, cpP); var cpN = mk('clipPath', { id: clipId + 'n' }, defs); mk('rect', { x: m.l, y: st0 + sh / 2, width: iw, height: sh / 2 }, cpN);
+      mk('path', { d: dA, fill: col.line, 'fill-opacity': 0.35, 'clip-path': 'url(#' + clipId + 'p)' }, svg);
+      mk('path', { d: dA, fill: col.neg, 'fill-opacity': 0.35, 'clip-path': 'url(#' + clipId + 'n)' }, svg);
+      mk('line', { x1: m.l, x2: m.l + iw, y1: YS(0), y2: YS(0), stroke: col.axis, 'stroke-width': 1 }, svg);
+      if (band) { [p, -p].forEach(function (v) { mk('line', { x1: m.l, x2: m.l + iw, y1: YS(v), y2: YS(v), stroke: col.sma, 'stroke-width': 1, 'stroke-dasharray': '3 3' }, svg); }); }
+      var lv = band && (YS(0) - YS(p)) >= 11 ? p : dmax * 0.7;
+      var l1 = mk('text', { x: m.l + iw + 6, y: YS(lv) + 4, 'font-size': 10.5, fill: col.muted }, svg); l1.textContent = '+' + de(lv * 100, 0) + ' %';
+      var l2 = mk('text', { x: m.l + iw + 6, y: YS(-lv) + 4, 'font-size': 10.5, fill: col.muted }, svg); l2.textContent = '−' + de(lv * 100, 0) + ' %';
+      var l0 = mk('text', { x: m.l + iw + 6, y: YS(0) + 4, 'font-size': 10.5, fill: col.muted }, svg); l0.textContent = 'SMA';
+      /* x-Achse */
+      var ticks = [], prev = null;
+      for (i = i0; i < n; i++) { var d = S.d[i], yr = d.slice(0, 4), mo = +d.slice(5, 7);
+        if (N > 110) { if (prev !== yr) { if (prev !== null) ticks.push({ i: i, l: yr }); prev = yr; } }
+        else { var q = yr + '-' + Math.floor((mo - 1) / 3); if (prev !== q) { if (prev !== null) ticks.push({ i: i, l: ['Jan', 'Apr', 'Jul', 'Okt'][Math.floor((mo - 1) / 3)] + ' ' + yr.slice(2) }); prev = q; } } }
+      var maxT = Math.max(2, Math.floor(iw / 58)); if (ticks.length > maxT) { var stp = Math.ceil(ticks.length / maxT); ticks = ticks.filter(function (t, k) { return k % stp === 0; }); }
+      mk('line', { x1: m.l, x2: m.l + iw, y1: st0 + sh, y2: st0 + sh, stroke: col.axis, 'stroke-width': 1 }, g);
+      ticks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: st0 + sh, y2: st0 + sh + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: st0 + sh + 16, 'text-anchor': 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
     }
     host.setAttribute('aria-label', o.name + ': Wochenschlüsse und SMA50, zuletzt ' + o.usd(S.c[n - 1]) + ', SMA50 ' + o.usd(E.sma[n - 1]) + ', Regel ' + (E.st[n - 1] === 1 ? 'investiert' : 'in Cash'));
     /* Darüberfahren und Tastatur: Linie und Punkte im Chart, die Werte stehen in der Werte-Zeile darüber (o.readout, sonst über der Grafik
