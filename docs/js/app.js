@@ -415,12 +415,28 @@
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
-    evenHeads(); drawCharts();
+    fitNames(); evenHeads(); drawCharts();
     if (keepFocus) { var nf = host.querySelector('button.tog[aria-controls="' + keepFocus + '"]'); if (nf) nf.focus({ preventScroll: true }); }
   }
   /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit …signal … %“
      oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder
      Größenänderung (resize), weil die Karten erst ab 4 px Breitenänderung neu gezeichnet werden. */
+  /* Namen der Status-Karten so groß wie möglich, höchstens 25 px, mindestens 23 px (Justus 27.09.2026: „nur die Namen wieder etwas größer“),
+     ohne dass im Kopf etwas anders umbricht als mit 23 px: weder der Name noch „Investiert“ / „seit Kaufsignal …“ daneben. Wie viel Platz
+     da ist, hängt von Fensterbreite und Text ab, deshalb gemessen statt fest; alle drei Karten gleich groß. Läuft vor evenHeads. */
+  function fitNames() {
+    var hs = Array.prototype.slice.call(document.querySelectorAll('#statusCards .scard .hd')); if (!hs.length) return;
+    function lines(el) {
+      var tops = {}, w = document.createTreeWalker(el, NodeFilter.SHOW_TEXT, null), n, r = document.createRange();
+      while ((n = w.nextNode())) { if (!n.nodeValue.trim()) continue; r.selectNodeContents(n); Array.prototype.forEach.call(r.getClientRects(), function (x) { if (x.width > 0) tops[Math.round(x.top)] = 1; }); }
+      return Object.keys(tops).length;
+    }
+    function sig() { return hs.map(function (hd) { var b = hd.querySelector('.stbox'); return lines(hd.querySelector('h3')) + '|' + (b ? Array.prototype.map.call(b.children, lines).join('+') : ''); }).join(' '); }
+    function set(v) { hs.forEach(function (hd) { hd.querySelector('h3').style.fontSize = v + 'px'; }); }
+    set(23); var base = sig(), best = 23;
+    [25, 24.5, 24, 23.5].some(function (v) { set(v); if (sig() === base) { best = v; return true; } return false; });
+    set(best);
+  }
   function evenHeads() {
     var hs = Array.prototype.slice.call(document.querySelectorAll('#statusCards .scard .hd')); if (!hs.length) return;
     hs.forEach(function (h) { h.style.minHeight = ''; });
@@ -1504,7 +1520,7 @@
   $('perfSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.mode = b.getAttribute('data-m'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); });
   (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
-  window.addEventListener('resize', function () { evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
+  window.addEventListener('resize', function () { fitNames(); evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
   if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBigClick(); });
   /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
   var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
