@@ -417,7 +417,7 @@
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
-    fitNames(); evenHeads(); drawCharts();
+    fitNames(); fitFig(); evenHeads(); drawCharts();
     if (keepFocus) { var nf = host.querySelector('button.tog[aria-controls="' + keepFocus + '"]'); if (nf) nf.focus({ preventScroll: true }); }
   }
   /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit …signal … %“
@@ -437,6 +437,18 @@
     function set(v) { hs.forEach(function (hd) { hd.querySelector('h3').style.fontSize = v + 'px'; }); }
     set(23); var base = sig(), best = 23;
     [25, 24.5, 24, 23.5].some(function (v) { set(v); if (sig() === base) { best = v; return true; } return false; });
+    set(best);
+  }
+  /* Wochenschluss-Block der Status-Karten größer (Justus 27.09.2026: „den Bereich größer machen“): Datum, Kurs und „zum SMA50“ zusammen bis zum
+     1,2-Fachen (--figk, app.css), so weit, dass nichts anders umbricht als in der Grundgröße: Kurs und „zum SMA50“ bleiben in einer Zeile. Gemessen
+     wie fitNames, weil der Platz mit Fensterbreite und Kurs schwankt; alle drei Karten gleich. */
+  function fitFig() {
+    var host = $('statusCards'), fs = host ? Array.prototype.slice.call(host.querySelectorAll('.scard .fig')) : []; if (!fs.length) return;
+    function lines(el) { var r = document.createRange(), t = {}; r.selectNodeContents(el); Array.prototype.forEach.call(r.getClientRects(), function (x) { if (x.width > 0) t[Math.round(x.top)] = 1; }); return Object.keys(t).length; }
+    function sig() { return fs.map(function (f) { var v = f.querySelector('.fv'), d = f.querySelector('.fd'), l = f.querySelector('.fl'); if (!v || !d) return ''; var vb = v.getBoundingClientRect(), db = d.getBoundingClientRect(); return (l ? lines(l) : 0) + '|' + lines(v) + '|' + lines(d) + '|' + (Math.abs(db.bottom - vb.bottom) < vb.height / 2 ? 'row' : 'wrap'); }).join(' '); }
+    function set(k) { host.style.setProperty('--figk', String(k)); }
+    set(1); var base = sig(), best = 1;
+    [1.2, 1.15, 1.1, 1.05].some(function (k) { set(k); if (sig() === base) { best = k; return true; } return false; });
     set(best);
   }
   function evenHeads() {
@@ -1522,7 +1534,7 @@
   $('perfSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.mode = b.getAttribute('data-m'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); });
   (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
-  window.addEventListener('resize', function () { fitNames(); evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
+  window.addEventListener('resize', function () { fitNames(); fitFig(); evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
   if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBigClick(); });
   /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
   var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
