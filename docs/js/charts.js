@@ -137,7 +137,7 @@
     var i0 = o.range ? Math.max(49, n - o.range) : 49, N = n - i0, i;
     if (N < 2) { host.appendChild(el('p', 'small muted', 'Zu wenige Wochen.')); return; }
     var col = { line: css(o.color), sma: css('--ink-2'), grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface'), band: css('--band'), buy: css('--sig-buy'), sell: css('--sig-sell'), neg: css('--neg') };
-    var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = o.tall ? Math.max(300, Math.min(420, Math.round(W * 0.38))) : (narrow ? 170 : 200), sh = o.tall ? 72 : 54, gap = 8;
+    var W = Math.max(240, host.clientWidth || 340), narrow = W < 380, ih = o.tall ? Math.max(300, Math.min(Math.round(W * 0.45), Math.round(((typeof window !== 'undefined' && window.innerHeight) || 800) * 0.55), 720)) : (narrow ? 170 : 200), sh = o.tall ? 84 : 54, gap = 8; /* Großansicht höher (Justus 27.09.2026): bis 55 % der Fensterhöhe, höchstens 720 px (vorher höchstens 420 px), so bleibt der Kursverlauf auch auf Laptops ganz im Bild; Abstandsstreifen 84 statt 72 px */
     /* o.bare (kleine Charts der Status-Karten, Justus 27.09.2026: „nur noch Verlauf und SMA“): kein Rand rechts für die Preisachse, kein Streifen darunter */
     var bare = !!o.bare;
     var m = bare ? { t: 8, r: 6, b: 6, l: 4 } : { t: 10, r: 58, b: 22, l: 4 }, iw = W - m.l - m.r, H = bare ? m.t + ih + m.b : m.t + ih + gap + sh + m.b, st0 = m.t + ih + gap;
