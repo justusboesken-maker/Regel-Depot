@@ -1021,11 +1021,17 @@
      sichtbar ist (#depot …; ohne oder mit unbekanntem # die Status-Seite). So bleiben Menü, Links, Push-Nachrichten (./#signale), Lesezeichen,
      Neuladen sowie Zurück und Vor im Browser gültig. Zeigt die Adresse auf eine Stelle innerhalb eines Abschnitts, öffnet dessen Seite und
      springt dorthin. Nach einem Wechsel wird neu gezeichnet, weil ausgeblendete Charts und Karten ihre Breite nicht kennen. Wechselt man selbst
-     (Menü, Link, Zurück), steht das Fenster oben und der Titel der Seite bekommt den Fokus (für Screenreader). */
+     (Menü, Link, Zurück), steht das Fenster oben und der Titel der Seite bekommt den Fokus (für Screenreader).
+     Zuletzt geöffnete Seite (Justus 27.09.2026: „springt häufig automatisch auf Status zurück“): Die installierte App und der Browser laden die
+     Seite nach dem Wechsel in eine andere App oft neu, und zwar mit der Startadresse ohne „#…“. Deshalb merkt sich die Seite die zuletzt
+     geöffnete Seite in diesem Browser (regelDepot.page) und zeigt sie, wenn die Adresse kein „#“ enthält; eine Adresse mit „#“ (Menü, Link,
+     Push, Lesezeichen) und Zurück/Vor gehen vor. */
   var PAGES = ['status', 'depot', 'rebalancing', 'signale', 'einstellungen', 'regeln'], PAGE = null, PAGE_TARGET = null; /* Sprungziel beim Laden, nach dem ersten Zeichnen noch einmal ansteuern */
+  var PAGE_KEY = 'regelDepot.page';
   function showPage(id, target, user) {
     if (PAGES.indexOf(id) < 0) id = 'status';
     var changed = id !== PAGE; PAGE = id;
+    try { localStorage.setItem(PAGE_KEY, id); } catch (e) { /* still */ }
     if (changed && BIG.a) closeBig();
     PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
     Array.prototype.forEach.call(document.querySelectorAll('nav.toc a[href^="#"]'), function (a) {
@@ -1042,7 +1048,11 @@
     if (changed) schedule();
   }
   function route(user) {
-    var id = (location.hash || '').slice(1), t = null;
+    var id = (location.hash || '').slice(1), t = null, last = null;
+    if (!id && !user) { /* Start ohne „#“: zuletzt geöffnete Seite, und die Adresse passend setzen (Neuladen, Zurück) */
+      try { last = localStorage.getItem(PAGE_KEY); } catch (e) { last = null; }
+      if (last && last !== 'status' && PAGES.indexOf(last) >= 0) { id = last; try { history.replaceState(history.state, '', '#' + last); } catch (e) { /* still */ } }
+    }
     try { t = id ? document.getElementById(decodeURIComponent(id)) : null; } catch (e) { t = null; }
     var sec = t && t.closest ? t.closest('.wrap > section') : null;
     showPage(sec ? sec.id : 'status', t, user);
