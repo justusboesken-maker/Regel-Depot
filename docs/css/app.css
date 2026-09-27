@@ -313,15 +313,15 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .readout .sig-sell{color:var(--bad);font-weight:600}
 /* Depotentwicklung: große Zahl statt Kopfzeile (Justus 27.09.2026, Entwurf C); Breiten aus charts.js fitHero, damit nichts springt */
 .readout .rd-hero{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px}
-.readout .rd-hero .hv{display:inline-block;min-width:var(--hvw,0);font-size:32px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--ink)}
-.readout .rd-hero .hp{min-width:var(--hpw,0);font-size:15px;font-weight:600;color:var(--ink-2)}
+.readout .rd-hero .hv{display:inline-block;min-width:var(--hvw,0);font-size:42px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--ink)}
+.readout .rd-hero .hp{min-width:var(--hpw,0);font-size:19px;font-weight:600;color:var(--ink-2)} /* große Zahl 42 statt 32 px, Prozent 19 statt 15 px (Justus 27.09.2026) */
 .readout .rd-hero .hp.good{color:var(--good)}
 .readout .rd-hero .hp.bad{color:var(--bad)}
 .readout .rd-hero .hs{font-size:13.5px;color:var(--muted)}
 .readout .rd-chips{gap:3px 16px;font-size:13.5px}
 .readout .rd-chips .rd-v{text-align:left;margin-left:2px}
 .readout .rd-chips .rd-i{font-size:15px} /* Bausteine unter der großen Zahl etwas größer (Justus 27.09.2026, 13,5 → 15 px wie die Prozentzahl daneben); „Positionen … · Wert …“ bleibt klein */
-@media (max-width:560px){.readout .rd-hero .hv{font-size:28px}}
+@media (max-width:560px){.readout .rd-hero .hv{font-size:34px} .readout .rd-hero .hp{font-size:17px}}
 /* Signalcharts: feste Zeilen je nach verfügbarer Breite (charts.js fitMode misst mit der Schrift des Geräts), in allen drei Karten gleich,
    damit die Charts auf gleicher Höhe bleiben und nichts abgeschnitten wird. Grundform (schmal): Datum, Abstand, Schluss, SMA50, Regelstand je
    eine Zeile; rd-mid: Schluss und SMA50 nebeneinander; rd-wide: drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand);
