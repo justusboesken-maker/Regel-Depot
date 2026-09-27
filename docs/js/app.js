@@ -33,6 +33,7 @@
   };
   function chip(kind, text) { var c = el('span', 'chip c-' + kind); c.innerHTML = ICON[kind === 'buy' ? 'buy' : kind === 'sell' ? 'sell' : kind === 'warn' ? 'warn' : 'info']; c.appendChild(document.createTextNode(text)); return c; }
   function nextMonday(d) { return ENG.addDays(ENG.mondayOf(d), 7); }
+  function dYY(s) { if (!s) return '–'; var p = s.slice(0, 10).split('-'); return p[2] + '.' + p[1] + '.' + p[0].slice(2); } /* TT.MM.JJ */
 
   /* ---------- Daten laden ---------- */
   function getJson(p) { return fetch('data/' + p + '?v=' + Date.now(), { cache: 'no-store' }).then(function (r) { if (!r.ok) throw new Error(p + ': HTTP ' + r.status); return r.json(); }); }
@@ -265,6 +266,7 @@
   }
 
   /* ---------- Status-Karten ---------- */
+  var ACT_OPEN = {}; /* aufgeklappte Handlungs-Boxen je Baustein, nur bis zum Neuladen */
   function renderStatus(Mo) {
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
@@ -272,13 +274,19 @@
       var card = el('article', 'card scard'); card.id = 'card-' + a; card.style.setProperty('--acol', 'var(' + COLOR[a] + ')');
       var top = el('div', 'top1'), hd = el('div', 'hd'), left = el('div'), h = el('h3');
       h.appendChild(aicon(a)); h.appendChild(document.createTextNode(m.name)); left.appendChild(h); /* ohne Zeile „Regel · Signal · Depot“ unter dem Namen (Justus 27.09.2026); Regel und Signalquelle stehen unter „Regeln“ */ hd.appendChild(left);
-      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp); if (ls) right.appendChild(el('span', 'since', 'seit ' + dDE(ls.d)));
+      var right = el('div', 'stbox'), stp = el('span', 'state ' + (L.st === 1 ? 'in' : 'out')); stp.appendChild(el('i')); stp.appendChild(document.createTextNode(L.st === 1 ? 'Investiert' : 'Cash')); right.appendChild(stp);
+      /* Unter dem Regelstand „seit Signal TT.MM.JJ ±x,x %“ (Justus 27.09.2026, statt „seit TT.MM.JJJJ“): Kursveränderung seit dem Schluss der
+         Signalwoche bis zum aktuellen Kurs wie in der Kursbox, gerechnet wie „Performance seit Signal“ in der Großansicht (perfSince).
+         Datum und Prozentzahl brechen bei Platzmangel getrennt um (app.css .since), damit der Name nicht früher umbricht. */
+      if (ls) { var pf = perfSince(a, livePrice(a)), sn = el('span', 'since'); sn.appendChild(el('span', null, 'seit Signal ' + dYY(ls.d)));
+        if (pf) { sn.appendChild(document.createTextNode(' ')); sn.appendChild(el('span', 'sp', pct(pf.r, 1))); sn.title = 'Kurs seit dem Schluss der Signalwoche: ' + usd(a, pf.from) + ' → ' + usd(a, pf.to); }
+        right.appendChild(sn); }
       hd.appendChild(right);
       top.appendChild(hd);
       var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
       if (lp && rn) {
-        var lv = el('div', 'live' + (rn.would ? ' would' : ''));
+        var lv = el('div', 'live' + (rn.would ? ' would ' + (rn.wouldSt ? 'buy' : 'sell') : '')); /* Kursbox grün bei möglichem Kauf-, rot bei möglichem Verkaufssignal (Justus 27.09.2026) */
         var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : 'Aktuell ' + (lp.t ? new Date(lp.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
         var what = rn.would ? ('Schließt die Woche so: ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal')) : (CFG.assets[a].rule.type === 'confirm' && ((rn.st === 1 && lp.usd < rn.thr) || (rn.st === 0 && lp.usd > rn.thr)) ? 'So wäre das der ' + (lp.usd > rn.thr ? rn.up : rn.dn) + '. Schluss ' + (lp.usd > rn.thr ? 'über' : 'unter') + ' dem SMA50, Signal erst nach ' + CFG.assets[a].rule.n : 'Schließt die Woche so, bleibt die Regel ' + (rn.wouldSt ? 'investiert' : 'auf Cash'));
         lv.appendChild(el('p', 'ld', pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + ' · ' + what + '.'));
@@ -293,7 +301,9 @@
       if (st && st.pending) row.appendChild(chip('info', 'Schluss fehlt noch'));
       if (row.childNodes.length) top.appendChild(row);
       card.appendChild(top);
-      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); mid.appendChild(ab);
+      /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, solange die Seite nicht neu geladen wird */
+      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('details', 'act ' + act.cls), sm = el('summary'); sm.appendChild(el('b', null, act.title)); ab.appendChild(sm); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : '')));
+      if (ACT_OPEN[a]) ab.open = true; ab.addEventListener('toggle', function () { ACT_OPEN[a] = ab.open; }); mid.appendChild(ab);
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
       var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
@@ -305,7 +315,17 @@
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
-    drawCharts();
+    evenHeads(); drawCharts();
+  }
+  /* Köpfe der drei Status-Karten gleich hoch, solange sie nebeneinander stehen (über 980 px): bricht nur in einer Karte „seit Signal … %“
+     oder der Name um, bleiben „Wochenschluss“ und die große Zahl darunter trotzdem auf einer Linie (Justus 27.09.2026). Auch bei jeder
+     Größenänderung (resize), weil die Karten erst ab 4 px Breitenänderung neu gezeichnet werden. */
+  function evenHeads() {
+    var hs = Array.prototype.slice.call(document.querySelectorAll('#statusCards .scard .hd')); if (!hs.length) return;
+    hs.forEach(function (h) { h.style.minHeight = ''; });
+    if (window.matchMedia && window.matchMedia('(max-width:980px)').matches) return;
+    var mx = Math.max.apply(null, hs.map(function (h) { return h.getBoundingClientRect().height; }));
+    if (mx > 0) hs.forEach(function (h) { h.style.minHeight = mx + 'px'; });
   }
   /* ---------- Großansicht ---------- */
   var BIG = { a: null, range: null, t0: 0, key: false };
@@ -359,7 +379,7 @@
     fact('Wochenschluss ' + dShort(L.d), usd(a, L.c)); fact('SMA50', usd(a, L.m)); fact('Abstand', pct(L.dist, 1)); fact('Serie', streakText(L));
     var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, pf = perfSince(a, lp);
     if (pf) fact(pf.label, pf.text, 'perf ' + pf.cls);
-    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? 'hot' : '');
+    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? (rn.wouldSt ? 'good' : 'bad') : ''); /* wie die Kursbox der Karte: grün Kauf-, rot Verkaufssignal */
     tools.appendChild(facts);
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Zeitraum');
     [[52, '1 J'], [156, '3 J'], [260, '5 J'], [520, '10 J'], [0, 'Max']].forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(BIG.range === r[0])); b.addEventListener('click', function () { BIG.range = r[0]; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBig(a); }); seg.appendChild(b); });
@@ -846,11 +866,13 @@
   /* Einklappbare Abschnitte (Justus 27.09.2026): Signale, Rebalancing, Einstellungen und Regeln sind anfangs eingeklappt (Klasse
      „folded“ schon im HTML, damit nichts aufblitzt); ein Klick auf den Titel klappt auf oder zu, der Zustand wird je Browser gemerkt
      (wie bei den Karten, Schlüssel sec-<id>). Menü, Links und #Adresse klappen das Ziel vor dem Springen auf. Status und Depot bleiben
-     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. */
+     immer offen, der Fußtext unter „Regeln“ bleibt sichtbar. Signale (data-remember="0" im HTML) ist beim Laden immer eingeklappt
+     (Justus 27.09.2026): Aufklappen per Titel, Menü, Link oder Push gilt nur für den Besuch und wird nicht gemerkt. */
+  function remembers(sec) { return sec.getAttribute('data-remember') !== '0'; }
   function setSec(sec, open, save) {
     sec.classList.toggle('folded', !open);
     var b = sec.querySelector('h2.sec .secfold'); if (b) b.setAttribute('aria-expanded', open ? 'true' : 'false');
-    if (save) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
+    if (save && remembers(sec)) { var s = foldState(); s['sec-' + sec.id] = open ? 1 : 0; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } }
   }
   function openSecFor(t) { var sec = t && t.closest ? t.closest('section.sfold') : null; if (!sec || !sec.classList.contains('folded')) return false; setSec(sec, true, true); return true; }
   function wireSections() {
@@ -861,7 +883,7 @@
       while (h.firstChild) b.appendChild(h.firstChild);
       var ch = document.createElement('i'); ch.className = 'chev'; ch.setAttribute('aria-hidden', 'true'); b.appendChild(ch); h.appendChild(b);
       b.addEventListener('click', function () { setSec(sec, sec.classList.contains('folded'), true); });
-      setSec(sec, s['sec-' + sec.id] === 1, false);
+      setSec(sec, remembers(sec) && s['sec-' + sec.id] === 1, false);
     });
     document.addEventListener('click', function (e) { var a = e.target && e.target.closest ? e.target.closest('a[href^="#"]') : null, id = a ? a.getAttribute('href').slice(1) : ''; if (id) openSecFor(document.getElementById(id)); }, true);
     function fromHash() { var id = (location.hash || '').slice(1), t = id ? document.getElementById(id) : null; if (openSecFor(t)) { try { t.scrollIntoView(); } catch (e) { /* still */ } } }
@@ -1377,7 +1399,7 @@
   $('perfSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.mode = b.getAttribute('data-m'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); });
   (function () { var seg = $('perfRange'); if (!seg) return; PERF_RANGES.forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('data-r', r[0]); b.setAttribute('aria-pressed', String(PERF.range === r[0])); seg.appendChild(b); }); seg.addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; PERF.range = b.getAttribute('data-r'); Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawPerf(model()); }); })();
   $('rangeSeg').addEventListener('click', function (e) { var b = e.target.closest('button'); if (!b) return; VIEW.range = +b.getAttribute('data-r'); Array.prototype.forEach.call(this.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawCharts(); try { localStorage.setItem('regelDepot.range', String(VIEW.range)); } catch (err) { /* still */ } });
-  window.addEventListener('resize', function () { var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
+  window.addEventListener('resize', function () { evenHeads(); var w = cardW(), pw = $('chPerf') ? $('chPerf').clientWidth : 0; if (Math.abs(w - lastW) > 4 || Math.abs(pw - lastPW) > 4) { lastW = w; lastPW = pw; schedule(); } if (BIG.a) drawBig(BIG.a); });
   if ($('bigModal')) $('bigModal').addEventListener('click', function (e) { if (e.target === this) closeBigClick(); });
   /* Dunkelmodus: Schalter oben; ohne eigene Wahl folgt die Seite dem System. Gemerkt in diesem Browser (regelDepot.theme). */
   var mqDark = window.matchMedia ? window.matchMedia('(prefers-color-scheme: dark)') : null;
