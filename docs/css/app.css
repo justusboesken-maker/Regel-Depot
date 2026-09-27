@@ -193,8 +193,8 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard details.act>span{display:block;margin-top:3px}
 /* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
-   über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
-.scard .cchart{position:relative;min-width:0;align-self:start;margin-top:6px} /* 6 px mehr über dem Chart: Platz für die Zeile .crd (22 px) unter der Box darüber */
+   über dem Chart (40 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
+.scard .cchart{position:relative;min-width:0;align-self:start;margin-top:20px} /* 20 px zusätzlich zum Zeilenabstand: 40 px über dem Chart, Platz für die Zeile .crd und den Knopf „Großansicht“ mit Luft zur Box darüber (Justus 27.09.2026, vorher 26 px) */
 .scard .crd{position:absolute;left:0;right:30px;bottom:100%;margin-bottom:5px;display:flex;align-items:baseline;gap:8px;font-size:12.5px;line-height:17px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-variant-numeric:tabular-nums;pointer-events:none}
 .scard .crd b{font-weight:600;color:var(--ink)}
 /* Knopf „Großansicht“ oben rechts am kleinen Chart (app.js renderStatus, Justus 27.09.2026): schlicht, gedämpft, beim Darüberfahren dunkler.
