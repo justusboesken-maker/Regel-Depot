@@ -265,6 +265,7 @@
   }
 
   /* ---------- Status-Karten ---------- */
+  var ACT_OPEN = {}; /* aufgeklappte Handlungs-Boxen je Baustein, nur bis zum Neuladen */
   function renderStatus(Mo) {
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
@@ -293,7 +294,9 @@
       if (st && st.pending) row.appendChild(chip('info', 'Schluss fehlt noch'));
       if (row.childNodes.length) top.appendChild(row);
       card.appendChild(top);
-      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('div', 'act ' + act.cls); ab.appendChild(el('b', null, act.title)); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : ''))); mid.appendChild(ab);
+      /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, solange die Seite nicht neu geladen wird */
+      var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('details', 'act ' + act.cls), sm = el('summary'); sm.appendChild(el('b', null, act.title)); ab.appendChild(sm); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : '')));
+      if (ACT_OPEN[a]) ab.open = true; ab.addEventListener('toggle', function () { ACT_OPEN[a] = ab.open; }); mid.appendChild(ab);
       card.appendChild(mid);
       /* Kleine Zahl über dem Chart (Justus 27.09.2026): der Wochenschluss der Woche unter dem Zeiger, ohne Zeiger leer (chartHover, app.css .crd) */
       var cw = el('div', 'cchart'), cr = el('div', 'crd'), ch = el('div', 'chart'); cr.id = 'crd-' + a; ch.id = 'ch-' + a; ch.setAttribute('role', 'img'); ch.setAttribute('aria-keyshortcuts', 'Enter'); bindBigOpen(ch, a); cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);

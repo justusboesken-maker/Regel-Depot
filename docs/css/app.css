@@ -179,6 +179,14 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .scard .act.buy{background:var(--good-bg)} .scard .act.buy b{color:var(--good)}
 .scard .act.sell{background:var(--bad-bg)} .scard .act.sell b{color:var(--bad)}
 .scard .act span{font-size:13px;color:var(--ink-2)}
+/* Handlung als aufklappbare Box: Titel mit +/–, Text erst nach Klick (Justus 27.09.2026) */
+.scard details.act{display:block}
+.scard details.act>summary{cursor:pointer;list-style:none;display:flex;justify-content:space-between;align-items:center;gap:12px}
+.scard details.act>summary::-webkit-details-marker{display:none}
+.scard details.act>summary::after{content:"+";font-weight:400;color:var(--muted);font-size:18px;line-height:1}
+.scard details.act[open]>summary::after{content:"–"}
+.scard details.act>summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
+.scard details.act>span{display:block;margin-top:3px}
 /* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
    über dem Chart (30 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
