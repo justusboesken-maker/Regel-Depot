@@ -584,6 +584,7 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 .bigfacts .bf.good .v{color:var(--good)}
 .bigfacts .bf.bad .v{color:var(--bad)}
 .bigchart{background:none;border:0;border-radius:0;padding:0} /* ohne grauen Kasten um das Chartfenster (Justus 27.09.2026), wie die kleinen Charts */
+.modalbox>.bigchart{margin-bottom:clamp(16px,2.5vw,36px)} /* mehr Abstand unter dem Chart bis zur Handlung (Justus 27.09.2026): am Desktop etwa 80 statt 43 px unter der Jahresachse */
 .modalbox .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .modalbox .act b{font-size:15.5px}
 .modalbox .act.buy{background:var(--good-bg)} .modalbox .act.buy b{color:var(--good)}
