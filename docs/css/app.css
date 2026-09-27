@@ -105,9 +105,11 @@ nav.toc a .cnt{display:inline-block;min-width:18px;padding:0 5px;margin-left:5px
 section{padding-block:24px 6px;display:grid;gap:16px;scroll-margin-top:52px;min-width:0}
 section>*{min-width:0}
 /* Abschnittstitel: eine kompakte Zeile statt Überschrift plus Einleitung */
-h2.eyebrow.sec{font-size:20px;letter-spacing:.08em;color:var(--ink-2);margin:0;padding-bottom:10px;border-bottom:1px solid var(--rule)} /* Abschnittsüberschriften deutlich größer: 20 statt 13 px, auf dem Handy 18 px (Justus 27.09.2026) */
-h2.eyebrow.sec span{color:var(--muted);font-size:14px;font-weight:500;letter-spacing:.04em;text-transform:none;margin-left:10px}
-@media (max-width:640px){h2.eyebrow.sec{font-size:18px} h2.eyebrow.sec span{display:block;margin:2px 0 0}} /* Zusatz wie „30.12.2026 · noch 94 Tage“ passt auf dem Handy nicht daneben: linksbündig darunter */
+/* Abschnittstitel sichtbar entfernt (Justus 27.09.2026: „diese Überschriften sollen weg“; seit den eigenen Seiten nennt das Menü die Seite):
+   nur für Screenreader da, als Beschriftung des Abschnitts und als Fokusziel nach einem Seitenwechsel (wie .sr-only) */
+h2.eyebrow.sec{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
+/* Stichtag des Rebalancings, stand bis dahin im Abschnittstitel */
+.rebwhen{margin:0;font-size:14px;color:var(--muted);letter-spacing:.02em}
 /* Seiten (Justus 27.09.2026): jeder Menüpunkt ist eine eigene Seite, sichtbar ist nur der Abschnitt zur Adresse (#status, #depot …;
    app.js wirePages). Der Titel bekommt nach einem Seitenwechsel den Fokus (für Screenreader), ohne Rahmen */
 section[hidden]{display:none!important}
