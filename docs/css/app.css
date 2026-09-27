@@ -457,6 +457,20 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 #rebalancing table th:last-child,#rebalancing table td:last-child{padding-right:0}
 #rebalancing>.card.pad{padding:20px 0 0;border-top:1px solid var(--rule);margin-top:6px}
 @media (max-width:980px){#rebalancing #rebCards:not(.one){grid-template-columns:minmax(0,1fr)} #rebalancing #rebCards>*+*::before{display:none} #rebalancing #rebCards>*+*{border-top:1px solid var(--rule);margin-top:14px;padding-top:18px}}
+/* Rebalancing besser lesbar (Justus 27.09.2026: „Bereich größer machen“): Stichtag, Hinweise oben, Titel, Kennzahlen, Tabelle und
+   Zeile darunter je 1,5–4,5 px größer als die Grundschriften, Tabellenzeilen etwas luftiger */
+#rebalancing .rebwhen{font-size:15.5px}
+#rebalancing #rebBanner .banner{font-size:15.5px;padding:13px 16px;gap:5px}
+#rebalancing .rv .hd{gap:6px}
+#rebalancing .rv .hd h3{font-size:21px}
+#rebalancing .rv .hd p.small{font-size:15px}
+#rebalancing .rv .hd .tot{font-size:15.5px;gap:6px 20px;margin-top:2px}
+#rebalancing .rv table{font-size:15px}
+#rebalancing .rv th,#rebalancing .rv td{padding-top:11px;padding-bottom:11px}
+#rebalancing .rv thead th{font-size:12.5px}
+#rebalancing .rv td .sub{font-size:13.5px}
+#rebalancing .rv td .aic{width:18px;height:18px;vertical-align:-3px}
+#rebalancing .rv .ft.small{font-size:15px}
 /* Einstellungen: aufklappbare Bereiche als Zeilen zwischen Linien */
 #einstellungen{row-gap:0}
 #einstellungen>details.box{background:none;border:0;border-radius:0;border-top:1px solid var(--rule)}
