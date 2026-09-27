@@ -293,6 +293,8 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .bigchart .rule-rd{font-size:18px;gap:5px;margin-bottom:10px}
 .bigchart .rule-rd .rd-row{gap:4px 24px}
 .bigchart .rule-rd i{width:22px}
+/* Wert direkt hinter „Schluss“ und „SMA50“ (Justus 27.09.2026: „weniger Abstand“): linksbündig in der reservierten Breite, statt rechtsbündig mit Leerraum davor */
+.bigchart .rule-rd .rd-v{text-align:left}
 .rule-rd.rd-line{display:flex;flex-wrap:wrap;align-items:baseline;gap:5px 32px}
 .rule-rd.rd-line .rd-h{display:flex;flex-wrap:nowrap;align-items:baseline;gap:0 12px;min-height:0;overflow:visible}
 .rule-rd.rd-line .rd-h b{display:inline;margin-right:0}
