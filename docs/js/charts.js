@@ -379,7 +379,20 @@
     host.setAttribute('aria-label', (series.length === 1 ? series[0].label : 'Bausteine') + ': ' + (mode === 'wert' ? 'Wert, zuletzt ' + eur(val(series[0], last) || 0) : 'Gewinn, zuletzt ' + sgnEur(val(series[0], last) || 0)));
     if (cap) cap.textContent = capText || '';
   }
-  /* Zwei Charts untereinander: oben das Gesamtdepot, darunter die drei Bausteine gemeinsam (eigene Euro-Skala, damit ihre Bewegung erkennbar bleibt) */
+  /* Werte der Bausteine für die Werte-Zeile ohne eigenen Chart: gleiche Werte und Farben wie früher der Chart „Bausteine“ */
+  function partRows(pts, mode, ser) {
+    var ink = css('--ink');
+    function val(s, q) { var pt = q.parts[s.key]; if (!pt) return null; return mode === 'wert' ? pt.val + pt.cash : pt.gain; }
+    function fmt(v) { return v == null ? '–' : mode === 'gewinn' ? sgnEur(v) : eur(v); }
+    function none() { return ''; }
+    function noop() {}
+    return { n: pts.length, title: '', head: none, sub: none, mark: noop, unmark: noop, hero: null,
+      rows: function (i) { var q = pts[i]; return ser.map(function (s) { return { color: s.colorVar ? css(s.colorVar) : ink, label: s.label, short: s.short, val: fmt(val(s, q)), strong: false }; }); },
+      wmax: function () { var w = 1; ser.forEach(function (s) { pts.forEach(function (q) { var v = val(s, q); if (v != null) w = Math.max(w, fmt(v).length); }); }); return w; } };
+  }
+  /* Depotentwicklung (Gewinn, Wert): ein Chart für das Gesamtdepot. Seit 27.09.2026 ohne eigenen Chart für die Bausteine (Justus: „Den Chart für
+     die Bausteine ganz weglassen. deren verlauf weiterhin beim durchgehen oben anzeigen“); ihre Werte am gewählten Tag stehen als Chips in der
+     Werte-Zeile über dem Chart (ohne Zeiger der letzte Stand) */
   function portfolioSplit(host, leg, cap, pts, mode, series, capText) {
     host.textContent = ''; if (leg) leg.textContent = ''; if (cap) cap.textContent = '';
     if (!pts || pts.length < 2) { host.appendChild(el('p', 'small muted', 'Für einen Verlauf fehlen noch Wochen mit Positionen.')); return; }
@@ -391,7 +404,7 @@
     function block(ser, height, hero) { var b = el('div', 'splitbox'); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
     var narrow = (host.clientWidth || 700) < 560;
     block(total, narrow ? 210 : 250, true);
-    block(parts, narrow ? 200 : 220);
+    if (parts.length) G.add(partRows(pts, mode, parts));
     G.reset();
     if (cap) cap.textContent = capText || '';
   }
