@@ -11,7 +11,7 @@
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
-  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08; --mh-gold:linear-gradient(180deg,#5E430B 0%,#8E6718 24%,#D8B25A 40%,#A7791F 50%,#6F4F0F 61%,#B98D30 71%,#8A6418 80%,#4E3708 100%); --mh-gold-sh:drop-shadow(0 1px 0 rgba(255,255,255,.75));
+  --mh-bg:linear-gradient(115deg,#D9E3F1 0%,#E4EBF5 50%,#EDF2F8 100%); --mh-line:#D0DAE7; --mh-muted:#4E5E75; --mh-track:#FFFFFF; --mh-track-b:#B9C6D8; --mh-deco:#1B3A6B; --mh-deco-lo:.3; --mh-deco-fo:.08; --mh-gold:#9A7425;
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,"Helvetica Neue",sans-serif;
   --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
 }
@@ -25,7 +25,7 @@
     --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:linear-gradient(180deg,#8C6A1F 0%,#C9A043 24%,#FBEFB5 40%,#E3BD5A 50%,#A87C24 61%,#F0D27F 71%,#C79A35 80%,#7D5C17 100%); --mh-gold-sh:drop-shadow(0 1px 1px rgba(0,0,0,.55));
+    --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763;
   }
 }
 :root[data-theme="dark"]{
@@ -37,7 +37,7 @@
   --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
-  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:linear-gradient(180deg,#8C6A1F 0%,#C9A043 24%,#FBEFB5 40%,#E3BD5A 50%,#A87C24 61%,#F0D27F 71%,#C79A35 80%,#7D5C17 100%); --mh-gold-sh:drop-shadow(0 1px 1px rgba(0,0,0,.55));
+  --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763;
 }
 *{box-sizing:border-box}
 html{scroll-padding-top:66px} /* Menüleiste 10 px höher seit 27.09.2026 (vorher 56 px) */
@@ -69,10 +69,11 @@ p{margin:0}
 .masthead .wrap.hdr{position:relative;z-index:1}
 .masthead .top{padding-block:20px 24px}
 /* Titel „Investus“ in poliertem Gold (Justus 27.09.2026, Entwurf G); Schrift wieder wie vorher (Justus 27.09.2026: „Die Schriftart soll wieder
-   die von vorher sein. Die Farbe und Glanz sollen bleiben“): Seitenschrift, Gewicht, Größe und Zeilenhöhe aus der h1-Regel oben, nur der
-   Goldverlauf je Modus (--mh-gold) und der Glanzschatten (--mh-gold-sh) bleiben */
-.masthead h1{justify-self:start;background-image:var(--mh-gold);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent;color:transparent;filter:var(--mh-gold-sh)}
-@media (forced-colors:active){.masthead h1{background:none;-webkit-text-fill-color:CanvasText;color:CanvasText;filter:none}}
+   die von vorher sein. Die Farbe und Glanz sollen bleiben“): Seitenschrift, Gewicht, Größe und Zeilenhöhe aus der h1-Regel oben.
+   Seit 27.09.2026 ohne Glanz (Justus: „weiterhin selbe Farbe aber ohne Glanz“): einfarbiges Gold je Modus (--mh-gold), der Durchschnitt des
+   früheren Verlaufs im Bereich der Buchstaben (hell etwas dunkler für mindestens 3:1 Kontrast), ohne Glanzstreifen und Schatten */
+.masthead h1{justify-self:start;color:var(--mh-gold)}
+@media (forced-colors:active){.masthead h1{color:CanvasText}}
 .masthead .switch{color:var(--mh-muted)}
 .masthead .switch input:not(:checked)+.track{background:var(--mh-track);border-color:var(--mh-track-b)}
 .masthead .switch input:not(:checked)+.track::after{background:#fff}
