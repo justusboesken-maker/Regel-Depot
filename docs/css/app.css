@@ -118,6 +118,11 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 .c-buy{color:var(--good);background:var(--good-bg)}
 .c-sell{color:var(--bad);background:var(--bad-bg)}
 .c-warn{color:var(--warn);background:var(--warn-bg)}
+/* Chip als Knopf zum Aufklappen (Grenzfall, Justus 27.09.2026): Pfeil rechts, zeigt nach oben, wenn offen */
+button.chip{border:0;margin:0;font-family:inherit;cursor:pointer}
+button.chip.tog::after{content:"";width:5px;height:5px;margin:0 1px 0 2px;border-right:1.6px solid currentColor;border-bottom:1.6px solid currentColor;transform:translateY(-1.5px) rotate(45deg)}
+button.chip.tog[aria-expanded="true"]::after{transform:translateY(1.5px) rotate(-135deg)}
+button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .c-info{color:var(--ink-2);background:var(--surface-2)}
 .state{display:inline-flex;align-items:center;gap:8px;font-size:15px;font-weight:600;padding:6px 12px 6px 10px;border-radius:8px}
 .state i{width:10px;height:10px;border-radius:50%;display:inline-block}
@@ -179,6 +184,12 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 @media (max-width:980px){.scard .fig .fv{font-size:30px}} /* Status-Spalten (Justus 27.09.2026): die große Zahl wächst mit der Fensterbreite (26 → 30 px bis 1250 px), damit Kurs und „zum SMA50“ in einer Zeile bleiben */
 .scard .fig .fd{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 .scard .row{display:flex;flex-wrap:wrap;align-items:center;gap:8px 10px}
+/* Erklärung zum Grenzfall (app.js edgeLines): was geschah, was knapp auf der anderen Seite der Schwelle passiert wäre, warum das zählt */
+.scard .edgex{border-radius:8px;padding:10px 12px;background:var(--warn-bg);font-size:13px;line-height:1.45;color:var(--ink);display:grid;gap:6px}
+.scard .edgex[hidden]{display:none}
+.scard .edgex p{margin:0}
+.scard .edgex .alt{font-weight:600}
+.scard .edgex .why{font-size:12.5px;color:var(--ink-2)}
 .scard .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .scard .act b{font-size:15.5px}
 .scard .act.buy{background:var(--good-bg)} .scard .act.buy b{color:var(--good)}

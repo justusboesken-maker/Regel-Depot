@@ -296,3 +296,64 @@ test('Schwelle eines Wechsels = Schwelle der Vorwoche für den nächsten Schluss
   const s49 = G.c.slice(gs.i - 49, gs.i).reduce((x, y) => x + y, 0);
   assert.equal(r4(gs.thr), r4(s49 / 49));
 });
+
+/* ---------- Grenzfall erklärt (edgeCase, Justus 27.09.2026) ---------- */
+/* Steigende Reihe; tail ersetzt die letzten Schlüsse (tail [60, 0]: Einbruch in der vorletzten Woche), lastAt legt den letzten Schluss relativ zur Schwelle */
+function synth(len, tail) {
+  const S = { k: [], d: [], c: [] };
+  for (let i = 0; i < len; i++) { const k = ENG.addDays('2020-01-06', 7 * i); S.k.push(k); S.d.push(ENG.addDays(k, 4)); S.c.push(100 + i * 0.5); }
+  (tail || []).forEach((v, j) => { S.c[len - (tail.length - j)] = v; });
+  return S;
+}
+function lastAt(S, rule, relToThr) {
+  const n = S.c.length; let s49 = 0; for (let i = n - 50; i < n - 1; i++) s49 += S.c[i];
+  const prev = ENG.evalRule(S, rule).st[n - 2];
+  const p = rule.type === 'band' ? rule.p : 0.03, th = s49 / 49, bu = (1 + p) * s49 / (49 - p), bd = (1 - p) * s49 / (49 + p);
+  const thr = rule.type === 'band' ? (prev === 1 ? bd : bu) : th;
+  const c = S.c.slice(); c[n - 1] = thr * (1 + relToThr); return { k: S.k, d: S.d, c };
+}
+
+test('Grenzfall Bitcoin 20.09.2026: 9 $ unter der Kaufschwelle, darüber wäre es das Kaufsignal gewesen', () => {
+  const S = series('btc'), x = ENG.edgeCase(S, RULES.btc);
+  assert.equal(x.d, '2026-09-20'); assert.equal(x.band, true); assert.equal(x.prev, 0);
+  assert.equal(x.last.st, 0); assert.equal(x.last.changed, false);
+  assert.ok(x.diff < 0 && Math.abs(x.rel) < 0.005, 'knapp unter der Kaufschwelle');
+  assert.equal(Math.round(x.thr), 81152); assert.equal(Math.round(-x.diff), 9);
+  assert.equal(x.alt.length, 1); assert.equal(x.alt[0].above, true); assert.equal(x.alt[0].changed, true); assert.equal(x.alt[0].st, 1);
+  /* Die Schwelle ist genau die Kippstelle: knapp darunter bleibt es bei Cash */
+  const n = S.c.length, c2 = S.c.slice(); c2[n - 1] = x.thr * (1 - 1e-7);
+  assert.equal(ENG.evalRule({ k: S.k, d: S.d, c: c2 }, RULES.btc).last.st, 0);
+});
+
+test('Grenzfall Bestätigungsregel: knapp über dem SMA50 nach einem Schluss darunter, darunter wäre es das Verkaufssignal gewesen', () => {
+  const base = synth(80, [60, 0]), S = lastAt(base, RULES.ftse, 0.001), x = ENG.edgeCase(S, RULES.ftse);
+  assert.equal(x.band, false); assert.equal(x.prev, 1);
+  assert.deepEqual(x.last, { st: 1, changed: false, up: 1, dn: 0 });
+  assert.equal(x.alt.length, 1); assert.equal(x.alt[0].above, false);
+  assert.equal(x.alt[0].changed, true); assert.equal(x.alt[0].st, 0); assert.equal(x.alt[0].dn, 2);
+});
+
+test('Grenzfall Bestätigungsregel: knapp unter dem SMA50 löst das Verkaufssignal aus, darüber wäre die Regel investiert geblieben', () => {
+  const base = synth(80, [60, 0]), S = lastAt(base, RULES.ftse, -0.001), x = ENG.edgeCase(S, RULES.ftse);
+  assert.deepEqual(x.last, { st: 0, changed: true, up: 0, dn: 2 });
+  assert.equal(x.alt[0].above, true); assert.equal(x.alt[0].changed, false); assert.equal(x.alt[0].st, 1); assert.equal(x.alt[0].up, 1);
+});
+
+test('Grenzfall Gold (n=4): knapp über dem SMA50, darunter wäre nur die Serie gerissen', () => {
+  const base = synth(80), S = lastAt(base, RULES.gold, 0.002), x = ENG.edgeCase(S, RULES.gold);
+  assert.equal(x.last.st, 1); assert.equal(x.last.changed, false); assert.ok(x.last.up > 1);
+  assert.equal(x.alt[0].changed, false); assert.equal(x.alt[0].st, 1); assert.equal(x.alt[0].dn, 1); assert.equal(x.alt[0].up, 0);
+});
+
+test('Grenzfall Band investiert: knapp über der Verkaufsschwelle, darunter wäre es das Verkaufssignal gewesen', () => {
+  const base = synth(80), S = lastAt(base, RULES.btc, 0.002), x = ENG.edgeCase(S, RULES.btc);
+  assert.equal(x.prev, 1); assert.equal(x.last.st, 1); assert.equal(x.last.changed, false);
+  assert.ok(x.thr < x.m, 'Verkaufsschwelle unter dem SMA50');
+  assert.equal(x.alt[0].above, false); assert.equal(x.alt[0].changed, true); assert.equal(x.alt[0].st, 0);
+});
+
+test('Grenzfall genau auf der Schwelle: beide Seiten, zu kurze Reihe ohne Ergebnis', () => {
+  const base = synth(80), S = lastAt(base, RULES.gold, 0), x = ENG.edgeCase(S, RULES.gold);
+  assert.equal(x.diff, 0); assert.equal(x.alt.length, 2); assert.deepEqual(x.alt.map((o) => o.above), [true, false]);
+  assert.equal(ENG.edgeCase(synth(50), RULES.gold), null);
+});

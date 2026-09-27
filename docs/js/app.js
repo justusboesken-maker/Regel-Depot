@@ -267,6 +267,36 @@
 
   /* ---------- Status-Karten ---------- */
   var ACT_OPEN = {}; /* aufgeklappte Handlungs-Boxen je Baustein, nur bis zum Neuladen */
+  var EDGE_OPEN = {}; /* aufgeklappte Grenzfall-Erklärungen je Baustein, nur bis zum Neuladen */
+  /* Grenzfall zum Aufklappen (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): Schluss, Schwelle und Abstand der
+     letzten Woche, was die Regel daraus gemacht hat und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (ENG.edgeCase);
+     dazu, warum das zählt, und mit welcher Quelle gerechnet ist. Liefert Absätze [Text, Klasse] oder null. */
+  var SRC_NAME = { alphavantage: 'Alpha Vantage', coinbase: 'Coinbase', eodhd: 'EODHD', kraken: 'Kraken', lbma: 'LBMA', ls: 'Lang & Schwarz', stooq: 'Stooq', yahoo: 'Yahoo Finance' };
+  function edgeLines(a) {
+    var m = CFG.assets[a], rule = m.rule, x = ENG.edgeCase(C[a].S, rule); if (!x) return null;
+    var unit = Math.pow(10, -m.dec), L = x.last, T = usd(a, x.thr), edgePct = (CFG.edge && CFG.edge.pct) || 0.005;
+    function stw(v) { return v === 1 ? 'investiert' : 'auf Cash'; }
+    function sig(v) { return v === 1 ? 'Kaufsignal' : 'Verkaufssignal'; }
+    function run(o) { return o.up > 0 ? o.up + '. Schluss in Folge über dem SMA50' : o.dn > 0 ? o.dn + '. Schluss in Folge unter dem SMA50' : null; }
+    var gap = Math.abs(x.diff) >= unit / 2 ? usd(a, Math.abs(x.diff)) : 'weniger als ' + usd(a, unit), rel = Math.abs(x.rel) >= 0.00005 ? pctPlain(Math.abs(x.rel), 2) : 'unter 0,01 %';
+    var thrName = x.band ? (x.prev === 1 ? 'Verkaufsschwelle' : 'Kaufschwelle') + ' von ' + T + ' (' + pctPlain(rule.p, 0) + (x.prev === 1 ? ' unter' : ' über') + ' dem SMA50)' : null;
+    var p1 = 'Der Wochenschluss vom ' + dDE(x.d) + ' lag mit ' + usd(a, x.c) + (x.diff === 0 ? ' genau auf der ' + (x.band ? thrName : 'Schwelle von ' + T + ', also auf dem SMA50')
+      : ' nur ' + gap + ' (' + rel + ') ' + (x.diff > 0 ? 'über' : 'unter') + (x.band ? ' der ' + thrName : ' dem SMA50 (Schwelle ' + T + ')')) + '. ';
+    if (L.changed) p1 += x.band ? 'Das hat das ' + sig(L.st) + ' ausgelöst.' : 'Das war der ' + run(L) + ' und hat das ' + sig(L.st) + ' ausgelöst.';
+    else if (x.band) p1 += 'Deshalb gab es kein ' + sig(1 - x.prev) + ', die Regel bleibt ' + stw(L.st) + '.';
+    else if (run(L)) p1 += 'Das war der ' + run(L) + ((L.st === 1 && L.dn > 0) || (L.st === 0 && L.up > 0) ? '; ein ' + sig(1 - L.st) + ' gibt es erst nach ' + rule.n + ' in Folge' : '') + '. Die Regel bleibt ' + stw(L.st) + '.';
+    else p1 += 'Damit beginnen beide Serien neu, die Regel bleibt ' + stw(L.st) + '.';
+    var p2 = x.alt.map(function (o) {
+      var pre = 'Ein Schluss ' + (o.above ? 'über ' : 'unter ') + T;
+      if (o.changed) return pre + ' hätte das ' + sig(o.st) + ' ausgelöst' + (x.band ? '' : ' (' + run(o) + ')') + '.';
+      if (L.changed || x.band) return pre + ' hätte kein Signal ausgelöst, die Regel wäre ' + stw(o.st) + ' geblieben.';
+      return pre + ' wäre der ' + run(o) + ' gewesen' + ((L.up > 0 && o.dn > 0) || (L.dn > 0 && o.up > 0) ? ' und hätte die Serie ' + (L.up > 0 ? 'über' : 'unter') + ' dem SMA50 beendet' : '') + '; die Regel wäre trotzdem ' + stw(o.st) + ' geblieben.';
+    }).join(' ');
+    var st = D.state && D.state.assets && D.state.assets[a], src = st && st.src ? String(st.src).replace(/ adjclose/, ' bereinigt').replace(/^(\S+)/, function (w) { return SRC_NAME[w] || w; }) : null;
+    var p3 = 'Grenzfall heißt: weniger als ' + pctPlain(edgePct, 1) + ' Abstand zur Schwelle. So knapp können schon kleine Unterschiede zwischen Kursquellen oder eine spätere Korrektur des Schlusskurses das Ergebnis drehen. ' +
+      (src ? 'Gerechnet ist mit ' + src + '. ' : '') + 'Ändert eine Korrektur die Regel, meldet die Seite das unter „Signale“ und als Push-Nachricht.';
+    return [[p1, ''], [p2, 'alt'], [p3, 'why']];
+  }
   function renderStatus(Mo) {
     var host = $('statusCards'); host.textContent = '';
     A.forEach(function (a) {
@@ -301,11 +331,24 @@
       }
       var row = el('div', 'row'), ti = thresholdInfo(a);
       if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
-      if (ti.edge) row.appendChild(chip('warn', 'Grenzfall'));
+      var edgeBox = null;
+      if (ti.edge) {
+        var ex = edgeLines(a);
+        if (!ex) row.appendChild(chip('warn', 'Grenzfall'));
+        else { /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf */
+          var eb = el('button', 'chip c-warn tog'); eb.type = 'button'; eb.innerHTML = ICON.warn; eb.appendChild(document.createTextNode('Grenzfall'));
+          edgeBox = el('div', 'edgex'); edgeBox.id = 'edgex-' + a; ex.forEach(function (q) { edgeBox.appendChild(el('p', q[1] || null, q[0])); });
+          eb.setAttribute('aria-controls', edgeBox.id); eb.setAttribute('aria-expanded', String(!!EDGE_OPEN[a])); edgeBox.hidden = !EDGE_OPEN[a];
+          eb.title = 'Erklärung zum Grenzfall ein- oder ausklappen';
+          (function (b, box) { b.addEventListener('click', function () { var o = box.hidden; box.hidden = !o; b.setAttribute('aria-expanded', String(o)); EDGE_OPEN[a] = o; }); })(eb, edgeBox);
+          row.appendChild(eb);
+        }
+      }
       if (a === 'gold' && D.state && D.state.cross && D.state.cross.goldf && D.state.cross.goldf.st != null && D.state.cross.goldf.st !== L.st) row.appendChild(chip('info', 'COMEX-Future: ' + (D.state.cross.goldf.st === 1 ? 'investiert' : 'Cash')));
       if (st && st.fallback) row.appendChild(chip('warn', 'Ersatzquelle'));
       if (st && st.pending) row.appendChild(chip('info', 'Schluss fehlt noch'));
       if (row.childNodes.length) top.appendChild(row);
+      if (edgeBox) top.appendChild(edgeBox);
       card.appendChild(top);
       /* Handlung eingeklappt: nur der Titel, Text per Klick (Justus 27.09.2026); offen bleibt offen, solange die Seite nicht neu geladen wird */
       var mid = el('div', 'mid'), act = actionFor(a, Mo), ab = el('details', 'act ' + act.cls), sm = el('summary'); sm.appendChild(el('b', null, act.title)); ab.appendChild(sm); ab.appendChild(el('span', null, act.text + (act.next ? ' ' + act.next : '')));

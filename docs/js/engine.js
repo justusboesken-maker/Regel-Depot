@@ -96,6 +96,19 @@
     var need = L.st === 1 ? rule.n - L.dn : rule.n - L.up;
     return { thr: nx.above, can: need <= 1, need: need, dir: L.st === 1 ? 'below' : 'above' };
   }
+  /* Grenzfall der letzten Woche erklärt (Justus 27.09.2026: „für Grenzfall soll eine konkrete Erklärung ausklappbar sein“): die Schwelle dieser Woche
+     aus den 49 Schlüssen davor (dieselbe Zahl wie in Vorwarnung und Signaltext, thresholds), der Abstand des Schlusses dazu, was die Regel daraus
+     gemacht hat (last) und was ein Schluss knapp auf der anderen Seite der Schwelle bewirkt hätte (alt; liegt der Schluss genau auf ihr, beide
+     Seiten). Beim Band gilt die Schwelle des Zustands vor dieser Woche: auf Cash die Kaufschwelle, investiert die Verkaufsschwelle. */
+  function edgeCase(S, rule) {
+    var n = S.c.length, i; if (n < 51) return null;
+    var E = evalRule(S, rule), L = E.last, prev = E.st[n - 2]; if (!L || L.m == null || prev == null) return null;
+    var s49 = 0; for (i = n - 50; i < n - 1; i++) s49 += S.c[i];
+    var band = rule.type === 'band', T = thresholds(s49, band ? rule.p : 0.03), thr = band ? (prev === 1 ? T.bandDown : T.bandUp) : T.above, c = L.c;
+    function alt(price) { var c2 = S.c.slice(); c2[n - 1] = price; var A = evalRule({ k: S.k, d: S.d, c: c2 }, rule).last; return { price: price, above: price > thr, st: A.st, changed: A.changed, up: A.up, dn: A.dn }; }
+    var eps = 1e-7, alts = c > thr ? [alt(thr * (1 - eps))] : c < thr ? [alt(thr * (1 + eps))] : [alt(thr * (1 + eps)), alt(thr * (1 - eps))];
+    return { k: L.k, d: L.d, c: c, m: L.m, thr: thr, diff: c - thr, rel: c / thr - 1, band: band, prev: prev, last: { st: L.st, changed: L.changed, up: L.up, dn: L.dn }, alt: alts };
+  }
   /* Was wäre, wenn die laufende Woche mit price schließt */
   function whatIf(S, rule, closeDate, price) {
     var k = mondayOf(closeDate), S2 = S.k.length && S.k[S.k.length - 1] === k ? S : append(S, k, closeDate, price);
@@ -401,7 +414,7 @@
     twrIndex: twrIndex, buyHold: buyHold, drawdown: drawdown,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
-    evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf,
+    evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf, edgeCase: edgeCase,
     book: book, units: units, cost: cost, taxYear: taxYear, tax23: tax23, tax20: tax20, simSell: simSell, taxFreeMax: taxFreeMax, rebalance: rebalance, vorab: vorab
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = ENG;
