@@ -405,7 +405,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
    Über „Buchungen und Kauflose“ ebenso 80 px von der Positionen-Tabelle bis zur Linie (Justus 27.09.2026, vorher 26 px).
    Als margin, damit die Sprungziele im Menü gleich bleiben. */
 #depot{margin-top:clamp(24px,6vw,65px)}
-#depot>#perfCard{margin-top:clamp(16px,5vw,54px)}
+#depot>#perfCard{margin-top:clamp(16px,5vw,54px);border-top:0} /* keine Linie zwischen Portfolio/Ziel und der Depotentwicklung (Justus 27.09.2026), Abstand bleibt */
 #depot>#posCard{margin-top:clamp(12px,calc(5vw - 8px),46px)} /* 8 px weniger: die Bildunterschrift des Charts darüber bringt eigenen Abstand mit */
 #depot>#txCard{margin-top:clamp(16px,5vw,54px)}
 /* Rebalancing, Signale, Einstellungen und Regeln offen wie Status und Depot (Justus 27.09.2026): keine Kästen, nur Linien,
