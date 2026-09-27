@@ -141,24 +141,28 @@ section.folded h2.eyebrow.sec .secfold .chev{transform:translateY(-50%) rotate(-
 #status>.toolbar{justify-content:flex-end}
 /* Status-Karten als offene Spalten (Justus 26.09.2026, Entwurf B): kein eigener Kasten (kein Rahmen, keine Fläche, keine Rundung);
    die Spalten stehen direkt auf dem Seitengrund und sind nur durch eine Linie mitten im Spaltenabstand getrennt */
-.scards{--sgap:clamp(56px,calc(10vw - 53px),104px);display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
+/* Abstand zwischen den drei Spalten bei Status und Regeln (Justus 27.09.2026, Entwurf C): bei 1512 px Fensterbreite 68 px,
+   bis etwa 1090 px wie früher 56 px, höchstens 70 px; die Trennlinie steht jeweils in der Mitte */
+.scards,.rules{--sgap:clamp(56px,calc(2.85vw + 25px),70px)}
+.scards{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
 .scards .scard{grid-row:span 4;grid-template-rows:subgrid;row-gap:30px;scroll-margin-top:60px}
 .scard{display:grid;gap:12px;padding:4px 0 8px;align-content:start;position:relative}
 .card.scard{background:none;border:0;border-radius:0;box-shadow:none}
 .scards .scard+.scard::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
 .scard .top1,.scard .mid,.scard .bot{display:grid;gap:10px;align-content:start;min-width:0}
 .scard .hd{display:flex;justify-content:space-between;align-items:flex-start;gap:10px}
-.scard .hd h3{display:flex;align-items:center;gap:8px}
+/* Name und Icon der Status-Karten größer (Justus 27.09.2026, Variante C: 23 px statt 16,5 px, Icon 29 px statt 20 px) */
+.scard .hd h3{display:flex;align-items:center;gap:8px;font-size:23px}
 .aic{display:inline-block;flex:0 0 auto;line-height:0}
 .aic svg{width:100%;height:100%;display:block;overflow:visible}
-.scard .hd .aic{width:20px;height:20px}
+.scard .hd .aic{width:29px;height:29px}
 .scard .sub{font-size:12.5px;color:var(--muted)}
 .scard .stbox{display:grid;justify-items:end;gap:4px}
 .scard .since{font-size:12px;color:var(--muted);white-space:nowrap}
 .scard .fig{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 10px}
 .scard .fig .fl{font-size:12.5px;color:var(--muted);flex-basis:100%}
 .scard .fig .fv{font-size:clamp(26px,calc(1.6vw + 10px),30px);font-weight:600;letter-spacing:-.01em;color:var(--ink)}
-@media (max-width:980px){.scard .fig .fv{font-size:30px}} /* Status-Spalten (Justus 27.09.2026): Abstand ab 1090 px und große Zahl (26 → 30 px bis 1250 px) wachsen mit der Fensterbreite, damit Kurs und „zum SMA50“ in einer Zeile bleiben */
+@media (max-width:980px){.scard .fig .fv{font-size:30px}} /* Status-Spalten (Justus 27.09.2026): die große Zahl wächst mit der Fensterbreite (26 → 30 px bis 1250 px), damit Kurs und „zum SMA50“ in einer Zeile bleiben */
 .scard .fig .fd{font-size:13px;color:var(--ink-2);font-variant-numeric:tabular-nums}
 /* Kopf der Status-Karte beim Darüberfahren über den Chart (app.js figHover): Wert und Abstand in einer Zeile, der Abstand wird bei
    Platzmangel mit „…“ gekürzt; die Höhe hält app.js fest, damit Karte und Chart nicht springen */
@@ -459,7 +463,10 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 
 /* Großansicht */
 .modal{position:fixed;inset:0;z-index:50;background:rgba(15,23,36,.55);backdrop-filter:blur(3px);overflow:auto;padding:24px 12px;display:grid;align-items:start;justify-items:center}
-.modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;gap:14px}
+.modalbox{position:relative;background:var(--bg);border:1px solid var(--rule);border-radius:12px;box-shadow:var(--shadow);width:min(1240px,100%);padding:18px 20px 22px;display:grid;--bgap:clamp(24px,3vw,40px);gap:var(--bgap)}
+/* Großansicht: mehr Abstand zwischen Chart, Handlung, Grenze, Signalen und Tabelle (Justus 27.09.2026: „noch ein bisschen mehr als B“,
+   ab etwa 1330 px Breite 40 px, auf schmalen Bildschirmen weniger, Handy 24 px); Kopf → Kennzahlen und „Letzte 26 Wochen“ → Tabelle bleiben bei 14 px */
+.modalbox>.toolbar,.modalbox>.subhd+.tablewrap{margin-top:calc(14px - var(--bgap))}
 .bigx{position:absolute;top:10px;right:10px;width:32px;height:32px;padding:0;border:0;border-radius:8px;background:transparent;color:var(--muted);display:grid;place-items:center;cursor:pointer}
 .bigx svg{width:15px;height:15px;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round}
 .bigx:hover{background:var(--surface-2);color:var(--ink)}
@@ -488,10 +495,10 @@ ol.steps code,.notes code,.small code{font-family:var(--mono);font-size:12px;bac
 
 /* Regeln */
 /* Regel-Karten wie die Status-Karten als offene Spalten (Justus 26.09.2026) */
-.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 56px}
+.rules{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:0 var(--sgap)}
 .rule{padding:4px 0 8px;display:grid;gap:8px;align-content:start;position:relative}
 .card.rule{background:none;border:0;border-radius:0;box-shadow:none}
-.rules .rule+.rule::before{content:"";position:absolute;left:-28px;top:0;bottom:0;border-left:1px solid var(--rule)}
+.rules .rule+.rule::before{content:"";position:absolute;left:calc(var(--sgap) / -2);top:0;bottom:0;border-left:1px solid var(--rule)}
 @media (max-width:980px){.rules{grid-template-columns:minmax(0,1fr);gap:0} .rules .rule{padding:18px 0} .rules .rule:first-child{padding-top:4px} .rules .rule+.rule{border-top:1px solid var(--rule)} .rules .rule+.rule::before{display:none}}
 .rule .formula{font-family:var(--mono);font-size:12.5px;background:var(--surface-2);border-radius:6px;padding:8px 10px;color:var(--ink);line-height:1.55}
 footer{margin-top:36px;padding-top:16px;border-top:1px solid var(--rule);font-size:13px;color:var(--muted);display:grid;gap:6px}
