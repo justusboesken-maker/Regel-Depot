@@ -207,10 +207,11 @@
     /* Aufteilung der Werte-Zeile nach der verfügbaren Breite, mit der Schrift des Geräts gemessen und für alle sichtbaren Wochen gleich (sonst
        sprängen Zeile und Chart beim Darüberfahren): rd-wide = drei Zeilen (Datum und Abstand, Schluss und SMA50, Regelstand); rd-mid = Datum und
        Abstand in zwei Zeilen; ohne Klasse zusätzlich Schluss und SMA50 untereinander (auch, wenn nicht gemessen werden kann); rd-two = der
-       Regelstand darf zwei Zeilen nutzen, die Höhe ist immer reserviert. Die Status-Karten gleichen sich danach an (app.js unifyReadouts). */
+       Regelstand darf zwei Zeilen nutzen, die Höhe ist immer reserviert; rd-line = Datum, Abstand, Schluss und SMA50 in einer Zeile, Regelstand
+       darunter (Großansicht). Die Status-Karten haben seit 27.09.2026 keine Werte-Zeile mehr (o.readout === false). */
     function fitMode() {
       if (!rd) return;
-      rd.classList.remove('rd-wide', 'rd-mid', 'rd-two');
+      rd.classList.remove('rd-wide', 'rd-mid', 'rd-two', 'rd-line');
       var bw = rd.clientWidth, cx = null, k, T = [], head = 0, note = 0, hb = [], nw = [];
       if (!bw) return;
       try { cx = document.createElement('canvas').getContext('2d'); } catch (e) { cx = null; }
@@ -219,8 +220,13 @@
       for (k = i0; k < n; k++) T.push(textAt(k));
       cx.font = '600 ' + fam; T.forEach(function (t, j) { hb[j] = cx.measureText(t.head).width; nw[j] = t.noteCls ? cx.measureText(nb(t.note)).width : 0; });
       cx.font = fam; T.forEach(function (t, j) { head = Math.max(head, hb[j] + 10 + cx.measureText(nb(t.extra)).width); note = Math.max(note, t.noteCls ? nw[j] : cx.measureText(nb(t.note)).width); });
-      rd.classList.add('rd-mid'); var row = rd.querySelector('.rd-row'), rowFits = !!row && row.scrollWidth <= row.clientWidth + 0.5; rd.classList.remove('rd-mid');
+      rd.classList.add('rd-mid'); var row = rd.querySelector('.rd-row'), rowW = 0, rowFits = false;
+      if (row) { row.style.width = 'max-content'; rowW = row.getBoundingClientRect().width; row.style.width = ''; rowFits = rowW <= row.clientWidth + 0.5; } /* Inhaltsbreite, nicht die des Blocks */
+      rd.classList.remove('rd-mid');
       if (rowFits) rd.classList.add(head + 2 <= bw ? 'rd-wide' : 'rd-mid');
+      /* rd-line (Großansicht, Justus 27.09.2026: „nutze den freien Platz nach rechts“): Datum, Abstand, Schluss und SMA50 passen zusammen in eine
+         Zeile (Abstand dazwischen 32 px wie in app.css), der Regelstand steht darunter; gemessen für alle sichtbaren Wochen, damit nichts springt */
+      if (rowFits && head + 32 + rowW + 2 <= bw) rd.classList.add('rd-line');
       if (note + 2 > bw) rd.classList.add('rd-two');
     }
     function show(k) {
