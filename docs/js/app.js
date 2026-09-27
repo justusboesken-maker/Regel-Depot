@@ -996,8 +996,12 @@
   /* Ein- und ausklappbare Karten (Käufe/Verkäufe, Push, Letzte Läufe); der Zustand wird je Browser gemerkt */
   var FOLD_KEY = 'regelDepot.fold';
   function foldState() { try { return JSON.parse(localStorage.getItem(FOLD_KEY) || '{}') || {}; } catch (e) { return {}; } }
+  /* data-remember="0": der Zustand gilt nur bis zum Neuladen, danach wieder wie data-open (z. B. „Hinweise“ unter Rebalancing, Justus 27.09.2026:
+     standardmäßig eingeklappt) */
+  var FOLD_MEM = {};
+  function foldStore(btn) { return btn.getAttribute('data-remember') === '0' ? FOLD_MEM : foldState(); }
   function applyFold(btn) {
-    var key = btn.getAttribute('data-fold'), s = foldState(), open = s[key] == null ? btn.getAttribute('data-open') !== '0' : !!s[key];
+    var key = btn.getAttribute('data-fold'), s = foldStore(btn), open = s[key] == null ? btn.getAttribute('data-open') !== '0' : !!s[key];
     var body = document.getElementById(btn.getAttribute('aria-controls'));
     btn.setAttribute('aria-expanded', open ? 'true' : 'false'); btn.textContent = open ? 'Einklappen' : 'Ausklappen';
     if (body) body.hidden = !open;
@@ -1008,7 +1012,7 @@
     var list = (root || document).querySelectorAll('button[data-fold]');
     for (var i = 0; i < list.length; i++) { (function (btn) {
       if (btn.getAttribute('data-wired')) return; btn.setAttribute('data-wired', '1');
-      btn.addEventListener('click', function () { var s = foldState(); s[btn.getAttribute('data-fold')] = btn.getAttribute('aria-expanded') === 'true' ? 0 : 1; try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } applyFold(btn); });
+      btn.addEventListener('click', function () { var s = foldStore(btn); s[btn.getAttribute('data-fold')] = btn.getAttribute('aria-expanded') === 'true' ? 0 : 1; if (s !== FOLD_MEM) { try { localStorage.setItem(FOLD_KEY, JSON.stringify(s)); } catch (e) { /* still */ } } applyFold(btn); });
       applyFold(btn);
     })(list[i]); }
   }
