@@ -3,8 +3,9 @@
   'use strict';
   var A = ['ftse', 'btc', 'gold'];
   var COLOR = { ftse: '--ftse', btc: '--btc', gold: '--gold' };
-  /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable */
-  function aicon(a) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(k) : ''; return s; }
+  /* Icon je Baustein (js/icons.js): ftse, btc, gold, cash, sonst Beimischung (alt, z. B. eth/sol); Farbe über die Baustein-Variable.
+     square: statt des Icons das Quadrat wie bei Cash in der Farbe des Bausteins (im Bereich „Depot“, Justus 27.09.2026) */
+  function aicon(a, square) { var k = /^(ftse|btc|gold|cash)$/.test(a) ? a : 'alt', s = document.createElement('span'); s.className = 'aic'; s.style.color = 'var(--' + k + ')'; s.innerHTML = window.INV_ICON ? window.INV_ICON(square ? 'cash' : k) : ''; return s; }
   var CAT = [{ k: 'ftse', label: 'FTSE All-World', color: '--ftse' }, { k: 'btc', label: 'Bitcoin', color: '--btc' }, { k: 'gold', label: 'Gold', color: '--gold' }, { k: 'cash', label: 'Cash', color: '--cash' }]; /* Reihenfolge der Bausteine 50/30/20, auch in der Legende; die Ringe folgen RING_ORDER */
   var BAR_ORDER = ['btc', 'ftse', 'gold'];
   var RING_ORDER = ['ftse', 'gold', 'btc']; /* Ringe Portfolio/Ziel ab 6 Uhr im Uhrzeigersinn: FTSE links, Gold oben rechts, Bitcoin unten rechts */
@@ -446,12 +447,12 @@
     var pt = $('posTable'); pt.textContent = ''; var t = el('table'), th = el('thead'), tr = el('tr');
     ['Position', 'Regel', 'Bestand', 'Kurs', 'Wert', 'Cash', 'Summe', 'Anteil mit Cash', 'Zielgewicht', 'Abweichung'].forEach(function (h, i) { var c = el('th', i > 1 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody');
-    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = aicon(a); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
+    A.forEach(function (a) { var P = Mo.pos[a], r = el('tr'), c0 = el('td'), sw = aicon(a, true); c0.appendChild(sw); c0.appendChild(document.createTextNode(CFG.assets[a].inst)); r.appendChild(c0);
       var st = C[a].E.last.st; var c1 = el('td'); c1.appendChild(el('span', 'tag ' + (st === 1 ? 'ok' : ''), st === 1 ? 'investiert' : 'Cash')); r.appendChild(c1);
       var bc = el('td', 'n', P.u > 0 ? units(a, P.uBtc != null ? P.uBtc : P.u) : '–'); var withAlts = a === 'btc' && P.alts && P.alts.some(function (x) { return x.u > 1e-12; }); if (withAlts) bc.appendChild(el('span', 'sub', '+ Beimischung (davon-Zeilen)')); r.appendChild(bc); var pxc = el('td', 'n', P.px ? eur(P.px, a === 'btc' ? 0 : 2) + ' ' : '–'); var pxo = pxOf(a); if (pxo && pxo.estimate) { var et = el('span', 'tag est', 'geschätzt'); et.title = pxo.src || ''; pxc.appendChild(et); } else if (pxo && pxo.stale) { var sg = el('span', 'tag', 'Stand ' + dShort(pxo.d)); sg.title = 'Lang & Schwarz war beim letzten Lauf nicht erreichbar; das ist der letzte L&S-Kurs'; pxc.appendChild(sg); } else if (pxo && pxo.fallback) { var ft = el('span', 'tag', 'Ersatzquelle'); ft.title = pxo.src || ''; pxc.appendChild(ft); } if (P.missing) { pxc.textContent = ''; var mt = el('span', 'tag bad', 'Kurs fehlt'); mt.title = 'Für diese Position liegt noch kein Euro-Kurs vor'; pxc.appendChild(mt); } r.appendChild(pxc); var vc = el('td', 'n', P.val == null ? '–' : eur(P.val)); if (withAlts && P.val != null) vc.appendChild(el('span', 'sub', 'inkl. Beimischung')); r.appendChild(vc); r.appendChild(el('td', 'n', eur(P.cash)));
       var sum = P.val == null ? null : P.val + P.cash; r.appendChild(el('td', 'n', sum == null ? '–' : eur(sum))); r.appendChild(el('td', 'n', full && tot > 0 ? pctPlain(sum / tot, 1) : '–')); r.appendChild(el('td', 'n', pctPlain(CFG.assets[a].w, 0))); r.appendChild(el('td', 'n', full ? sgnEur(sum - tot * CFG.assets[a].w) : '–')); tb.appendChild(r);
       /* Beimischung: steckt schon im Wert und in der Summe der Bitcoin-Zeile, deshalb hier nur „davon“ ohne eigene Summe und eigenen Anteil */
-      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(aicon('alt')); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
+      if (a === 'btc' && P.alts) P.alts.forEach(function (x) { if (!(x.u > 1e-12)) return; var ar = el('tr', 'altrow'), a0 = el('td'); a0.appendChild(aicon('alt', true)); a0.appendChild(document.createTextNode('davon ' + x.name + ' (Beimischung, folgt der Bitcoin-Regel)')); ar.appendChild(a0); ar.appendChild(el('td', null, ''));
         ar.appendChild(el('td', 'n', units(x.id, x.u))); var apx = el('td', 'n', x.px ? eur(x.px, 2) + ' ' : 'Kurs fehlt noch'); if (x.px && x.live) apx.appendChild(el('span', 'tag', 'live')); ar.appendChild(apx); ar.appendChild(el('td', 'n', x.val != null ? 'davon ' + eur(x.val) : '–')); for (var ci = 0; ci < 5; ci++) ar.appendChild(el('td', 'n', '')); tb.appendChild(ar); }); });
     t.appendChild(tb); var tf = el('tfoot'), fr = el('tr'); fr.appendChild(el('td', null, 'Summe')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td')); fr.appendChild(el('td', 'n', full ? eur(inv) : '–')); fr.appendChild(el('td', 'n', eur(cashT))); fr.appendChild(el('td', 'n', full ? eur(tot) : '–')); fr.appendChild(el('td', 'n', full ? '100 %' : '–')); fr.appendChild(el('td', 'n', '100 %')); fr.appendChild(el('td')); tf.appendChild(fr); t.appendChild(tf);
     pt.appendChild(t);
@@ -480,7 +481,7 @@
       return out;
     }
     var wrap = el('div', 'donuts');
-    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, '')); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
+    function legend(ps) { var lg = el('div', 'dlegend'); ps.forEach(function (q) { if (!(q.v > 0.5)) return; var it = el('span'), sw = aicon(String(q.color).replace(/^--/, ''), true); it.appendChild(sw); it.appendChild(document.createTextNode(q.label + ' ' + pctPlain(q.v / tot, 0) + ' · ' + eur(q.v))); lg.appendChild(it); }); return lg; }
     var pi = parts(ist, 'ist'), pz = parts(ziel, 'ziel'), d1 = el('div'), d2 = el('div');
     d1.appendChild(CH.donut('Portfolio', 'was gerade im Depot liegt', ring('ist', pi), tot, Math.PI)); d1.appendChild(legend(pi));
     d2.appendChild(CH.donut('Ziel', 'laut Regeln', ring('ziel', pz), tot, Math.PI)); d2.appendChild(legend(pz));
@@ -503,7 +504,7 @@
     list.forEach(function (x) {
       var r = el('tr'), a = x.a, P = posOf(Mo, a) || { px: null }, cashMove = x.type === 'einzahlung' || x.type === 'auszahlung';
       r.appendChild(el('td', null, dDE(x.d)));
-      var c1 = el('td'), sw = aicon(a); c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
+      var c1 = el('td'), sw = aicon(a, true); c1.appendChild(sw); c1.appendChild(document.createTextNode(INFO(a).short + (x.type === 'umbuchung' ? ' → ' + INFO(x.to).short : '') + ' ')); if (ALT[a]) c1.appendChild(el('span', 'tag', 'Beimischung')); if (x.reb) c1.appendChild(el('span', 'tag', 'Rebalancing')); if (x.est) c1.appendChild(el('span', 'tag est', 'geschätzt'));
       if (x.note) { if (SHOW_NOTES) { var nt = el('span', 'sub small muted', x.note); nt.style.display = 'block'; c1.appendChild(nt); } else { c1.title = x.note; var ni = el('span', 'noteic', 'i'); ni.setAttribute('aria-label', 'Notiz: ' + x.note); c1.appendChild(ni); } }
       r.appendChild(c1);
       r.appendChild(el('td', null, x.type === 'kauf' ? 'Kauf' : x.type === 'verkauf' ? 'Verkauf' : x.type === 'einzahlung' ? 'Einzahlung' : x.type === 'umbuchung' ? 'Umbuchung' : 'Auszahlung'));
