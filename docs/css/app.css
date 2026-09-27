@@ -476,6 +476,7 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 details.box{background:var(--surface);border:1px solid var(--rule);border-radius:10px}
 details.box>summary{cursor:pointer;padding:13px 18px;font-weight:600;font-size:14.5px;list-style:none;display:flex;justify-content:space-between;gap:12px;align-items:center}
 details.box>summary::-webkit-details-marker{display:none}
+details.box>summary #taxYearLbl{margin-right:auto;margin-left:-4px} /* Jahr direkt hinter „Steuerangaben“ (Justus 27.09.2026), das Plus bleibt rechts */
 details.box>summary::after{content:"+";font-weight:400;color:var(--muted);font-size:18px;line-height:1}
 details.box[open]>summary::after{content:"–"}
 details.box>summary:focus-visible{outline:2px solid var(--accent);outline-offset:-2px;border-radius:10px}
