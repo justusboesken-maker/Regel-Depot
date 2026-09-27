@@ -913,7 +913,7 @@
     CH.pctChart(host, w.dates, [
       { vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot (regelbasiert)', short: 'Dein Depot' },
       { vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold 50/30/20', short: 'Buy & Hold' }
-    ], { height: narrow ? 230 : 280, ends: true, sync: G,
+    ], { height: narrow ? 280 : 360, ends: true, sync: G, /* so hoch wie der Chart in „Gewinn“ und „Wert“ (27.09.2026, vorher 280 / 230 px) */
       sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
       aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;

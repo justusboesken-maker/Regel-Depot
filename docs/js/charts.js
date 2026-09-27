@@ -403,7 +403,7 @@
     /* ohne Überschriften „Depot gesamt“ und „Bausteine“ (Justus 27.09.2026); die Werte-Zeile nennt die Linien */
     function block(ser, height, hero) { var b = el('div', 'splitbox'); var ch = el('div', 'chart'); b.appendChild(ch); wrap.appendChild(b); portfolioChart(ch, null, null, pts, mode, ser, '', { height: height, legend: false, sync: G, hero: hero }); }
     var narrow = (host.clientWidth || 700) < 560;
-    block(total, narrow ? 210 : 250, true);
+    block(total, narrow ? 280 : 360, true); /* höher (Justus 27.09.2026: „größer in die Höhe“, vorher 250 / 210 px), gleich hoch wie der Chart „Vergleich“ */
     if (parts.length) G.add(partRows(pts, mode, parts));
     G.reset();
     if (cap) cap.textContent = capText || '';
