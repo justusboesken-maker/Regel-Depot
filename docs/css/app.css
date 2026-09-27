@@ -206,6 +206,11 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard details.act[open]>summary::after{content:"–"}
 .scard details.act>summary:focus-visible{outline:2px solid var(--accent);outline-offset:4px;border-radius:4px}
 .scard details.act>span{display:block;margin-top:3px}
+/* Steuerhinweis zum Verkauf in der Handlung (app.js renderStatus, Justus 27.09.2026): unter dem Text, durch eine feine Linie abgesetzt;
+   ein Warnhinweis mit Warnsymbol und dunklerer Schrift */
+.scard details.act>.atax{display:flex;gap:7px;align-items:flex-start;margin:9px 0 0;padding-top:9px;border-top:1px solid var(--rule)}
+.scard details.act>.atax svg{width:14px;height:14px;flex:0 0 auto;margin-top:2px;color:var(--warn)}
+.scard details.act>.atax.warn span{color:var(--ink)}
 /* Kleine Zahl über dem Chart-Fenster (Justus 27.09.2026): beim Darüberfahren oder mit den Pfeiltasten steht dort der Wochenschluss der Woche
    unter dem Zeiger mit Datum (app.js chartHover), der Kopf der Karte bleibt beim letzten Wochenschluss. Die Zeile liegt absolut im Abstand
    über dem Chart (40 px), braucht also keinen Platz und lässt nichts springen; ohne Zeiger ist sie leer */
