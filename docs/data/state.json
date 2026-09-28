@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-09-28T05:20:11.747Z",
+ "updated": "2026-09-28T05:58:18.378Z",
  "assets": {
   "ftse": {
    "k": "2026-09-21",
@@ -154,16 +154,7 @@
    "src": "coinbase BTC-USD spot"
   }
  },
- "queue": [
-  {
-   "id": "sig-btc-2026-09-27",
-   "title": "Bitcoin: Kaufsignal",
-   "body": "Wochenschluss 27.09.: Schluss 84.462 $ liegt über der Kaufschwelle 80.436 $ (3 % über dem SMA50). Laut Regel kaufen zur Eröffnung am Montag, 28.09.",
-   "tag": "signal-btc",
-   "url": "./#status",
-   "ts": "2026-09-28T00:13:13.527Z"
-  }
- ],
- "step": "live",
- "pendingQueue": 1
+ "queue": [],
+ "step": "mo-notify",
+ "pendingQueue": 0
 }
