@@ -936,6 +936,13 @@
 
   /* ---------- Signale: Verlauf, Push, Zeitplan, Läufe ---------- */
   var feedAll = false;
+  /* Gelesen/ungelesen (Justus 28.09.2026: die Zahl am Menüpunkt „Signale“ soll durch Lesen verschwinden, die neue Nachricht in „Signale“ markiert
+     sein). Zählt wie bisher: Kauf, Verkauf und Vorwarnung der letzten 7 Tage, jetzt aber nur, was auf der Seite „Signale“ noch nicht zu sehen war.
+     Beim Öffnen von „Signale“ gelten die neuen Einträge als gelesen (gemerkt in diesem Browser, regelDepot.seen); sie bleiben für diesen Besuch der
+     Seite markiert („Neu“) und sind beim nächsten Besuch normal. */
+  var SEEN_KEY = 'regelDepot.seen', FEED_NEW = {};
+  function seenList() { try { var a = JSON.parse(localStorage.getItem(SEEN_KEY) || '[]'); return Array.isArray(a) ? a : []; } catch (e) { return []; } }
+  function markSeen(keys) { if (!keys.length) return; var a = seenList(); keys.forEach(function (k) { if (a.indexOf(k) < 0) a.push(k); }); if (a.length > 300) a = a.slice(-300); try { localStorage.setItem(SEEN_KEY, JSON.stringify(a)); } catch (e) { /* still */ } }
   function switchText(a, s) {
     var r = CFG.assets[a].rule;
     /* Dieselbe Schwelle wie Vorwarnung und Statuskarte (aus den 49 Schlüssen davor) */
@@ -946,15 +953,16 @@
     var items = [], host = $('feed'); host.textContent = '';
     var since = ENG.addDays(todayISO(), -730);
     A.forEach(function (a) { C[a].E.sw.forEach(function (s) { if (s.d >= since) items.push({ a: a, kind: s.to ? 'buy' : 'sell', d: s.d, t: s.d + 'T23:59:59Z', title: CFG.assets[a].name + ': ' + (s.to ? 'Kaufsignal' : 'Verkaufssignal'), text: switchText(a, s), key: 'sig:' + a + ':' + s.d }); }); });
-    (D.events || []).forEach(function (ev) { if (!ev) return; var kind = ev.kind === 'kauf' ? 'buy' : ev.kind === 'verkauf' ? 'sell' : ev.kind === 'vorwarnung' ? 'warn' : ev.kind === 'fehler' ? 'bad' : 'info'; var key = 'sig:' + ev.a + ':' + ev.d; if ((kind === 'buy' || kind === 'sell') && items.some(function (i) { return i.key === key; })) return; items.push({ a: ev.a, kind: kind, d: ev.d || (ev.t || '').slice(0, 10), t: ev.t, title: ev.title || (ev.a ? CFG.assets[ev.a].name : ''), text: ev.text || '', key: ev.id }); });
+    (D.events || []).forEach(function (ev) { if (!ev) return; if (!ev.id) ev = Object.assign({ id: (ev.kind || 'ev') + ':' + (ev.a || '') + ':' + (ev.t || ev.d || '') }, ev); var kind = ev.kind === 'kauf' ? 'buy' : ev.kind === 'verkauf' ? 'sell' : ev.kind === 'vorwarnung' ? 'warn' : ev.kind === 'fehler' ? 'bad' : 'info'; var key = 'sig:' + ev.a + ':' + ev.d; if ((kind === 'buy' || kind === 'sell') && items.some(function (i) { return i.key === key; })) return; items.push({ a: ev.a, kind: kind, d: ev.d || (ev.t || '').slice(0, 10), t: ev.t, title: ev.title || (ev.a ? CFG.assets[ev.a].name : ''), text: ev.text || '', key: ev.id }); });
     items.sort(function (x, y) { return x.t < y.t ? 1 : x.t > y.t ? -1 : 0; });
-    var recent = items.filter(function (i) { return ENG.daysBetween(i.d, todayISO()) <= 7 && (i.kind === 'buy' || i.kind === 'sell' || i.kind === 'warn'); }).length;
-    var cnt = $('navCnt'); if (recent) { cnt.textContent = String(recent); cnt.hidden = false; } else cnt.hidden = true;
+    var seen = seenList(), unread = items.filter(function (i) { return i.key && ENG.daysBetween(i.d, todayISO()) <= 7 && (i.kind === 'buy' || i.kind === 'sell' || i.kind === 'warn') && seen.indexOf(i.key) < 0; });
+    if (PAGE === 'signale' && !document.hidden && unread.length) { unread.forEach(function (i) { FEED_NEW[i.key] = 1; }); markSeen(unread.map(function (i) { return i.key; })); unread = []; }
+    var cnt = $('navCnt'); if (unread.length) { cnt.textContent = String(unread.length); cnt.hidden = false; cnt.setAttribute('aria-label', unread.length === 1 ? '1 neue Nachricht' : unread.length + ' neue Nachrichten'); } else cnt.hidden = true;
     if (!items.length) { host.appendChild(el('div', 'it', 'Noch keine Signale.')); return; }
     var show = feedAll ? items : items.slice(0, 10);
     show.forEach(function (it) {
-      var row = el('div', 'it'); row.appendChild(chip(it.kind === 'bad' ? 'warn' : it.kind, it.kind === 'buy' ? 'Kauf' : it.kind === 'sell' ? 'Verkauf' : it.kind === 'warn' ? 'Vorwarnung' : it.kind === 'bad' ? 'Fehler' : 'Info'));
-      var b = el('div'); b.appendChild(el('h4', null, it.title)); b.appendChild(el('p', null, it.text)); row.appendChild(b);
+      var row = el('div', 'it' + (FEED_NEW[it.key] ? ' new' : '')); row.appendChild(chip(it.kind === 'bad' ? 'warn' : it.kind, it.kind === 'buy' ? 'Kauf' : it.kind === 'sell' ? 'Verkauf' : it.kind === 'warn' ? 'Vorwarnung' : it.kind === 'bad' ? 'Fehler' : 'Info'));
+      var b = el('div'), h4 = el('h4', null, it.title); if (FEED_NEW[it.key]) h4.appendChild(el('span', 'newtag', 'Neu')); b.appendChild(h4); b.appendChild(el('p', null, it.text)); row.appendChild(b);
       var t = el('time', null, dDE(it.d)); t.setAttribute('datetime', it.d); row.appendChild(t); host.appendChild(row);
     });
     if (items.length > 10) { var more = el('div', 'more'); var btn = el('button', 'link', feedAll ? 'Weniger anzeigen' : 'Alle ' + items.length + ' Einträge anzeigen'); btn.type = 'button'; btn.addEventListener('click', function () { feedAll = !feedAll; renderFeed(); }); more.appendChild(btn); host.appendChild(more); }
@@ -1046,7 +1054,7 @@
   function pageFresh(m) { return !!m && PAGES.indexOf(m.page) >= 0 && m.t > 0 && Date.now() - m.t < PAGE_IDLE; }
   function showPage(id, target, user) {
     if (PAGES.indexOf(id) < 0) id = 'status';
-    var changed = id !== PAGE; PAGE = id; savePage();
+    var changed = id !== PAGE; if (changed && PAGE === 'signale') FEED_NEW = {}; PAGE = id; savePage();
     document.documentElement.setAttribute('data-page', id); /* für das CSS: Titel „Investus“ nur auf der Seite Depot in Gold (27.09.2026) */
     if (changed && BIG.a) closeBig();
     PAGES.forEach(function (p) { var s = $(p); if (s) s.hidden = p !== id; });
@@ -1096,7 +1104,7 @@
         foldReset();
         if (PAGE && PAGE !== 'status') { try { history.replaceState(history.state, '', '#status'); } catch (e) { /* still */ } showPage('status', null, true); }
         else { savePage(); schedule(); }
-      } else savePage();
+      } else { savePage(); if (PAGE === 'signale') schedule(); } /* auf „Signale“ zurück: inzwischen eingetroffene Nachrichten als gelesen markieren */
     });
     route(false);
   }
