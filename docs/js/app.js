@@ -897,19 +897,9 @@
     var few = w && w.dates.length < 2;
     /* Start mit dem Wochenschluss vor dem Regelstart (Justus 28.09.2026); VWCE und Gold-ETC haben da den Schlusskurs ihres letzten Handelstags.
        Fehlten zum Wochenschluss Euro-Kurse, startet der Vergleich am ersten Tag mit allen (wie bisher). */
-    var wk = START === c.start, NM = { ftse: 'VWCE', btc: 'Bitcoin', gold: 'Gold-ETC' }, older = {};
-    if (wk && c.pxd) Object.keys(c.pxd).forEach(function (a) { var d = c.pxd[a]; if (d && d < START) (older[d] = older[d] || []).push(NM[a] || INFO(a).short); });
-    var olderTxt = Object.keys(older).sort().map(function (d) { return older[d].join(' und ') + ' mit dem Schlusskurs vom ' + dDE(d); }).join(', ');
-    var startTxt = wk ? 'dem Wochenschluss vom ' + dDE(START) + ' vor dem Regelstart am ' + dDE(c.rule) + (olderTxt ? ' (' + olderTxt + ')' : '') : 'dem ' + dDE(START) + ' (erster Tag mit allen Euro-Kursen)';
-    var head = w && w.cut
-      ? 'Zeitraum ' + w.label + ': beide Linien starten am ' + dDE(w.dates[0]) + ' bei 0 %; Max DD, Hoch → Tief und aktueller Rückgang gelten nur für diesen Zeitraum. Gerechnet wird ab ' + startTxt + ' mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
-      : 'Beide Linien starten ' + (wk ? 'mit ' + startTxt : 'am ' + dDE(START) + ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. ';
-    var capText = head
-      + 'Dein Depot: alle Positionen samt ETH/SOL und Cash (Zinsen ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a., geschätzt), zeitgewichtet gerechnet, also ohne Sprünge durch Ein- und Auszahlungen. '
-      + 'Buy & Hold: legt ' + (wk ? 'zum Wochenschluss vom ' + dDE(START) : 'am ' + dDE(START) + ' zum Tagesschluss') + ' den Gesamtwert deines Depots' + (c.vals ? ' (' + eur(c.vals[0]) + ')' : '') + ' zu 50 % in VWCE, 30 % in Bitcoin und 20 % in WisdomTree Physical Swiss Gold an, geht jedes Jahr am Rebalancing-Stichtag (' + dShort('2000-' + md) + ') zurück auf 50/30/20 und bekommt dieselben Ein- und Auszahlungen wie dein Depot (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern. '
-      + 'Drawdown: Rückgang vom bisherigen Höchststand der jeweiligen Linie' + (w && w.cut ? ' im Zeitraum.' : '.')
-      + (c.skipped.length ? ' Ausgelassen, weil für eine gehaltene Position ein Euro-Kurs fehlte: ' + (c.skipped.length === 1 ? 'der ' + dDE(c.skipped[0]) : c.skipped.length + ' Tage vom ' + dDE(c.skipped[0]) + ' bis ' + dDE(c.skipped[c.skipped.length - 1])) + '.' : '');
-    cap.textContent = capText;
+    /* Ohne festen Erklärtext unter dem Chart (Justus 28.09.2026: „Beide Linien starten … Drawdown: …“ entfällt, wie unter Gewinn und Wert);
+       es bleibt nur der Hinweis auf ausgelassene Tage (leer: app.css blendet den Absatz aus) */
+    cap.textContent = c.skipped.length ? 'Ausgelassen, weil für eine gehaltene Position ein Euro-Kurs fehlte: ' + (c.skipped.length === 1 ? 'der ' + dDE(c.skipped[0]) : c.skipped.length + ' Tage vom ' + dDE(c.skipped[0]) + ' bis ' + dDE(c.skipped[c.skipped.length - 1])) + '.' : '';
     if (c.wait || few) {
       var why = c.wait || ('Im Zeitraum „' + w.label + '“ gibt es noch keine zwei Tagespunkte. Wähl einen längeren Zeitraum oder „Alles“.');
       /* Noch kein Verlauf: feste Legende statt Werte-Zeile */
