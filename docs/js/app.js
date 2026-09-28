@@ -818,8 +818,9 @@
   }
 
   /* ---------- Vergleich mit Buy & Hold 50/30/20 (Justus 26.09.2026) ----------
-     Ab dem Regelstart je Tag: dein Depot (Positionen samt Beimischung und Cash, wie „Wert“) zeitgewichtet gegen ein Buy-&-Hold-Depot, das am
-     Starttag zum Tagesschluss den Gesamtwert deines Depots zu 50/30/20 in VWCE, Bitcoin und Gold-ETC anlegt, jedes Jahr am Rebalancing-Stichtag
+     Ab dem letzten Wochenschluss vor dem Regelstart je Tag (Justus 28.09.2026): dein Depot (Positionen samt Beimischung und Cash, wie „Wert“)
+     zeitgewichtet gegen ein Buy-&-Hold-Depot, das zu diesem Wochenschluss den Gesamtwert deines Depots zu 50/30/20 in VWCE, Bitcoin und
+     Gold-ETC anlegt, jedes Jahr am Rebalancing-Stichtag
      auf 50/30/20 zurückgeht und dieselben Ein- und Auszahlungen bekommt (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern.
      Darunter der Drawdown beider Linien mit Max DD, Hoch → Tief und aktuellem Rückgang. */
   var BH_W = { ftse: 0.5, btc: 0.3, gold: 0.2 };
@@ -843,20 +844,25 @@
   /* Letzter Eintrag [Datum, Kurs] bis einschließlich d in einer nach Datum sortierten Liste (Binärsuche) */
   function lastAt(rows, d) { var lo = 0, hi = rows.length - 1, v = null; while (lo <= hi) { var mid = (lo + hi) >> 1; if (rows[mid][0] <= d) { v = rows[mid]; lo = mid + 1; } else hi = mid - 1; } return v; }
   function compareData(Mo) {
-    var START = (CFG.trading && CFG.trading.start) || '2026-09-28', today = todayISO(), out = { start: START, skipped: [] };
-    if (today < START) { out.wait = 'Der Vergleich beginnt am ' + dDE(START) + ' mit dem Regelstart. Die Linien erscheinen ab dem ' + dDE(ENG.addDays(START, 1)) + ', sobald es zwei Tagespunkte gibt.'; return out; }
+    /* Start (Justus 28.09.2026: „ab dem Wochenschluss von gestern“): der letzte Wochenschluss vor dem Regelstart, also der Sonntag davor.
+       Bitcoin, ETH und SOL schließen die Woche Sonntag 24 Uhr UTC, VWCE und Gold-ETC an ihrem letzten Handelstag (lastAt nimmt den letzten
+       Kurs bis Sonntag). Die Signale dieses Wochenschlusses setzt du ab dem Regelstart um, deshalb zählen Käufe und Verkäufe vom Regelstart
+       schon zum Vergleich. */
+    var RULE = (CFG.trading && CFG.trading.start) || '2026-09-28', START = ENG.addDays(ENG.mondayOf(RULE), -1), today = todayISO(), out = { start: START, rule: RULE, skipped: [] };
+    if (today < START) { out.wait = 'Der Vergleich beginnt mit dem Wochenschluss vom ' + dDE(START) + ' vor dem Regelstart am ' + dDE(RULE) + '. Die Linien erscheinen ab dem ' + dDE(ENG.addDays(START, 1)) + ', sobald es zwei Tagespunkte gibt.'; return out; }
     /* Für die zeitgewichtete Rechnung zählt das Cash ab dem Start (auch wenn „Stand vom“ später liegt) und wird nicht bei 0 gekappt: Sonst
        erschiene es an seinem Stichtag als Gewinn, und eine Korrektur des Cash nach unten als Verlust (Prüfung 26.09.2026) */
     var cf = Mo.dep.cashDate && Mo.dep.cashDate < START ? Mo.dep.cashDate : START;
     var pts = Mo.ready ? perfSeries(Mo, 'tag', START, { cashFrom: cf, noFloor: true }) : null;
     if (pts) pts = pts.filter(function (p) { if (p.d < START) return false; var miss = Object.keys(p.parts).some(function (a) { return p.parts[a].missing; }); if (miss) out.skipped.push(p.d); return !miss && p.total > 0.005; });
-    if (!pts || pts.length < 2) { out.wait = pts && pts.length === 1 ? 'Der Vergleich startet mit dem Tagesschluss vom ' + dDE(pts[0].d) + '. Die Linien erscheinen ab dem nächsten Tag.' : 'Für den Vergleich fehlen noch Buchungen oder Euro-Kurse.'; return out; }
+    if (!pts || pts.length < 2) { out.wait = pts && pts.length === 1 ? 'Der Vergleich startet mit dem ' + (pts[0].d === START ? 'Wochenschluss' : 'Tagesschluss') + ' vom ' + dDE(pts[0].d) + '. Die Linien erscheinen ab dem nächsten Tag.' : 'Für den Vergleich fehlen noch Buchungen oder Euro-Kurse.'; return out; }
     var keys = Object.keys(BH_W), rows = {}, px = {}, miss = null;
     keys.forEach(function (a) { rows[a] = eurPoints(a, true); px[a] = []; });
     pts.forEach(function (p) { keys.forEach(function (a) { var r = lastAt(rows[a], p.d); if (!(r && r[1] > 0)) miss = miss || a; px[a].push(r ? r[1] : NaN); }); });
     if (miss) { out.wait = 'Für das Buy-&-Hold-Depot fehlt zum Start ein Euro-Kurs (' + INFO(miss).short + ').'; return out; }
     var dates = pts.map(function (p) { return p.d; }), first = dates[0], last = dates[dates.length - 1];
     out.first = first;
+    out.pxd = {}; keys.forEach(function (a) { var r = lastAt(rows[a], first); out.pxd[a] = r ? r[0] : ''; }); /* Datum der Startkurse */
     var flows = dates.map(function () { return 0; }), reb = dates.map(function () { return false; }), i;
     /* Zahlungen nach dem ersten Punkt dem ersten Tagespunkt ab ihrem Datum zuordnen; bis zum ersten Punkt stecken sie im Startwert */
     Mo.dep.tx.forEach(function (t) { if (!t || !t.d || t.d <= first || t.d > last || !(CFG.assets[t.a] || ALT[t.a])) return; var f = extFlow(t); if (!(Math.abs(f) >= 0.005)) return; for (var k = 1; k < dates.length; k++) if (dates[k] >= t.d) { flows[k] += f; break; } });
@@ -889,12 +895,18 @@
     function legItem(v, dash, text) { var sp = el('span'), i = el('i'); i.style.borderTopColor = 'var(' + v + ')'; i.style.width = '26px'; if (dash) i.className = 'dash'; else i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(text)); leg.appendChild(sp); }
     var c = compareData(Mo), START = c.first || c.start, md = rebalMd(Mo), w = c.wait ? null : compareWindow(c);
     var few = w && w.dates.length < 2;
+    /* Start mit dem Wochenschluss vor dem Regelstart (Justus 28.09.2026); VWCE und Gold-ETC haben da den Schlusskurs ihres letzten Handelstags.
+       Fehlten zum Wochenschluss Euro-Kurse, startet der Vergleich am ersten Tag mit allen (wie bisher). */
+    var wk = START === c.start, NM = { ftse: 'VWCE', btc: 'Bitcoin', gold: 'Gold-ETC' }, older = {};
+    if (wk && c.pxd) Object.keys(c.pxd).forEach(function (a) { var d = c.pxd[a]; if (d && d < START) (older[d] = older[d] || []).push(NM[a] || INFO(a).short); });
+    var olderTxt = Object.keys(older).sort().map(function (d) { return older[d].join(' und ') + ' mit dem Schlusskurs vom ' + dDE(d); }).join(', ');
+    var startTxt = wk ? 'dem Wochenschluss vom ' + dDE(START) + ' vor dem Regelstart am ' + dDE(c.rule) + (olderTxt ? ' (' + olderTxt + ')' : '') : 'dem ' + dDE(START) + ' (erster Tag mit allen Euro-Kursen)';
     var head = w && w.cut
-      ? 'Zeitraum ' + w.label + ': beide Linien starten am ' + dDE(w.dates[0]) + ' bei 0 %; Max DD, Hoch → Tief und aktueller Rückgang gelten nur für diesen Zeitraum. Gerechnet wird ab dem ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
-      : 'Beide Linien starten am ' + dDE(START) + (START === c.start ? ' (Regelstart)' : ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. ';
+      ? 'Zeitraum ' + w.label + ': beide Linien starten am ' + dDE(w.dates[0]) + ' bei 0 %; Max DD, Hoch → Tief und aktueller Rückgang gelten nur für diesen Zeitraum. Gerechnet wird ab ' + startTxt + ' mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. '
+      : 'Beide Linien starten ' + (wk ? 'mit ' + startTxt : 'am ' + dDE(START) + ' (erster Tag mit allen Euro-Kursen)') + ' bei 0 % und zeigen die Entwicklung in Prozent mit Tagesschlusskursen in Euro; der letzte Punkt ist aktuell. ';
     var capText = head
       + 'Dein Depot: alle Positionen samt ETH/SOL und Cash (Zinsen ' + pctPlain(Mo.cfg.cashRate || 0, 2) + ' p. a., geschätzt), zeitgewichtet gerechnet, also ohne Sprünge durch Ein- und Auszahlungen. '
-      + 'Buy & Hold: legt am ' + dDE(START) + ' zum Tagesschluss den Gesamtwert deines Depots' + (c.vals ? ' (' + eur(c.vals[0]) + ')' : '') + ' zu 50 % in VWCE, 30 % in Bitcoin und 20 % in WisdomTree Physical Swiss Gold an, geht jedes Jahr am Rebalancing-Stichtag (' + dShort('2000-' + md) + ') zurück auf 50/30/20 und bekommt dieselben Ein- und Auszahlungen wie dein Depot (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern. '
+      + 'Buy & Hold: legt ' + (wk ? 'zum Wochenschluss vom ' + dDE(START) : 'am ' + dDE(START) + ' zum Tagesschluss') + ' den Gesamtwert deines Depots' + (c.vals ? ' (' + eur(c.vals[0]) + ')' : '') + ' zu 50 % in VWCE, 30 % in Bitcoin und 20 % in WisdomTree Physical Swiss Gold an, geht jedes Jahr am Rebalancing-Stichtag (' + dShort('2000-' + md) + ') zurück auf 50/30/20 und bekommt dieselben Ein- und Auszahlungen wie dein Depot (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern. '
       + 'Drawdown: Rückgang vom bisherigen Höchststand der jeweiligen Linie' + (w && w.cut ? ' im Zeitraum.' : '.')
       + (c.skipped.length ? ' Ausgelassen, weil für eine gehaltene Position ein Euro-Kurs fehlte: ' + (c.skipped.length === 1 ? 'der ' + dDE(c.skipped[0]) : c.skipped.length + ' Tage vom ' + dDE(c.skipped[0]) + ' bis ' + dDE(c.skipped[c.skipped.length - 1])) + '.' : '');
     cap.textContent = capText;
