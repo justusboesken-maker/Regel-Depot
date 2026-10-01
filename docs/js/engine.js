@@ -434,10 +434,112 @@
     }
     return { dd: dd, max: max, cur: dd.length ? dd[dd.length - 1] : 0 };
   }
+  /* ---------- Reine Regel („Regel pur“, Justus 28.09.2026: „die Linie mit dem komplett regelbasierten“) ----------
+     Startet mit v0 (Wert deines Depots zum Start), genau nach w aufgeteilt (50/30/20). Je Baustein investiert (Stücke der Anlage) oder Cash,
+     wie die Regel nach dem letzten Wochenschluss steht (st0 am Start). Kauf und Verkauf genau zum Schlusskurs des Wochenschlusses mit dem
+     Signal (sw[a] = [{i, to}]: am Punkt i kippt die Regel auf to), ohne Gebühren und Steuern. Cash wächst je Schritt um rc[t] (Zins × Tage
+     / 365). Einzahlungen nach w auf die Bausteine, im investierten Baustein sofort zum Schlusskurs gekauft; Auszahlungen anteilig aus allem;
+     an Rebalancing-Tagen (reb[t]) zurück auf w. px: {Anlage: [Euro-Kurs je Punkt]}.
+     Ergebnis: vals (Wert je Punkt), idx (zeitgewichtet, Start 1), b[a].val / b[a].inv (Wert des Bausteins; 1 = nach dem Schluss investiert),
+     orders: [{i, a, side (1 Kauf, −1 Verkauf), eur, price, why: 'signal' | 'einzahlung' | 'auszahlung' | 'rebalancing'}]. */
+  function rulePure(o) {
+    var px = o.px, w = o.w, keys = Object.keys(w), n = keys.length && px[keys[0]] ? px[keys[0]].length : 0;
+    var u = {}, cash = {}, st = {}, b = {}, vals = [], idx = [], orders = [], I = 1, t;
+    keys.forEach(function (a) { u[a] = 0; cash[a] = 0; st[a] = o.st0 && o.st0[a] ? 1 : 0; b[a] = { val: [], inv: [] }; });
+    function val(a, i) { return u[a] * px[a][i] + cash[a]; }
+    function total(i) { var s = 0; keys.forEach(function (a) { s += val(a, i); }); return s; }
+    function rec(i) { keys.forEach(function (a) { b[a].val.push(val(a, i)); b[a].inv.push(st[a]); }); vals.push(total(i)); idx.push(I); }
+    function order(i, a, side, e, why) { if (e > 0.005) orders.push({ i: i, a: a, side: side, eur: e, price: px[a][i], why: why }); }
+    if (!n || !(o.v0 > 0)) return { vals: vals, idx: idx, b: b, orders: orders };
+    keys.forEach(function (a) { var T = o.v0 * w[a]; if (st[a]) u[a] = T / px[a][0]; else cash[a] = T; });
+    rec(0);
+    var at = {};
+    keys.forEach(function (a) { ((o.sw && o.sw[a]) || []).forEach(function (s) { if (s.i > 0 && s.i < n) (at[s.i] = at[s.i] || []).push({ a: a, to: s.to ? 1 : 0 }); }); });
+    for (t = 1; t < n; t++) {
+      var g = (o.rc && o.rc[t]) || 0;
+      keys.forEach(function (a) { cash[a] *= 1 + g; });
+      var v = total(t), prev = vals[t - 1], f = (o.flows && o.flows[t]) || 0;
+      if (prev > 0.005) I *= v / prev;
+      /* Signale zum Schlusskurs: kaufen mit dem ganzen Cash des Bausteins bzw. die ganze Position verkaufen */
+      (at[t] || []).forEach(function (s) {
+        var a = s.a; if (s.to === st[a]) return; st[a] = s.to;
+        if (s.to === 1) { order(t, a, 1, cash[a], 'signal'); u[a] += cash[a] / px[a][t]; cash[a] = 0; }
+        else { var e = u[a] * px[a][t]; order(t, a, -1, e, 'signal'); cash[a] += e; u[a] = 0; }
+      });
+      if (f > 0) keys.forEach(function (a) { var x = f * w[a]; if (st[a]) { order(t, a, 1, x, 'einzahlung'); u[a] += x / px[a][t]; } else cash[a] += x; });
+      else if (f < 0) {
+        var V = total(t), k = V > 0.005 ? Math.max(0, 1 + f / V) : 0;
+        keys.forEach(function (a) { order(t, a, -1, u[a] * px[a][t] * (1 - k), 'auszahlung'); u[a] *= k; cash[a] *= k; });
+      }
+      if (o.reb && o.reb[t]) {
+        var V2 = total(t);
+        keys.forEach(function (a) { var T = V2 * w[a], now = val(a, t); if (st[a]) { order(t, a, T > now ? 1 : -1, Math.abs(T - now), 'rebalancing'); u[a] = T / px[a][t]; cash[a] = 0; } else { u[a] = 0; cash[a] = T; } });
+      }
+      rec(t);
+    }
+    return { vals: vals, idx: idx, b: b, orders: orders };
+  }
+  /* ---------- Gründe für den Abstand deines Depots zur reinen Regel (Justus 28.09.2026) ----------
+     Je Schritt t (Schluss t−1 bis Schluss t) wird der Unterschied der Tagesrenditen, in Euro auf deinen Depotwert gerechnet
+     (VM[t−1] · (r_M − r_R)), zerlegt. g_R = Rendite des Regel-Bausteins (investiert die Kursrendite r_a, sonst der Cash-Zins r_c):
+       aufteilung:  deine Baustein-Gewichte gegen die der Regel: Σ (dein Baustein-Wert − Regel-Anteil · VM[t−1]) · (g_R − r_R),
+       beimischung: Gewinn der Beimischung (ETH/SOL) − ihr Wert · r_a (statt Bitcoin),
+       gebuehren:   − Gebühren deiner Orders,
+       zeitpunkt:   Kurs deiner Orders gegen den Schlusskurs des Tages (Stücke · (Schluss − Kurs)); dazu der Teil von „investiert oder Cash anders
+                    als die Regel“, der zu einer noch offenen Regel-Order gehört (pend = offener Betrag mit Vorzeichen, Kauf +, Verkauf −; nur in
+                    ihre Richtung und höchstens ihr Betrag),
+       cash:        der übrige Teil von „investiert oder Cash anders als die Regel“ ((dein investierter Wert − Regel-Anteil · Baustein-Wert)
+                    · (r_a − r_c)), dazu der Rest (Zinsen, Rundung).
+     Alle Teile wachsen danach mit der Rendite der Regel weiter (Prüfung 01.10.2026: mit der Rendite des eigenen Bausteins rechnete nach einem
+     Rebalancing der Teil weiter im alten Baustein, und die Aufteilung glich das aus, obwohl die Gewichte gleich waren). So gehen die Teile genau auf:
+       Prozentpunkte (beide Linien ab k0 bei 0, wie im Chart): Summe = I_M − I_R;
+       Euro: Summe = Abstand deines Werts zum Wert der Regel am Ende minus am Anfang des Zeitraums (ab dem Start: der ganze Abstand).
+     Sonderfall (ein Depot ist leer oder eine Auszahlung größer als sein Wert): der Abstand wird ohne Zerlegung unter „cash“ weitergeführt.
+     o: VM, F, VR (je Punkt), px[a], rc, k0; m[a] = {val, flow, units, fee, tpx, pend, alt, altGain} (dein Baustein je Punkt: Wert samt Cash,
+     Zahlungen und Umbuchungen, Stücke der Anlage nach dem Schluss, Gebühren und Kurswirkung deiner Orders im Schritt, offener Betrag von
+     Regel-Orders; nur beim Krypto-Baustein alt = Wert der Beimischung nach dem Schluss und altGain = ihr Gewinn im Schritt); r[a] = {val, inv}
+     (Regel-Baustein aus rulePure). */
+  var ATTR = ['aufteilung', 'zeitpunkt', 'cash', 'gebuehren', 'beimischung'];
+  function attribution(o) {
+    var keys = Object.keys(o.r), n = o.VM.length, k0 = Math.max(0, o.k0 || 0), P = {}, E = {}, E0 = null, IM = 1, IR = 1, t;
+    ATTR.forEach(function (j) { P[j] = 0; E[j] = 0; });
+    E.aufteilung = (o.VM[0] || 0) - (o.VR[0] || 0);
+    function snap() { var s = {}; ATTR.forEach(function (j) { s[j] = E[j]; }); return s; }
+    if (k0 === 0) E0 = snap();
+    for (t = 1; t < n; t++) {
+      var VMp = o.VM[t - 1], VRp = o.VR[t - 1], F = (o.F && o.F[t]) || 0, win = t > k0;
+      if (VMp > 0.005 && VRp > 0.005 && o.VM[t] - F > 0 && o.VR[t] - F > 0) {
+        var rM = (o.VM[t] - F) / VMp - 1, rR = (o.VR[t] - F) / VRp - 1, rc = (o.rc && o.rc[t]) || 0, x = {};
+        ATTR.forEach(function (j) { x[j] = 0; });
+        keys.forEach(function (b) {
+          var M = o.m[b], R = o.r[b], p0 = o.px[b][t - 1], ra = p0 > 0 ? o.px[b][t] / p0 - 1 : 0;
+          var e = R.inv[t - 1] ? 1 : 0, gR = e ? ra : rc, vm0 = M.val[t - 1] || 0;
+          var X = (M.val[t] || 0) - (M.flow[t] || 0) - vm0 - vm0 * gR;
+          var beim = M.alt ? (M.altGain[t] || 0) - (M.alt[t - 1] || 0) * ra : 0, fee = -(M.fee[t] || 0), tp = M.tpx[t] || 0;
+          var g = (M.units[t - 1] || 0) * p0 + (M.alt ? M.alt[t - 1] || 0 : 0) - e * vm0, q = (M.pend && M.pend[t]) || 0;
+          var gp = q > 0 && g < 0 ? Math.max(g, -q) : q < 0 && g > 0 ? Math.min(g, -q) : 0;
+          x.aufteilung += (vm0 - R.val[t - 1] / VRp * VMp) * (gR - rR);
+          x.beimischung += beim; x.gebuehren += fee;
+          x.zeitpunkt += tp + gp * (ra - rc);
+          x.cash += (g - gp) * (ra - rc) + (X - beim - fee - tp - g * (ra - rc));
+        });
+        ATTR.forEach(function (j) { E[j] = E[j] * (1 + rR) + x[j]; if (win) P[j] = P[j] * (1 + rR) + IM * x[j] / VMp; });
+        if (win) { IM *= 1 + rM; IR *= 1 + rR; }
+      } else {
+        var s0 = 0; ATTR.forEach(function (j) { s0 += E[j]; });
+        E.cash += ((o.VM[t] || 0) - (o.VR[t] || 0)) - s0;
+      }
+      if (t === k0) E0 = snap();
+    }
+    if (!E0) E0 = snap();
+    var eu = {}, pp = {}, sPP = 0, sEU = 0;
+    ATTR.forEach(function (j) { pp[j] = P[j]; eu[j] = E[j] - E0[j]; sPP += pp[j]; sEU += eu[j]; });
+    return { pp: pp, eur: eu, sumPP: sPP, sumEur: sEU, iM: IM, iR: IR };
+  }
 
   var ENG = {
     parseNum: parseNum, parseDate: parseDate, easterSunday: easterSunday, ukHolidays: ukHolidays, calendar: calendar,
-    twrIndex: twrIndex, buyHold: buyHold, drawdown: drawdown,
+    twrIndex: twrIndex, buyHold: buyHold, drawdown: drawdown, rulePure: rulePure, attribution: attribution,
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf, edgeCase: edgeCase,

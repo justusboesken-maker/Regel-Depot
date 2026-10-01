@@ -7,7 +7,7 @@
   --rule:#D8DEE6; --rule-strong:#B9C2CE; --accent:#1B3A6B; --accent-soft:#E4EBF6; --accent-ink:#FFFFFF;
   --good:#0B6B37; --good-bg:#DFF1E6; --warn:#7A5000; --warn-bg:#FAEFD2; --bad:#A8231B; --bad-bg:#FBE4E1; --bad-ink:#FFFFFF;
   --live-buy-bg:#E4F1EB; --live-buy-ink:#186340; --live-sell-bg:#F6E8E8; --live-sell-ink:#8E2D2B; --live-sub:var(--muted); /* Kursbox bei möglichem Kauf-/Verkaufssignal (Justus 27.09.2026) */
-  --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#b98300; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
+  --ftse:#2a78d6; --btc:#eb6834; --alt:#f2a98a; --gold:#b98300; --rp:#7b4fd6; --cash:#8a94a3; --pos:#2a78d6; --neg:#e34948;
   --grid:#E7EBF0; --axis:#C3CAD4; --band:rgba(63,74,90,.10);
   --sig-buy:#0ca30c; --sig-sell:#d03b3b;
   --shadow:0 1px 2px rgba(15,23,36,.06),0 4px 16px rgba(15,23,36,.05);
@@ -22,7 +22,7 @@
     --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
     --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
     --live-buy-bg:#2E6244; --live-buy-ink:#A9E6C2; --live-sell-bg:#753D3A; --live-sell-ink:#FFBEB9; --live-sub:#CED5DE;
-    --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
+    --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --rp:#b79cff; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
     --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
     --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
     --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763; --mh-t-reb:#70D6DB; --mh-t-sig:#F0C477; --mh-t-set:#B4BFCE; --mh-t-rul:#8BB5FF;
@@ -34,7 +34,7 @@
   --rule:#29313B; --rule-strong:#3A4450; --accent:#A9C3EE; --accent-soft:#1B2638; --accent-ink:#0E1217;
   --good:#6FD699; --good-bg:#12301F; --warn:#F1C866; --warn-bg:#33290F; --bad:#FF928A; --bad-bg:#3A1917; --bad-ink:#1A0B0A;
   --live-buy-bg:#2E6244; --live-buy-ink:#A9E6C2; --live-sell-bg:#753D3A; --live-sell-ink:#FFBEB9; --live-sub:#CED5DE;
-  --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
+  --ftse:#3987e5; --btc:#d95926; --alt:#a8664a; --gold:#c98500; --rp:#b79cff; --cash:#6b7684; --pos:#3987e5; --neg:#e66767;
   --grid:#232B35; --axis:#3A4450; --band:rgba(182,192,204,.12);
   --shadow:0 1px 2px rgba(0,0,0,.4),0 4px 16px rgba(0,0,0,.25);
   --mh-bg:radial-gradient(640px 220px at 88% -20%,rgba(120,170,255,.12),transparent 70%),linear-gradient(115deg,#121A26 0%,#152031 55%,#1A273D 100%); --mh-line:#222C3A; --mh-muted:#9AA6B6; --mh-track:rgba(255,255,255,.1); --mh-track-b:rgba(255,255,255,.22); --mh-deco:#FFFFFF; --mh-deco-lo:.22; --mh-deco-fo:.09; --mh-gold:#D8B763; --mh-t-reb:#70D6DB; --mh-t-sig:#F0C477; --mh-t-set:#B4BFCE; --mh-t-rul:#8BB5FF;
@@ -310,6 +310,17 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .ddtab tbody th{font-weight:500;color:var(--ink-2);white-space:nowrap}
 .ddtab tbody tr:last-child th{border-bottom:0}
 .ddtab td.wrap{white-space:normal}
+/* Reine Regel im Vergleich (Justus 28.09.2026): Gründe für den Abstand und Orders der Regel neben deinen Orders */
+.attrtab tbody th,.attrtab thead th:first-child{white-space:normal}
+@media (max-width:560px){.perfdd .ddtab th,.perfdd .ddtab td{padding-left:6px;padding-right:6px}.perfdd .ddtab thead th{white-space:normal}}
+@media (max-width:400px){.perfdd .ddtab{font-size:12.5px}}
+.attrtab tfoot th,.attrtab tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0}
+.perfdd .ordhead{margin-top:4px}
+.ordtab{font-size:12.5px;width:auto;min-width:min(100%,560px)}
+.ordtab th,.ordtab td{padding:7px 10px}
+.ordtab td b{display:block;font-weight:600}
+.ordtab td .sub{display:block;color:var(--muted);font-size:12px;margin-top:1px}
+@media (max-width:560px){.ordtab,.ordtab tbody{display:block;min-width:0}.ordtab thead{display:none}.ordtab tr{display:grid;grid-template-columns:1fr 1fr;column-gap:12px;padding:9px 0;border-bottom:1px solid var(--rule)}.ordtab tbody tr:last-child{border-bottom:0}.ordtab td{display:block;border:0;padding:0}.ordtab td::before{content:attr(data-l);display:block;font-size:11px;font-weight:600;letter-spacing:.05em;text-transform:uppercase;color:var(--muted);margin-bottom:2px}.ordtab td.n{grid-column:1 / -1;text-align:left;white-space:normal;margin-top:6px}.ordtab td.n::before{display:inline;margin:0 6px 0 0}}
 .tip{position:absolute;pointer-events:none;background:var(--surface);border:1px solid var(--rule-strong);border-radius:8px;box-shadow:var(--shadow);padding:8px 10px;font-size:12.5px;min-width:190px;opacity:0;transition:opacity .08s;z-index:3}
 .tip .d{color:var(--muted);margin-bottom:4px}
 .tip .r{display:grid;grid-template-columns:14px 1fr auto;gap:8px;align-items:center}

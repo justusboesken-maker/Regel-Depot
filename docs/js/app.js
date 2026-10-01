@@ -875,7 +875,74 @@
     var vals = pts.map(function (p) { return p.total; }), mine = ENG.twrIndex(vals, flows), bh = ENG.buyHold(px, BH_W, vals[0], flows, reb);
     out.dates = dates; out.vals = vals; out.flows = flows; out.reb = reb; out.rebDays = rebalDays(Mo, first, last);
     out.mine = mine; out.bh = bh; out.ddMine = ENG.drawdown(mine); out.ddBh = ENG.drawdown(bh.idx);
+    ruleCompare(Mo, out, pts, px, keys);
     return out;
+  }
+  /* Reine Regel und Gründe für den Abstand (Justus 28.09.2026: „die Linie mit dem komplett regelbasierten … um auch die Abweichung von
+     meinem Depot zum regelbasierten zu sehen und die Gründe“; Antworten: Handel zum Wochenschluss, komplett nach Regel, Gründe als Tabelle
+     mit Orders zum Ausklappen). Regelstand je Baustein aus den gebuchten Wochenschlüssen (wie Status): der Stand nach dem letzten Schluss bis
+     zum Start, danach jeder Wechsel am Tag seines Schlusses (Bitcoin Sonntag, FTSE und Gold letzter Handelstag) zum Euro-Schlusskurs dieses
+     Tages. Ein Wechsel am letzten Wochenschluss vor dem Start (z. B. Bitcoin 27.09.) steckt schon im Startstand; er bekommt eine Order am
+     Start, damit deine Umsetzung am Montag dazu passt. Dein Depot je Baustein aus den Tagespunkten (Wert samt Cash, Stücke, Beimischung
+     ETH/SOL); Zahlungen und Umbuchungen je Baustein und deine Orders mit Kurs und Gebühr dem ersten Tagespunkt ab ihrem Datum zugeordnet (wie
+     die Zahlungen). Zu jeder Regel-Order (außer Auszahlungen) gehört deine erste Order in dieselbe Richtung im selben Baustein vom Schluss der
+     Regel bis 7 Tage danach (alle Orders dieses Tages, jede Order nur einmal); bis dahin ist die Regel-Order offen (pend: Betrag mit Vorzeichen,
+     auf deinen Depotwert umgerechnet; nur Signale und Orders ab der Mindestorder). */
+  function ruleCompare(Mo, out, pts, px, keys) {
+    var dates = out.dates, n = dates.length, first = dates[0], last = dates[n - 1], rate = Mo.cfg.cashRate || 0, minO = Mo.cfg.minOrder || 25;
+    var rc = dates.map(function (d, k) { return k ? rate * ENG.daysBetween(dates[k - 1], d) / 365 : 0; });
+    var st0 = {}, sw = {}, pre = [], wk0 = ENG.addDays(first, -7);
+    keys.forEach(function (a) {
+      var S = C[a] && C[a].S, E = C[a] && C[a].E, s0 = 0, j;
+      sw[a] = []; st0[a] = 0; if (!S || !E) return;
+      for (j = 0; j < S.d.length && S.d[j] <= first; j++) if (E.st[j] != null) s0 = E.st[j];
+      st0[a] = s0;
+      E.sw.forEach(function (s) {
+        if (s.d > last) return;
+        if (s.d <= first) { if (s.d > wk0) pre.push({ a: a, to: s.to ? 1 : 0, d: s.d }); return; }
+        for (var k = 1; k < n; k++) if (dates[k] >= s.d) { sw[a].push({ i: k, to: s.to, d: s.d }); break; }
+      });
+    });
+    var R = ENG.rulePure({ px: px, w: BH_W, v0: out.vals[0], flows: out.flows, reb: out.reb, st0: st0, sw: sw, rc: rc });
+    pre.forEach(function (s) { if (st0[s.a] === s.to) R.orders.unshift({ i: 0, a: s.a, side: s.to ? 1 : -1, eur: out.vals[0] * BH_W[s.a], price: px[s.a][0], why: 'signal', d: s.d }); });
+    function z() { return dates.map(function () { return 0; }); }
+    var m = {}, AB = (CFG.alts && CFG.alts.bucket) || 'btc', trades = [], ap = {};
+    keys.forEach(function (a) { m[a] = { val: [], units: [], flow: z(), fee: z(), tpx: z(), pend: z() }; });
+    pts.forEach(function (p) { keys.forEach(function (a) { var q = p.parts[a]; m[a].val.push(q ? q.val + q.cash : 0); m[a].units.push(q ? q.units || 0 : 0); }); });
+    if (ALTS.length && m[AB]) {
+      var au = {};
+      ALTS.forEach(function (x) { var rws = eurPoints(x.id, true); ap[x.id] = dates.map(function (d) { var r = lastAt(rws, d); return r ? r[1] : 0; }); au[x.id] = []; });
+      dates.forEach(function (d) { var B = ENG.book(Mo.dep.tx.filter(function (t) { return t && t.d && t.d <= d && ALT[t.a] && (t.type === 'kauf' || t.type === 'verkauf'); })); ALTS.forEach(function (x) { au[x.id].push(ENG.units(B.pos[x.id] || [])); }); });
+      m[AB].alt = pts.map(function (p, k) { var q = p.parts[AB]; return q ? q.val - (q.units || 0) * px[AB][k] : 0; });
+      m[AB].altGain = dates.map(function (d, k) { var g = 0; if (k) ALTS.forEach(function (x) { g += au[x.id][k - 1] * (ap[x.id][k] - ap[x.id][k - 1]); }); return g; });
+    }
+    Mo.dep.tx.forEach(function (t) {
+      if (!t || !t.d || t.d <= first || t.d > last || !(CFG.assets[t.a] || ALT[t.a])) return;
+      var k = 1; while (k < n && dates[k] < t.d) k++; if (k >= n) return;
+      if (t.type === 'umbuchung') { var v = +t.amount || 0; if (m[t.a]) m[t.a].flow[k] -= v; if (m[t.to]) m[t.to].flow[k] += v; return; }
+      var b = bucketOf(t.a), f = extFlow(t); if (!m[b]) return;
+      if (Math.abs(f) >= 0.005) m[b].flow[k] += f;
+      if (t.type !== 'kauf' && t.type !== 'verkauf') return;
+      var pr = ALT[t.a] ? (ap[t.a] ? ap[t.a][k] : 0) : px[b][k], side = t.type === 'kauf' ? 1 : -1, u = +t.units || 0, q = +t.price || 0, fee = +t.fee || 0;
+      if (pr > 0) m[b].tpx[k] += side * u * (pr - q);
+      m[b].fee[k] += fee;
+      trades.push({ k: k, d: t.d, a: t.a, b: b, side: side, units: u, price: q, fee: fee, alt: !!ALT[t.a] });
+    });
+    var used = {}, match = R.orders.map(function (o) {
+      var grp = [], d0 = o.d || dates[o.i], lim = ENG.addDays(d0, 7), day = null;
+      if (o.why === 'auszahlung') return grp;
+      trades.forEach(function (x, j) { if (!used[j] && x.b === o.a && x.side === o.side && x.d >= d0 && x.d <= lim && (day === null || x.d < day)) day = x.d; });
+      if (day !== null) trades.forEach(function (x, j) { if (!used[j] && x.b === o.a && x.side === o.side && x.d === day) { used[j] = 1; grp.push(x); } });
+      return grp;
+    });
+    R.orders.forEach(function (o, oi) {
+      if (o.why === 'auszahlung' || !m[o.a] || (o.why !== 'signal' && o.eur < minO)) return;
+      var d0 = o.d || dates[o.i], lim = ENG.addDays(d0, 7), g = match[oi], amt = o.side * o.eur * (R.vals[o.i] > 0.005 ? out.vals[o.i] / R.vals[o.i] : 1), end, k;
+      if (g.length) end = g[0].k; else { end = o.i; while (end + 1 < n && dates[end + 1] <= lim) end++; }
+      for (k = o.i + 1; k <= end; k++) m[o.a].pend[k] += amt;
+    });
+    out.rule = R; out.ruleSt0 = st0; out.ruleSw = sw; out.trades = trades; out.match = match; out.minOrder = minO;
+    out.attrIn = { VM: out.vals, F: out.flows, VR: R.vals, px: px, rc: rc, m: m, r: R.b };
   }
   /* Zeitraum im Vergleich (Justus 26.09.2026: „Start bei 0 %“): Gerechnet wird immer ab dem Start (Zahlungen, Buy-&-Hold-Stücke,
      Rebalancing); der gewählte Zeitraum schneidet danach aus, beide Linien beginnen an seinem ersten Tag bei 0 %, und Max DD, Hoch → Tief
@@ -890,7 +957,53 @@
     var mi = sl(c.mine), bi = sl(c.bh.idx), w = { k0: k0, cut: k0 > 0, label: label, dates: sl(c.dates), vals: sl(c.vals), bhVals: sl(c.bh.vals), flows: sl(c.flows), reb: sl(c.reb) };
     w.pM = mi.map(function (x) { return x / mi[0] - 1; }); w.pB = bi.map(function (x) { return x / bi[0] - 1; });
     w.ddMine = ENG.drawdown(mi); w.ddBh = ENG.drawdown(bi);
+    /* Reine Regel im Zeitraum (Justus 28.09.2026): Linie ab 0 %, Drawdown, Gründe (Prozentpunkte ab dem Anfang des Zeitraums, Euro als
+       Veränderung des Abstands im Zeitraum) und die Orders im Zeitraum */
+    if (c.rule && c.rule.idx.length === n) {
+      var ri = sl(c.rule.idx);
+      w.pR = ri.map(function (x) { return x / ri[0] - 1; }); w.ddRule = ENG.drawdown(ri); w.rVals = sl(c.rule.vals);
+      w.attr = ENG.attribution(Object.assign({}, c.attrIn, { k0: k0 })); w.orders = orderRows(c, k0);
+    }
     return w;
+  }
+  /* Orders der Regel neben deinen Orders (zum Ausklappen unter den Gründen), mit der Zuordnung aus ruleCompare. Eine Zeile erscheint, wenn
+     die Regel-Order (ab dem Schluss am ersten Tag des Zeitraums) oder deine Order im Zeitraum liegt; kleine Regel-Orders unter der Mindestorder
+     ohne deine Order entfallen. Ohne deine Order: „schon investiert“ bzw. „schon in Cash“, wenn dein Baustein beim Signal schon so stand, sonst
+     „noch offen“ (bis 7 Tage) bzw. „nicht umgesetzt“ / „nicht angelegt“. Kurs für dich nur für Bitcoin, VWCE bzw. Gold-ETC selbst: beim Kauf
+     (Regel-Kurs − dein Kurs) · Stücke, beim Verkauf (dein Kurs − Regel-Kurs) · Stücke; positiv = besser als die Regel. Danach deine Orders
+     ohne Regel-Order. */
+  function orderRows(c, k0) {
+    var D = c.dates, T = c.trades || [], M = c.attrIn.m, rows = [], used = {}, rest = {}, today = todayISO(), minO = c.minOrder || 25;
+    c.rule.orders.forEach(function (o, oi) {
+      var grp = (c.match && c.match[oi]) || [], d0 = o.d || D[o.i], lim = ENG.addDays(d0, 7), status = '';
+      grp.forEach(function (x) { used[T.indexOf(x)] = 1; });
+      if (!grp.length && o.why !== 'signal' && o.eur < minO) return;
+      if (!(o.i >= k0 || grp.some(function (x) { return x.k > k0; }))) return;
+      if (!grp.length) {
+        var mb = M[o.a], inv = mb && ((mb.units[o.i] || 0) > 1e-9 || (mb.alt && (mb.alt[o.i] || 0) > 0.5));
+        if (o.why === 'auszahlung') status = '–';
+        else if (o.why === 'signal' && o.side > 0 && inv) status = 'schon investiert';
+        else if (o.why === 'signal' && o.side < 0 && mb && !inv) status = 'schon in Cash';
+        else if (today <= lim) status = 'noch offen';
+        else status = o.why === 'einzahlung' ? 'nicht angelegt' : 'nicht umgesetzt';
+      }
+      rows.push({ d: d0, rule: o, mine: grp, status: status });
+    });
+    T.forEach(function (x, j) { if (used[j] || x.k <= k0) return; var key = x.d + '|' + x.b + '|' + x.side; (rest[key] = rest[key] || []).push(x); });
+    Object.keys(rest).forEach(function (key) { rows.push({ d: rest[key][0].d, rule: null, mine: rest[key], status: '' }); });
+    rows.sort(function (x, y) { return x.d < y.d ? -1 : x.d > y.d ? 1 : 0; });
+    rows.forEach(function (r) {
+      var u = 0, v = 0;
+      r.mine.forEach(function (x) { if (!x.alt) { u += x.units; v += x.units * x.price; } });
+      r.mainUnits = u; r.mainEur = v; r.mainPrice = u > 0 ? v / u : null;
+      r.altEur = r.mine.reduce(function (s, x) { return s + (x.alt ? x.units * x.price : 0); }, 0);
+      r.fee = r.mine.reduce(function (s, x) { return s + x.fee; }, 0);
+      if (r.rule && r.mainPrice > 0 && r.rule.price > 0) {
+        var P = r.rule.price, q = r.mainPrice;
+        r.diffEur = r.rule.side > 0 ? u * (P - q) : u * (q - P); r.diffPct = r.rule.side > 0 ? P / q - 1 : q / P - 1;
+      }
+    });
+    return rows;
   }
   /* Tastatur-Bedienung, die der Vergleich auf #chPerf setzt, in den anderen Ansichten wieder entfernen */
   function resetKeys(host) { host.removeAttribute('tabindex'); host.onkeydown = null; host.onfocus = null; host.onblur = null; }
@@ -908,37 +1021,92 @@
     if (c.wait || few) {
       var why = c.wait || ('Im Zeitraum „' + w.label + '“ gibt es noch keine zwei Tagespunkte. Wähl einen längeren Zeitraum oder „Alles“.');
       /* Noch kein Verlauf: feste Legende statt Werte-Zeile */
-      leg.classList.remove('readout'); legItem('--ink', false, 'Dein Depot (regelbasiert)'); legItem('--muted', true, 'Buy & Hold 50/30/20');
+      leg.classList.remove('readout'); legItem('--ink', false, 'Dein Depot'); legItem('--rp', false, 'Regel pur'); legItem('--muted', true, 'Buy & Hold 50/30/20');
       box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', why)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + why); return;
     }
     var n = w.dates.length, pM = w.pM, pB = w.pB, narrow = (host.clientWidth || 700) < 560, since = (w.cut ? w.label + ' ab ' : 'seit ') + dDE(w.dates[0]);
     function pp(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' Prozentpunkte'; }
     /* Werte-Zeile statt Kästchen (Justus 26.09.2026): gleicher Tag oben und im Drawdown, die Werte stehen über den Charts */
-    var G = CH.syncGroup(leg);
-    CH.pctChart(host, w.dates, [
-      { vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot (regelbasiert)', short: 'Dein Depot' },
-      { vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold 50/30/20', short: 'Buy & Hold' }
-    ], { height: narrow ? 280 : 360, ends: true, sync: G, /* so hoch wie der Chart in „Gewinn“ und „Wert“ (27.09.2026, vorher 280 / 230 px) */
-      sub: function (i) { return 'Unterschied ' + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · Buy & Hold zurück auf 50/30/20' : ''); },
-      aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
+    var G = CH.syncGroup(leg), pR = w.pR, hasR = !!pR;
+    /* Drei Linien (Justus 28.09.2026): dein Depot, die reine Regel („Regel pur“, Farbe --rp) und Buy & Hold */
+    var lines = [{ vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot', short: 'Dein Depot' }];
+    if (hasR) lines.push({ vals: pR, color: '--rp', width: 2, label: 'Regel pur', short: 'Regel pur' });
+    lines.push({ vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold 50/30/20', short: 'Buy & Hold' });
+    CH.pctChart(host, w.dates, lines, { height: narrow ? 280 : 360, ends: true, sync: G, /* so hoch wie der Chart in „Gewinn“ und „Wert“ (27.09.2026, vorher 280 / 230 px) */
+      sub: function (i) { return (hasR ? 'Zur Regel ' + pp(pM[i] - pR[i]) + ', zu Buy & Hold ' : 'Unterschied ') + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + (hasR ? ', Regel pur ' + eur(w.rVals[i]) : '') + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · ' + (hasR ? 'Regel und Buy & Hold' : 'Buy & Hold') + ' zurück auf 50/30/20' : ''); },
+      aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + (hasR ? ', Regel pur ' + pct(pR[n - 1], 1) : '') + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
     var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
     ddBox.appendChild(ddCh); box.appendChild(ddBox); /* ohne Unterüberschrift (Justus 27.09.2026); „Drawdown“ steht in der Werte-Zeile */
-    CH.pctChart(ddCh, w.dates, [
-      { vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' },
-      { vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' }
-    ], { height: narrow ? 140 : 160, dd: true, ends: true, sync: G, title: 'Drawdown', aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
+    var ddLines = [{ vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' }];
+    if (hasR) ddLines.push({ vals: w.ddRule.dd, color: '--rp', width: 2, label: 'Regel pur' });
+    ddLines.push({ vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' });
+    CH.pctChart(ddCh, w.dates, ddLines, { height: narrow ? 140 : 160, dd: true, ends: true, sync: G, title: 'Drawdown', aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + (hasR ? ', Regel pur ' + pct(w.ddRule.max.v, 1) : '') + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
     /* Kennzahlen */
-    var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody');
+    var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody'), DDS = hasR ? [w.ddMine, w.ddRule, w.ddBh] : [w.ddMine, w.ddBh];
     t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich, ' + since));
-    ['', 'Dein Depot', 'Buy & Hold'].forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; tr.appendChild(x); }); th.appendChild(tr); t.appendChild(th);
+    (hasR ? ['', 'Dein Depot', 'Regel pur', 'Buy & Hold'] : ['', 'Dein Depot', 'Buy & Hold']).forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; tr.appendChild(x); }); th.appendChild(tr); t.appendChild(th);
     function span(D) { return D.max.peak < 0 ? 'kein Rückgang' : dDE(w.dates[D.max.peak]) + ' → ' + dDE(w.dates[D.max.trough]); }
     [['Max DD', function (D) { return pct(D.max.v, 1); }, ''], ['Hoch → Tief', span, 'wrap'], ['Aktuell', function (D) { return pct(D.cur, 1); }, '']].forEach(function (row) {
       var r = el('tr'), h = el('th', null, row[0]); h.scope = 'row'; r.appendChild(h);
-      [w.ddMine, w.ddBh].forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
+      DDS.forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
     });
     t.appendChild(tb); tw.appendChild(t); box.appendChild(tw);
+    if (hasR && w.attr) drawReasons(box, w, since);
     G.reset();
+  }
+  /* Gründe für den Abstand zur reinen Regel (Justus 28.09.2026: „Tabelle, Details zum Ausklappen“): je Grund Prozentpunkte (ab dem Anfang
+     des Zeitraums, wie die Linien) und Euro (wie sich der Abstand im Zeitraum verändert hat, bei „Alles“ der ganze Abstand); grün, wo dein
+     Depot besser liegt als die Regel, rot, wo schlechter (jede Zahl nach ihrem eigenen Vorzeichen). Die Zeile Beimischung nur, wenn es eine
+     gibt. Darunter zum Ausklappen jede Order der Regel neben deiner Order (orderRows). */
+  var REASONS = [['aufteilung', 'Aufteilung der Bausteine'], ['zeitpunkt', 'Zeitpunkt und Kurs deiner Orders'], ['cash', 'Cash und Positionen anders als die Regel'], ['gebuehren', 'Gebühren'], ['beimischung', 'Beimischung']];
+  var ORDER_NAME = { ftse: 'VWCE', btc: 'Bitcoin', gold: 'Gold-ETC' }, ORDER_WHY = { signal: 'Signal', einzahlung: 'Einzahlung', auszahlung: 'Auszahlung', rebalancing: 'Rebalancing' };
+  function drawReasons(box, w, since) {
+    var A2 = w.attr, aw = el('div', 'tablewrap'), at = el('table', 'ddtab attrtab'), ah = el('thead'), ar = el('tr'), ab = el('tbody'), af = el('tfoot'), fr = el('tr');
+    function ppv(v) { var x = Math.round(v * 10000) / 100; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 2); }
+    function ud(v) { return !(Math.abs(v) >= 0.5) ? '' : v > 0 ? ' up' : ' down'; }
+    function udp(v) { return !(Math.abs(v) >= 0.00005) ? '' : v > 0 ? ' up' : ' down'; }
+    var altName = ALTS.map(function (x) { return x.short; }).join('/');
+    function eu0(v) { return !(Math.abs(v) >= 0.5) ? '0 €' : sgnEur(v); }
+    function px2(v) { return eur(v, v < 1000 ? 2 : 0); }
+    at.appendChild(el('caption', 'sr-only', 'Abstand deines Depots zur reinen Regel und die Gründe, ' + since));
+    ['Abstand zur Regel pur', 'Prozentpunkte', 'Euro'].forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; ar.appendChild(x); });
+    ah.appendChild(ar); at.appendChild(ah);
+    REASONS.forEach(function (row) {
+      if (row[0] === 'beimischung' && !ALTS.length) return;
+      var r = el('tr'), h = el('th', null, row[0] === 'beimischung' ? row[1] + ' ' + altName : row[1]), e = A2.eur[row[0]], p = A2.pp[row[0]]; h.scope = 'row'; r.appendChild(h);
+      r.appendChild(el('td', 'n' + udp(p), ppv(p))); r.appendChild(el('td', 'n' + ud(e), eu0(e))); ab.appendChild(r);
+    });
+    var fh = el('th', null, 'Summe'); fh.scope = 'row'; fr.appendChild(fh);
+    fr.appendChild(el('td', 'n' + udp(A2.sumPP), ppv(A2.sumPP))); fr.appendChild(el('td', 'n' + ud(A2.sumEur), eu0(A2.sumEur))); af.appendChild(fr);
+    at.appendChild(ab); at.appendChild(af); aw.appendChild(at); box.appendChild(aw);
+    /* Orders zum Ausklappen; der Zustand bleibt gemerkt wie bei den anderen Klappen (data-fold) */
+    var oh = el('div', 'cardhead ordhead'), ob = el('button', 'fold'), body = el('div', 'ordbody');
+    oh.appendChild(el('p', 'subhd', 'Orders der Regel und deine Orders'));
+    ob.type = 'button'; ob.setAttribute('data-fold', 'cmp-orders'); ob.setAttribute('aria-controls', 'cmpOrders'); ob.setAttribute('data-open', '0');
+    oh.appendChild(ob); box.appendChild(oh); body.id = 'cmpOrders';
+    if (!w.orders.length) body.appendChild(el('p', 'small muted', 'Im Zeitraum gibt es noch keine Orders.'));
+    else {
+      var ow = el('div', 'tablewrap'), ot = el('table', 'ordtab'), oth = el('thead'), otr = el('tr'), otb = el('tbody');
+      ot.appendChild(el('caption', 'sr-only', 'Orders der reinen Regel und deine Orders, ' + since));
+      ['Regel', 'Du', 'Kurs für dich'].forEach(function (h, k) { var x = el('th', k === 2 ? 'n' : null, h); x.scope = 'col'; otr.appendChild(x); });
+      oth.appendChild(otr); ot.appendChild(oth);
+      w.orders.forEach(function (r) {
+        var tr2 = el('tr'), c1 = el('td'), c2 = el('td'), c3 = el('td', 'n' + (r.diffEur != null ? ud(r.diffEur) : '')), o = r.rule;
+        c1.setAttribute('data-l', 'Regel'); c2.setAttribute('data-l', 'Du'); c3.setAttribute('data-l', 'Kurs für dich'); /* Beschriftung auf dem Handy (app.css) */
+        if (o) { c1.appendChild(el('b', null, (o.side > 0 ? 'Kauf ' : 'Verkauf ') + ORDER_NAME[o.a])); c1.appendChild(el('span', 'sub', ORDER_WHY[o.why] + ' · ' + dShort(r.d) + (o.i === 0 && o.d ? ' (Start)' : '') + ' · ' + eur(o.eur) + ' zu ' + px2(o.price))); }
+        else c1.appendChild(el('span', 'muted', '–'));
+        if (r.mine.length) {
+          var x0 = r.mine[0], what = r.mainUnits > 0 ? ORDER_NAME[x0.b] + (r.altEur > 0 ? ' + ' + altName : '') : altName;
+          c2.appendChild(el('b', null, (x0.side > 0 ? 'Kauf ' : 'Verkauf ') + what + (o ? '' : ' (ohne Regel-Order)')));
+          c2.appendChild(el('span', 'sub', dShort(x0.d) + (r.mainUnits > 0 ? ' · ' + eur(r.mainEur) + ' zu ' + px2(r.mainPrice) : '') + (r.altEur > 0 ? ' · ' + altName + ' ' + eur(r.altEur) : '') + (r.fee > 0 ? ' · Gebühr ' + eur(r.fee, 2) : '')));
+        } else c2.appendChild(el('span', 'muted', r.status || '–'));
+        c3.textContent = r.diffEur != null ? pct(r.diffPct, 2) + ' · ' + sgnEur(r.diffEur, 2) : '–';
+        tr2.appendChild(c1); tr2.appendChild(c2); tr2.appendChild(c3); otb.appendChild(tr2);
+      });
+      ot.appendChild(otb); ow.appendChild(ot); body.appendChild(ow);
+    }
+    box.appendChild(body); wireFolds(box);
   }
 
   /* ---------- Signale: Verlauf, Push, Zeitplan, Läufe ---------- */
@@ -1386,7 +1554,7 @@
     });
     function note(t) { notes.appendChild(el('p', null, t)); }
     var rlaw = CFG.taxLaw || {}, plan = (rlaw.rebalDays || []).map(function (md) { return md.slice(3) + '.' + md.slice(0, 2) + '.'; });
-    if (plan.length) note('Rhythmus: quartalsweise zum Quartalsende (' + plan.join(', ') + '; fällt der Tag auf ein Wochenende oder einen Feiertag, gilt der Handelstag davor)' + (rlaw.rebalFrom && rlaw.rebalFrom > today ? ', erstmals am ' + dDE(rlaw.rebalFrom) : '') + '. Umsetzen und buchen kannst du am Stichtag und bis 7 Tage danach. Buy & Hold im Vergleich geht an denselben Tagen auf 50/30/20 zurück.');
+    if (plan.length) note('Rhythmus: quartalsweise zum Quartalsende (' + plan.join(', ') + '; fällt der Tag auf ein Wochenende oder einen Feiertag, gilt der Handelstag davor)' + (rlaw.rebalFrom && rlaw.rebalFrom > today ? ', erstmals am ' + dDE(rlaw.rebalFrom) : '') + '. Umsetzen und buchen kannst du am Stichtag und bis 7 Tage danach. Buy & Hold und Regel pur im Vergleich gehen an denselben Tagen auf 50/30/20 zurück.');
     if (date.slice(5, 7) === '12') note('Handelstage: Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Bitcoin kannst du bei Trade Republic auch am 31.12. handeln.');
     note('Verkauft wird immer der älteste Kauf zuerst (FIFO). Einzelne Kauflose kannst du nicht auswählen.');
     note('Freigrenze: Liegen alle kurzfristigen Gewinne aus Bitcoin und Gold ' + cfg.year + ' zusammen bei 1.000 € oder mehr, ist der ganze Betrag steuerpflichtig, nicht nur der Teil darüber. Die Seite hält ' + eur(cfg.buffer) + ' Abstand.');
