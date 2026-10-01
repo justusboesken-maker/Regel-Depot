@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <script>/* Seite schon vor dem ersten Zeichnen merken (Titel auf „Depot“ in Gold, ohne Aufblitzen); app.js showPage setzt es danach genau */try{var h=location.hash.slice(1),m=JSON.parse(localStorage.getItem("regelDepot.page")||"null"),p=h||(m&&m.t>0&&Date.now()-m.t<3600000?m.page:"");if(p)document.documentElement.setAttribute("data-page",p);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20260928-0942">
+<link rel="stylesheet" href="css/app.css?v=20261001-0948">
 </head>
 <body>
 
@@ -102,7 +102,7 @@
 
 <section id="rebalancing" aria-labelledby="h-reb" hidden>
   <h2 class="eyebrow sec" id="h-reb">Rebalancing</h2>
-  <p class="rebwhen">Stichtag <span id="rebDate">30.12.2026</span></p>
+  <p class="rebwhen">Stichtag <span id="rebDate">30.12.2026</span> · quartalsweise</p>
   <div id="rebBanner"></div>
   <div class="grid2" id="rebCards"></div>
   <div class="card pad" id="rebNotesCard"><div class="cardhead"><p class="subhd">Hinweise</p><button type="button" class="fold" data-fold="rebnotes" aria-controls="rebNotesBody" aria-expanded="false" data-open="0">Ausklappen</button></div><div id="rebNotesBody" style="margin-top:8px"><div class="notes" id="rebNotes"></div></div></div>
@@ -167,7 +167,7 @@
         <label class="check"><input type="checkbox" id="tNv"> NV-Bescheinigung liegt Trade Republic vor<small>dann behält die Bank keine Abgeltungsteuer ein</small></label>
         <label>Abstand zur Freigrenze (€)<small>Puffer für Kursschwankungen</small><input type="text" id="tBuf" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label>Mindestbetrag je Order (€)<small>kleinere Umschichtungen sind optional</small><input type="text" id="tMin" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
-        <label>Rebalancing-Stichtag<input type="date" id="tReb"></label>
+        <label>Abweichender Rebalancing-Stichtag<small>leer: quartalsweise zum Quartalsende (31.03., 30.06., 30.09., 30.12.); ein Datum ersetzt den Stichtag seines Quartals</small><input type="date" id="tReb"></label>
         <label>Zins auf Cash (% p. a.)<small>Trade Republic verzinst Guthaben, aktuell EZB-Satz</small><input type="text" id="tCashRate" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <button class="btn" type="submit">Speichern</button>
       </form>
@@ -206,10 +206,10 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20260928-0942"></script>
-<script src="js/store.js?v=20260928-0942"></script>
-<script src="js/charts.js?v=20260928-0942"></script>
-<script src="js/icons.js?v=20260928-0942"></script>
-<script src="js/app.js?v=20260928-0942"></script>
+<script src="js/engine.js?v=20261001-0948"></script>
+<script src="js/store.js?v=20261001-0948"></script>
+<script src="js/charts.js?v=20261001-0948"></script>
+<script src="js/icons.js?v=20261001-0948"></script>
+<script src="js/app.js?v=20261001-0948"></script>
 </body>
 </html>

@@ -284,6 +284,19 @@ test('Feiertage London (England & Wales) mit Ersatztagen', () => {
   assert.deepEqual(ENG.ukHolidays(2032).slice(-2), ['2032-12-27', '2032-12-28'], 'Weihnachten am Samstag');
   assert.deepEqual(ENG.ukHolidays(2033).slice(-2), ['2033-12-26', '2033-12-27'], 'Weihnachten am Sonntag');
 });
+test('Wochenschluss-Uhrzeit London: FTSE 16:40 (Halbtag 12:40), Gold 15:05 gleich nach dem Nachmittagsfixing; vorgezogene Wochen wie bisher', () => {
+  const CAL = ENG.calendar({});
+  assert.equal(CAL.closeMin('ftse', '2026-10-02'), 16 * 60 + 40);
+  assert.equal(CAL.closeMin('gold', '2026-10-02'), 15 * 60 + 5);
+  assert.equal(CAL.closeMin('ftse', '2026-12-24'), 12 * 60 + 40, 'Halbtag vor Weihnachten');
+  assert.equal(CAL.closeMin('gold', '2026-12-23'), 15 * 60 + 5, 'Gold schließt vor Weihnachten am 23.12. (kein Nachmittagsfixing am 24.12.)');
+  assert.equal(CAL.earlyClose('gold', '2026-09-28'), false, 'normale Woche: Gold schließt Freitag, nicht vorgezogen');
+  assert.equal(CAL.earlyClose('ftse', '2026-09-28'), false);
+  assert.equal(CAL.earlyClose('gold', '2026-12-21'), true, 'Gold-Woche vor Weihnachten endet Mittwoch 23.12.');
+  assert.equal(CAL.earlyClose('ftse', '2026-12-21'), true, 'FTSE-Halbtag Donnerstag 24.12.');
+  assert.equal(CAL.earlyClose('ftse', '2027-12-20'), true, 'FTSE-Halbtag Freitag 24.12.2027');
+  assert.equal(CAL.earlyClose('gold', '2027-03-22'), true, 'Karfreitag 2027: Gold schließt Donnerstag');
+});
 
 /* ---------- Signaltext und Vorwarnung nennen dieselbe Schwelle (Prüfbericht, kleinere Unstimmigkeiten) ---------- */
 test('Schwelle eines Wechsels = Schwelle der Vorwoche für den nächsten Schluss', () => {
@@ -373,4 +386,25 @@ test('Grenzfall Band: knapp ausgelöstes Kaufsignal misst gegen die Kaufschwelle
 test('Grenzfall Seite: side folgt der Regel, rel dem Abstand zur Schwelle', () => {
   const up = ENG.edgeCase(lastAt(synth(80), RULES.ftse, 0.003), RULES.ftse), dn = ENG.edgeCase(lastAt(synth(80), RULES.ftse, -0.003), RULES.ftse);
   assert.equal(up.side, 1); assert.equal(dn.side, -1); assert.ok(Math.abs(up.rel - 0.003) < 1e-9); assert.ok(Math.abs(dn.rel + 0.003) < 1e-9);
+});
+
+
+/* ---------- Rebalancing-Stichtage: quartalsweise zum Quartalsende (Justus 01.10.2026) ---------- */
+const LAWQ = { rebalDays: ['03-31', '06-30', '09-30', '12-30'], rebalFrom: '2026-12-30' };
+test('Rebalancing quartalsweise: Quartalsende, erstmals 30.12.2026', () => {
+  assert.deepEqual(ENG.rebalDates(LAWQ, null, '2026-01-01', '2027-12-31'), ['2026-12-30', '2027-03-31', '2027-06-30', '2027-09-30', '2027-12-30']);
+  assert.deepEqual(ENG.rebalDates(LAWQ, null, '2026-10-01', '2026-12-29'), []);
+});
+test('Rebalancing quartalsweise: Wochenende und Feiertag -> Handelstag davor', () => {
+  assert.deepEqual(ENG.rebalDates(LAWQ, null, '2028-01-01', '2028-12-31'), ['2028-03-31', '2028-06-30', '2028-09-29', '2028-12-29']);
+  assert.deepEqual(ENG.rebalDates(LAWQ, null, '2051-03-01', '2051-04-30'), ['2051-03-30'], 'Karfreitag 31.03.2051');
+  assert.deepEqual(ENG.rebalDates(LAWQ, null, '2059-03-01', '2059-04-30'), ['2059-03-27'], 'Ostermontag 31.03.2059, davor Wochenende und Karfreitag');
+});
+test('Rebalancing quartalsweise: gewählter Tag ersetzt den Stichtag seines Quartals', () => {
+  assert.deepEqual(ENG.rebalDates(LAWQ, '2027-06-15', '2027-01-01', '2027-12-31'), ['2027-03-31', '2027-06-15', '2027-09-30', '2027-12-30']);
+  assert.deepEqual(ENG.rebalDates(LAWQ, '2026-12-30', '2026-10-01', '2027-04-30'), ['2026-12-30', '2027-03-31']);
+  assert.equal(ENG.quarterOf('2027-06-15'), '2027-Q2'); assert.equal(ENG.quarterOf('2026-12-30'), '2026-Q4'); assert.equal(ENG.quarterOf('2027-01-01'), '2027-Q1');
+});
+test('Rebalancing ohne Quartalsplan in der Konfiguration: einmal im Jahr am rebalDay', () => {
+  assert.deepEqual(ENG.rebalDates({ rebalDay: '12-30' }, null, '2026-01-01', '2027-12-31'), ['2026-12-30', '2027-12-30']);
 });

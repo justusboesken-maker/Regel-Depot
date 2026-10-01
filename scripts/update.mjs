@@ -4,7 +4,7 @@
    Depotbewertung: Lang & Schwarz, Coinbase, EZB; Ersatzquellen Kraken, Yahoo, gold-api), bildet Wochenschlüsse, rechnet die Regeln,
    schreibt docs/data/*.json, sammelt Ereignisse und schickt Web-Push-Nachrichten.
 
-   Aufruf: node scripts/update.mjs --step <auto|live|fr-warn|fr-close|sa-close|so-warn|mo-close|mo-notify|eod|all|init|test-sources|test-eodhd|test-push>
+   Aufruf: node scripts/update.mjs --step <auto|live|fr-warn|fr-close|sa-close|so-warn|btc-close|mo-close|mo-notify|eod|all|init|test-sources|test-eodhd|test-push>
            [--final] [--fallback] [--now 2026-09-28T00:30:00Z] [--mock <ordner>] [--dry] [--verbose]
    Umgebung: VAPID_PRIVATE_KEY, PUSH_SUB_1 … PUSH_SUB_5 (Subscription-JSON), ALPHAVANTAGE_KEY, EODHD_KEY, PUSH_SENT_FILE (Workflow) */
 import fs from 'node:fs';
@@ -73,7 +73,8 @@ const MON_PUSH = (() => { const m = /^(\d{1,2}):(\d{2})$/.exec((CFG.push && CFG.
 /* Freitag nach dem Londoner Schluss ist die laufende Woche fällig. Im Sommer ist es in London zwischen 23 und 24 Uhr UTC schon Samstag,
    während UTC noch Freitag zeigt: auch dann gilt die Woche als geschlossen (sonst würde ein offener Wochenschluss verworfen). */
 const FRI_CLOSED = DOW === 4 && (LONDON_DOW !== 4 || LONDON_HOUR >= 16.67);
-/* Ist der Wochenschluss am Handelstag day für Anlage a vorbei? (Londoner Datum und Uhrzeit; FTSE 16:40, an Halbtagen 12:40; Gold 16:40) */
+/* Ist der Wochenschluss am Handelstag day für Anlage a vorbei? (Londoner Datum und Uhrzeit; FTSE 16:40, an Halbtagen 12:40; Gold 15:05, gleich
+   nach dem Nachmittagsfixing) */
 function closedNow(a, day) { const L = londonAt(NOW.toISOString()); return L.d > day || (L.d === day && L.m >= CAL.closeMin(a, day)); }
 
 /* ---------- Formatierung (Meldungstexte) ---------- */
@@ -108,13 +109,17 @@ function subscriptions() {
   for (let i = 1; i <= (CFG.push.maxSubscriptions || 5); i++) { const s = process.env['PUSH_SUB_' + i]; if (s && s.trim().startsWith('{')) { try { out.push({ n: i, sub: JSON.parse(s) }); } catch (e) { fail('Push', 'PUSH_SUB_' + i + ' ist kein gültiges JSON'); } } }
   return out;
 }
-async function flushQueue() {
+/* Bitcoin-Nachrichten (Signal, Korrektur, Revision, Grenzfall, Fehler) gehen nachts sofort hinaus: Die Bitcoin-Woche endet Sonntag 24 Uhr UTC,
+   gehandelt wird gleich danach (Justus 01.10.2026: „bei BTC muss ich ja direkt handeln“). Alles andere aus der Nacht zum Montag wartet auf mondayAt. */
+const isBtcPush = (p) => /^(sig|korr|rev|edge|err)-btc-/.test(p.id || '') || p.tag === 'signal-btc' || p.tag === 'err-btc';
+async function flushQueue(only) {
   /* Nachrichten, die seit einer Woche nicht zugestellt werden konnten, verfallen (sonst würden sie ewig wiederholt) */
   const old = (STATE.queue || []).filter((p) => p.ts && Date.parse(p.ts) < NOW.getTime() - 7 * 864e5);
   if (old.length) { STATE.queue = STATE.queue.filter((p) => !old.includes(p)); RUN.changed = true; note('Push: ' + old.length + ' Nachricht(en) älter als 7 Tage verworfen (' + old.map((p) => p.title).join(' | ').slice(0, 120) + ')'); }
-  const q = STATE.queue || [];
+  /* only: nur diese Nachrichten jetzt schicken, die übrigen bleiben in der Warteschlange */
+  const all = STATE.queue || [], q = only ? all.filter(only) : all, rest = only ? all.filter((p) => !only(p)) : [];
   if (!q.length) return;
-  if (OPT.dry) { note('Push (Probelauf): ' + q.map((p) => p.title).join(' | ')); STATE.queue = []; RUN.changed = true; return; }
+  if (OPT.dry) { note('Push (Probelauf): ' + q.map((p) => p.title).join(' | ') + (rest.length ? ' (' + rest.length + ' warten weiter)' : '')); STATE.queue = rest; RUN.changed = true; return; }
   const subs = subscriptions(), priv = process.env.VAPID_PRIVATE_KEY;
   if (!subs.length || !priv) { note('Push: ' + q.length + ' Nachricht(en) bleiben in der Warteschlange (' + (!priv ? 'VAPID_PRIVATE_KEY fehlt' : 'keine Push-Anmeldung hinterlegt') + ')'); return; }
   const vapid = { subject: CFG.push.subject, publicKey: CFG.push.vapidPublicKey, privateKey: priv };
@@ -130,9 +135,9 @@ async function flushQueue() {
     if (sent) { RUN.notified += sent; sentIds.push(p.id); } else if (!gone && subs.length) { keep.push(p); }
   }
   rememberSent(sentIds);
-  STATE.queue = keep;
+  STATE.queue = rest.concat(keep);
   RUN.changed = true;
-  note('Push: ' + RUN.notified + ' Nachricht(en) zugestellt' + (keep.length ? ', ' + keep.length + ' bleiben in der Warteschlange' : ''));
+  note('Push: ' + RUN.notified + ' Nachricht(en) zugestellt' + (keep.length ? ', ' + keep.length + ' bleiben in der Warteschlange' : '') + (rest.length ? ', ' + rest.length + ' warten auf ' + ((CFG.push && CFG.push.mondayAt) || '07:53') + ' Uhr' : ''));
 }
 
 /* ---------- Quellen (mit Mock für Tests) ---------- */
@@ -169,7 +174,11 @@ const KRAKEN_PAIR = { 'BTC-USD': 'XBTUSD', 'BTC-EUR': 'XBTEUR', 'ETH-EUR': 'ETHE
 /* Hauptquellen laut config (Alpha Vantage für den FTSE, Coinbase für Bitcoin, LBMA für Gold). Weitere Quellen (Kraken, Yahoo, Alpha-Vantage-Krypto)
    erst im zweiten Anlauf; geprüft: Alpha Vantage weicht von Yahoo seit 2014 unter 0,01 % ab, Coinbase von Yahoo im Mittel 0,05 %. */
 const STEP0 = OPT.step;
-let ALLOW_FB = OPT.final || OPT.fallback || ['mo-notify', 'eod', 'all'].includes(STEP0);   /* der Ticker setzt es beim Nachholen von mo-notify */
+/* Weitere Quellen sofort beim Bitcoin-Wochenschluss (btc-close, mo-close): schlägt Coinbase fehl, gleich Kraken usw. (Justus 01.10.2026) */
+let ALLOW_FB = OPT.final || OPT.fallback || ['mo-notify', 'eod', 'all', 'mo-close', 'btc-close'].includes(STEP0);   /* der Ticker setzt es beim Nachholen von mo-notify */
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+/* Nachfassen beim Bitcoin-Wochenschluss: Pause und Gesamtdauer (für Probeläufe per Umgebung verkürzbar) */
+const RETRY_MS = +process.env.RD_RETRY_MS || 20000, RETRY_BUDGET_MS = +process.env.RD_RETRY_BUDGET_MS || 5 * 60000;
 async function firstOk(label, tries) {
   const errs = [];
   for (const t of tries) { try { const r = await t(); if (r) return r; } catch (e) { errs.push((t.name || '?') + ': ' + e.message); vlog(label + ' · ' + errs[errs.length - 1]); } }
@@ -263,7 +272,8 @@ function signalChain(a) {
   }
   return [];
 }
-async function loadSignalSeries(a) {
+/* opt.skipPrimary: gleich die weiteren Quellen (btc-close, wenn die Hauptquelle zwar antwortet, aber die Sonntagskerze noch fehlt) */
+async function loadSignalSeries(a, opt) {
   const c = CFG.assets[a];
   if (c.signal.src === 'lbma') {
     const r = cleanDaily(await F.lbma(c.signal.fix || 'pm'));
@@ -272,8 +282,11 @@ async function loadSignalSeries(a) {
   const chain = signalChain(a);
   const clean = (r) => Object.assign(r, { daily: cleanDaily(r.daily) });
   let primaryError = null;
-  try { const r = clean(await chain[0]()); return Object.assign({ fallback: false }, r); }
-  catch (e) { primaryError = e.message; vlog('Hauptquelle ' + c.signal.src + ' für ' + a + ' fehlgeschlagen: ' + e.message); }
+  if (opt && opt.skipPrimary && chain.length > 1) primaryError = 'Hauptquelle ' + c.signal.src + ' noch ohne Schluss der Woche';
+  else {
+    try { const r = clean(await chain[0]()); return Object.assign({ fallback: false }, r); }
+    catch (e) { primaryError = e.message; vlog('Hauptquelle ' + c.signal.src + ' für ' + a + ' fehlgeschlagen: ' + e.message); }
+  }
   if (!ALLOW_FB) throw new Error(primaryError + ' (weitere Quellen erst im nächsten Anlauf)');
   const errs = [primaryError];
   for (const f of chain.slice(1)) { try { const r = clean(await f()); return Object.assign({ fallback: true, primaryError }, r); } catch (e) { errs.push((f.name || '?') + ': ' + e.message); vlog(a + ' · ' + errs[errs.length - 1]); } }
@@ -291,10 +304,16 @@ function dueCutoff(a) {
   return THIS_MON;
 }
 /* Ist die fällige Woche (Montag k) in den Tagesdaten vollständig? Maßgeblich ist der letzte Handelstag der Woche laut Kalender. */
-function weekComplete(a, k, lastD) {
+/* lastAny: letzter Tag der ganzen Reihe. Bitcoin: Die Sonntagskerze gilt erst als abgeschlossen, wenn der Anbieter schon den Montag zeigt (die
+   Kerze des laufenden Tages ist immer dabei) oder eine Stunde nach dem Schluss; so wird kurz nach Mitternacht keine noch offene Kerze gebucht. */
+function weekComplete(a, k, lastD, lastAny) {
   const c = CFG.assets[a], sun = addDays(k, 6), weekOver = TODAY >= addDays(k, 7);
   if (!lastD || lastD < k) return { ok: false, reason: 'noch kein Kurs der Woche' };
-  if (c.week === 'sun') return lastD >= sun ? { ok: true } : { ok: false, reason: 'Sonntagsschluss fehlt noch' };
+  if (c.week === 'sun') {
+    if (lastD < sun) return { ok: false, reason: 'Sonntagsschluss fehlt noch' };
+    const settled = (lastAny && lastAny > sun) || NOW.getTime() >= Date.parse(addDays(k, 7) + 'T01:00:00Z');
+    return settled ? { ok: true } : { ok: false, reason: 'Sonntagskerze noch nicht abgeschlossen (Anbieter noch ohne Montag)' };
+  }
   const ltd = lastTradingDay(a, k), fri = addDays(k, 4);
   if (!ltd) return { ok: true, holiday: true };
   if (lastD >= ltd) return ltd < fri ? { ok: true, holiday: true } : { ok: true };
@@ -409,22 +428,45 @@ function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
   note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + stTxt(L.st) + (newSw.length && !flipPrev ? ', SIGNALWECHSEL' : '') + (prelimNow ? ' (vorläufig: ' + (src.prelimLabel || '') + ')' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : ''));
   return { done: true, E, newSw };
 }
-/* Gold: Fehlt das LBMA-Fixing am Montagmorgen (ab 5 Uhr UTC) noch, zählt der Spotpreis kurz nach dem Fixing vom Freitag (STATE.goldSnap) als
-   vorläufiger Wochenschluss. Das Fixing ersetzt ihn, sobald es da ist; ändert sich dadurch die Regel, kommt eine Korrektur.
-   Von Justus am 26.09.2026 so festgelegt (config signal.spotFallback). */
-function spotFallback(a, base, prev, dueK, reason) {
-  const c = CFG.assets[a], snap = STATE.goldSnap;
-  if (!c.signal.spotFallback || !snap || snap.k !== dueK || !(snap.p > 0)) return null;
-  if (NOW.getTime() < new Date(addDays(dueK, 7) + 'T05:00:00Z').getTime()) return null;
+/* Gold: Fehlt das LBMA-Fixing noch (die LBMA veröffentlicht es meist erst spät abends), zählt sofort der Spotpreis kurz nach dem Fixing
+   (STATE.goldSnap) als vorläufiger Wochenschluss. Das Fixing ersetzt ihn, sobald es da ist; ändert sich dadurch die Regel, kommt eine Korrektur.
+   Von Justus am 26.09.2026 so festgelegt (config signal.spotFallback), zunächst erst ab Montag 5 Uhr UTC; seit 01.10.2026 sofort („Live Quelle
+   bei BTC und Gold zumindest vorläufig bis Signal kommt“). */
+async function spotFallback(a, base, prev, dueK, reason) {
+  const c = CFG.assets[a];
+  if (!c.signal.spotFallback) return null;
+  await ensureGoldSnap(dueK);
+  const snap = STATE.goldSnap;
+  if (!snap || snap.k !== dueK || !(snap.p > 0)) return null;
   const tl = londonAt(snap.t), hm = String(Math.floor(tl.m / 60)).padStart(2, '0') + ':' + String(tl.m % 60).padStart(2, '0');
-  const label = 'Spotpreis ' + ds(snap.d) + ' ' + hm + ' Uhr London (' + (snap.src || 'gold-api.com') + '), das LBMA-Fixing fehlt noch';
+  const label = 'Spotpreis ' + ds(tl.d) + ' ' + hm + ' Uhr London (' + (snap.src || 'gold-api.com') + '), das LBMA-Fixing fehlt noch';
   /* Die nächtliche Fehlermeldung „ohne Wochenschluss“ ist damit überholt */
   STATE.queue = (STATE.queue || []).filter((q) => q.id !== 'err-' + a + '-' + dueK);
   note(name(a) + ': LBMA-Fixing fehlt (' + String(reason).slice(0, 80) + '), vorläufiger Wochenschluss aus dem ' + label.split(', das')[0]);
   return bookWeeks(a, base, { k: [dueK], d: [snap.d], c: [snap.p] }, prev, dueK, { src: 'Spotpreis ' + (snap.src || 'gold-api.com') + ' ' + snap.t + ' (vorläufig, LBMA-Fixing fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: snap.d, prelimLabel: label }, { ok: true });
 }
-async function closeAsset(a) {
-  const c = CFG.assets[a], cutoff = dueCutoff(a), stored = storedSeries(a), prev = lastState(a);
+/* Bitcoin: Liefert kurz nach dem Wochenschluss keine Quelle die Tageskerze vom Sonntag (Coinbase, Kraken, Yahoo, Alpha Vantage), gilt vorläufig
+   der Live-Kurs (Coinbase, sonst Kraken), aber nur in der ersten Stunde nach 0 Uhr UTC, danach weicht er zu weit vom Schluss ab. Die Tageskerze
+   ersetzt ihn, sobald eine Quelle sie liefert (mo-close, mo-notify, eod); ändert sich dadurch die Regel, kommt eine Korrektur (Justus 01.10.2026:
+   „unmittelbare Alternativquelle bei fehlgeschlagenem Abruf … Live Quelle bei BTC und Gold zumindest vorläufig bis Signal kommt“). */
+async function btcLiveFallback(reason) {
+  const a = 'btc', dueK = addDays(dueCutoff(a), -7), sun = addDays(dueK, 6), closeT = Date.parse(addDays(dueK, 7) + 'T00:00:00Z');
+  const now = OPT.now ? NOW.getTime() : Date.now();
+  if (now < closeT || now > closeT + 3600e3) return null;
+  const stored = storedSeries(a), prev = lastState(a), lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
+  if (lastStored && lastStored >= dueK) return null;                    /* schon gebucht (auch vorläufig) */
+  let q; try { q = await currentPrice(a); } catch (e) { fail(name(a), 'Live-Kurs als Ersatz: ' + e.message); return null; }
+  if (!(q.price > 0)) return null;
+  const t = q.priceTime || new Date(now).toISOString(), srcName = String(q.src || '').replace(/ (spot|ticker)$/, '');
+  const label = 'Live-Kurs ' + t.slice(11, 16) + ' Uhr UTC (' + srcName + '), die Tageskerze vom Sonntag fehlt noch';
+  note(name(a) + ': Tageskerze vom Sonntag fehlt (' + String(reason).slice(0, 90) + '), vorläufiger Wochenschluss aus dem ' + label.split(', die')[0]);
+  STATE.queue = (STATE.queue || []).filter((p) => p.id !== 'err-' + a + '-' + dueK);
+  return bookWeeks(a, stored, { k: [dueK], d: [sun], c: [q.price] }, prev, dueK, { src: 'Live-Kurs ' + srcName + ' ' + t + ' (vorläufig, Tageskerze fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: sun, prelimLabel: label }, { ok: true });
+}
+/* opt.retry: Zwischenversuch (btc-close fasst nach); ein Fehlschlag wird dann noch nicht als Fehler oder „fehlt noch“ eingetragen.
+   opt.quiet: Ticker; der Ersatz-Spotpreis darf buchen, ein Fehlschlag wird nicht eingetragen (das machen die geplanten Wochenschluss-Läufe). */
+async function closeAsset(a, opt) {
+  const c = CFG.assets[a], cutoff = dueCutoff(a), stored = storedSeries(a), prev = lastState(a), retry = !!(opt && opt.retry), quiet = !!(opt && opt.quiet);
   const dueK = addDays(cutoff, -7);                                   /* jüngste fällige Woche */
   const lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
   const already = !!(lastStored && lastStored >= dueK && prev && prev.k >= dueK && !prev.pending);
@@ -432,11 +474,13 @@ async function closeAsset(a) {
   if (already && !prev.preliminary) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
   if (prelimNow) vlog(a + ': Woche ' + dueK + ' vorläufig gebucht (' + prev.preliminary + '), prüfe auf endgültigen Schluss');
   let src;
-  try { src = await loadSignalSeries(a); }
+  try { src = await loadSignalSeries(a, opt); }
   catch (e) {
     const reason = 'Kursabruf fehlgeschlagen: ' + e.message;
     if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + e.message.slice(0, 80) + ')'); return { done: true, already: true }; }
-    const fb = spotFallback(a, stored, prev, dueK, reason); if (fb) return fb;
+    if (retry) { vlog(a + ': ' + reason); return { done: false, error: e.message }; }
+    const fb = await spotFallback(a, stored, prev, dueK, reason); if (fb) return fb;
+    if (quiet) { vlog(a + ': ' + reason); return { done: false, error: e.message }; }
     fail(name(a), reason); markPending(a, dueK, reason); return { done: false, error: e.message };
   }
   const daily = src.daily;
@@ -444,9 +488,9 @@ async function closeAsset(a) {
   const fresh = subset(fresh0, (k) => k < cutoff);
   /* Für die Vollständigkeit zählt der letzte (gültige) Tageskurs, der zur fälligen Woche gehört */
   const lastInWeek = daily.dates.filter((d) => mondayOf(d) === dueK).pop() || null;
-  const comp = weekComplete(a, dueK, lastInWeek);
+  const comp = weekComplete(a, dueK, lastInWeek, daily.dates.length ? daily.dates[daily.dates.length - 1] : null);
   if (!comp.ok) {
-    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + comp.reason + ')'); return { done: true, already: true }; }
+    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + comp.reason + ')'); return { done: true, already: true, stillPrelim: true }; }
     /* Frühere Wochen trotzdem übernehmen (ohne die unvollständige) – als Buchung, damit rückwirkende Änderungen und neue Wechsel gemeldet werden */
     let base = stored, prevB = prev;
     const older = subset(fresh, (k) => k < dueK);
@@ -454,7 +498,9 @@ async function closeAsset(a) {
       const trial = mergeFor(a, stored, older, prev && prev.preliminary ? prev.k : null);
       if (!sameSeries(stored, trial)) { const r = bookWeeks(a, stored, older, prev, older.k[older.k.length - 1], src, { ok: true }); if (r.done) { base = storedSeries(a); prevB = lastState(a); } }
     }
-    const fb = spotFallback(a, base, prevB, dueK, comp.reason); if (fb) return fb;
+    if (retry) { vlog(a + ': ' + comp.reason); return { done: false, pending: true, reason: comp.reason }; }
+    const fb = await spotFallback(a, base, prevB, dueK, comp.reason); if (fb) return fb;
+    if (quiet) { vlog(a + ': ' + comp.reason); return { done: false, pending: true, reason: comp.reason }; }
     markPending(a, dueK, comp.reason + (src.fallback ? ' (Ersatzquelle)' : ''));
     note(name(a) + ': Wochenschluss ' + ds(c.week === 'sun' ? addDays(dueK, 6) : (lastTradingDay(a, dueK) || addDays(dueK, 4))) + ' fehlt noch (' + comp.reason + ')');
     return { done: false, pending: true };
@@ -702,8 +748,9 @@ function ruleNow(a, price) {
   return { thr: round(ft.thr, 4), dist: round(price / ft.thr - 1, 6), can: ft.can, need: ft.need || null, st: E.last.st, would: E2.last.changed, wouldSt: E2.last.st, sma: round(E.last.m, 4), up: E2.last.up, dn: E2.last.dn, week: openK, closePending: openK < dueCutoff(a) };
 }
 /* Gold: den ersten Spotpreis nach dem LBMA-Nachmittagsfixing am letzten Fixing-Tag der Woche (meist Freitag, vor Feiertagen früher; 15 Uhr London)
-   festhalten; er dient als vorläufiger Wochenschluss, falls das Fixing am Montagmorgen noch fehlt (spotFallback). Nur Kurse aus dem Fenster
-   15:02 bis 17:00 Uhr London, damit er nah am Fixing liegt. Der stündliche Ticker läuft jeden Tag, das Fenster wird also auch mittwochs getroffen. */
+   festhalten; er dient sofort als vorläufiger Wochenschluss, solange das Fixing noch nicht veröffentlicht ist (spotFallback). Nur Kurse aus dem
+   Fenster 15:02 bis 17:00 Uhr London, damit er nah am Fixing liegt. Der stündliche Ticker läuft jeden Tag, das Fenster wird also auch mittwochs
+   getroffen; der Ticker um 15:07 Uhr London bucht den vorläufigen Schluss gleich mit (main, Schritt live). */
 function recordGoldSnap(g) {
   if (!CFG.assets.gold.signal.spotFallback || !g || !(g.price > 0)) return;
   const t = g.priceTime || NOW.toISOString(), L = londonAt(t);
@@ -713,7 +760,27 @@ function recordGoldSnap(g) {
   if (cur && cur.k === k) return;                                        /* der erste Kurs nach dem Fixing zählt */
   STATE.goldSnap = { k, d: L.d, p: round(g.price, 2), t, src: String(g.src || '').replace(/ XAU\/USD spot$/, '') };
   RUN.changed = true;
-  note('Gold: Spotpreis nach dem Fixing festgehalten, ' + usd('gold', g.price) + ' (' + t.slice(11, 16) + ' UTC), Ersatz für den Wochenschluss, falls das LBMA-Fixing bis Montagmorgen fehlt');
+  note('Gold: Spotpreis nach dem Fixing festgehalten, ' + usd('gold', g.price) + ' (' + t.slice(11, 16) + ' UTC), vorläufiger Wochenschluss, bis das LBMA-Fixing veröffentlicht ist');
+}
+/* Fehlt für die fällige Gold-Woche noch der Spotpreis (kein Ticker-Lauf im Fenster nach dem Fixing), jetzt einen holen: Er gilt dann mit seiner
+   Uhrzeit als vorläufiger Schluss, auch nach 17 Uhr London (unmittelbare Ersatzquelle, Justus 01.10.2026). Nie vor dem Fixing und nur vom Fixing-Tag. */
+async function ensureGoldSnap(dueK) {
+  const snap = STATE.goldSnap;
+  if (snap && snap.k === dueK && snap.p > 0) return;
+  const ltd = lastTradingDay('gold', dueK);
+  if (!ltd || !closedNow('gold', ltd)) return;
+  /* Nur ein Kurs vom Fixing-Tag selbst (Londoner Datum) nach 15:02 Uhr: davor taugt er nicht, und ab dem nächsten Handelstag wäre es ein Kurs
+     einer anderen Woche (am Wochenende meldet die Quelle den letzten Kurs vom Freitagabend, der gilt noch) */
+  let g = null, t = null;
+  for (const f of [F.goldSpot2, F.goldSpot1]) {
+    try { const q = await f(); const tt = q && q.priceTime ? q.priceTime : NOW.toISOString(), L = londonAt(tt); if (q && q.price > 0 && L.d === ltd && L.m >= 15 * 60 + 2) { g = q; t = tt; break; } vlog('Gold-Spot ' + (q && q.src) + ': Zeitpunkt ' + tt + ' passt nicht'); }
+    catch (e) { vlog('Gold-Spot: ' + e.message); }
+  }
+  if (!g) return;
+  const L = londonAt(t);
+  STATE.goldSnap = { k: dueK, d: ltd, p: round(g.price, 2), t, src: String(g.src || '').replace(/ XAU\/USD spot$/, ''), late: L.m > 17 * 60 };
+  RUN.changed = true;
+  note('Gold: Spotpreis ' + usd('gold', g.price) + ' (' + t.slice(11, 16) + ' UTC) als vorläufiger Wochenschluss festgehalten, das LBMA-Fixing fehlt noch');
 }
 async function liveTick() {
   const prev = loadJson('live.json', { prices: {} }), out = { t: NOW.toISOString(), prices: {}, rule: {} };
@@ -864,7 +931,7 @@ async function main() {
   RUN.step = step;
   log('Regel-Depot Update · ' + NOW.toISOString() + ' · Schritt ' + step + (OPT.final ? ' (letzter Versuch)' : '') + (OPT.mock ? ' · Mock ' + OPT.mock : ''));
   STATE.assets = STATE.assets || {}; STATE.queue = STATE.queue || [];
-  let flush = true;
+  let flush = true, flushOnly = null;
   QUIET = null;
   try {
     if (step === 'init') {
@@ -913,12 +980,37 @@ async function main() {
       await liveTick();
     } else if (step === 'so-warn') {
       try { await warnAsset('btc', await currentPrice('btc')); } catch (e) { fail(name('btc'), 'Vorwarnung: ' + e.message); }
+    } else if (step === 'btc-close') {
+      /* Bitcoin-Wochenschluss pünktlich (Justus 01.10.2026: „Die kommen mir zu spät, bei BTC muss ich ja direkt handeln“): Der Workflow startet
+         diesen Lauf Sonntag 23:31 und 23:46 UTC und lässt ihn bis Montag 0:00:40 UTC warten. Dann sofort die Tageskerze vom Sonntag: zuerst
+         Coinbase, schlägt das fehl, gleich die weiteren Quellen (Kraken, Yahoo, Alpha Vantage), bis zu 5 Minuten lang alle 20 Sekunden erneut
+         (antwortet Coinbase ohne fertige Sonntagskerze, abwechselnd mit den weiteren Quellen); liefert keine sie, gilt vorläufig der Live-Kurs
+         (btcLiveFallback). Die Nachricht dazu geht sofort hinaus, auch nachts. */
+      if (DOW === 6) QUIET = 'Die Bitcoin-Woche endet erst Sonntag 24 Uhr UTC (der Workflow wartet bis dahin), nichts zu tun.';
+      else {
+        const t0 = Date.now();
+        let r = await closeAsset('btc', { retry: true }), alt = false;
+        while (!r.done && Date.now() - t0 < RETRY_BUDGET_MS) {
+          await sleep(RETRY_MS);
+          alt = !!r.pending && !alt;                                   /* antwortet Coinbase ohne Sonntagskerze: abwechselnd die weiteren Quellen */
+          r = await closeAsset('btc', { retry: true, skipPrimary: alt });
+        }
+        if (!r.done) { const fb = await btcLiveFallback(r.error || r.reason || 'Tageskerze vom Sonntag fehlt noch'); if (fb && fb.done) r = fb; }
+        if (!r.done) r = await closeAsset('btc');                   /* letzter Versuch: Fehler und „fehlt noch“ eintragen */
+        if (r.already) QUIET = 'Bitcoin-Wochenschluss ist schon gebucht, nichts zu tun.';
+      }
+      flushOnly = isBtcPush;
     } else if (step === 'mo-close') {
-      await closeAsset('btc'); await closeAsset('gold'); await closeAsset('ftse');
+      /* Nachfass-Läufe 0:07 und 2:23 UTC (falls der pünktliche Lauf ausfiel), dazu was bei Gold und FTSE noch fehlt */
+      let rb = await closeAsset('btc', { retry: true });
+      if ((!rb.done && rb.pending) || rb.stillPrelim) rb = await closeAsset('btc', { retry: true, skipPrimary: true });
+      if (!rb.done) rb = await closeAsset('btc');
+      if (!rb.done && STATE.assets.btc && STATE.assets.btc.pending) await btcLiveFallback(STATE.assets.btc.pending.reason);
+      await closeAsset('gold'); await closeAsset('ftse');
       await goldCross();
       await eurQuotes(['btc', 'eurusd']);
       if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Investus: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
-      flush = false;                                                   /* Nachts nicht pushen, das macht mo-notify */
+      flushOnly = isBtcPush;                                           /* Bitcoin sofort, alles andere um mondayAt mit mo-notify */
     } else if (step === 'mo-notify') {
       for (const a of A) await closeAsset(a);
       weeklySummary();
@@ -928,6 +1020,9 @@ async function main() {
       const dl = EUR.daily && EUR.daily.btc, lastBtc = dl && dl.length ? dl[dl.length - 1][0] : '';
       if (lastBtc < addDays(TODAY, -1)) { try { await eurQuotes(['btc']); } catch (e) { vlog('Krypto-Tagesschluss: ' + e.message); } }
       await liveTick();
+      /* Gold: Nach dem Nachmittagsfixing (ab 15:05 Uhr London) bucht der Ticker die Woche sofort, vorläufig mit dem Spotpreis, solange die LBMA das
+         Fixing noch nicht veröffentlicht hat; danach prüft er stündlich, ob es da ist (schon endgültig gebuchte Wochen kosten keinen Abruf) */
+      await closeAsset('gold', { quiet: true });
       /* Montag: Die Nachrichten vom Wochenende gehen um 7:53 Uhr (Berlin) mit mo-notify hinaus. Fällt dieser Lauf aus oder verdrängt GitHub ihn,
          holt der nächste Ticker-Lauf das nach (Wochenschlüsse, Wochenübersicht, Warteschlange). Sonst verschickt der Ticker, was noch wartet. */
       const monHold = BERLIN.dow === 0 && BERLIN.hour < MON_PUSH;
@@ -998,7 +1093,7 @@ async function main() {
   } catch (e) { fail(null, e); }
   /* Nichts zu tun (vorgezogene Läufe an normalen Tagen): nichts schreiben, damit kein Commit entsteht */
   if (QUIET && RUN.ok && !RUN.changed) { log(QUIET); return; }
-  if (flush) await flushQueue();
+  if (flush) await flushQueue(flushOnly);
   /* Zustand und Protokoll schreiben */
   STATE.updated = NOW.toISOString(); STATE.step = step; STATE.version = 1;
   STATE.pendingQueue = (STATE.queue || []).length;

@@ -259,6 +259,28 @@
     };
   }
 
+  /* ---------- Rebalancing-Stichtage (Justus 01.10.2026: quartalsweise zum Quartalsende, ab dem 30.12.2026; vorher jährlich am 30.12.) ----------
+     law.rebalDays: Monat-Tag je Quartal (31.03., 30.06., 30.09. und 30.12., weil Lang & Schwarz am 31.12. nicht handelt); law.rebalFrom: erster
+     Stichtag, frühere fallen weg. Fällt ein Stichtag auf ein Wochenende oder einen deutschen Börsenfeiertag (Neujahr, Karfreitag, Ostermontag,
+     1. Mai, 24. bis 26.12., 31.12.), gilt der Handelstag davor. stored: in den Einstellungen gewählter Tag; er ersetzt den Stichtag seines
+     Kalenderquartals (auch vor rebalFrom). Ohne rebalDays gilt rebalDay einmal im Jahr. Ergebnis: Stichtage von from bis to (je einschließlich). */
+  function quarterOf(d) { return d.slice(0, 4) + '-Q' + (Math.floor((+d.slice(5, 7) - 1) / 3) + 1); }
+  function deHoliday(d) {
+    var md = d.slice(5), E = easterSunday(+d.slice(0, 4));
+    return md === '01-01' || md === '05-01' || md === '12-24' || md === '12-25' || md === '12-26' || md === '12-31' || d === addDays(E, -2) || d === addDays(E, 1);
+  }
+  function tradeDayOnOrBefore(d) { while (dow0(d) > 4 || deHoliday(d)) d = addDays(d, -1); return d; }
+  function rebalDates(law, stored, from, to) {
+    law = law || {};
+    var mds = law.rebalDays && law.rebalDays.length ? law.rebalDays : [law.rebalDay || '12-30'], start = law.rebalFrom || '', ov = stored ? String(stored).slice(0, 10) : '', out = [];
+    for (var y = +from.slice(0, 4) - 1; y <= +to.slice(0, 4) + 1; y++) mds.forEach(function (md) {
+      var nom = y + '-' + md, d = ov && quarterOf(ov) === quarterOf(nom) ? ov : tradeDayOnOrBefore(nom);
+      if (d !== ov && start && d < start) return;
+      if (d >= from && d <= to && out.indexOf(d) < 0) out.push(d);
+    });
+    return out.sort();
+  }
+
   /* ---------- Vorabpauschale (A-9) ---------- */
   function vorab(lots, year, p0, pEnd, basiszins) {
     if (!(p0 > 0) || !(pEnd > p0)) return 0;
@@ -298,7 +320,8 @@
   /* Handelskalender London für FTSE und Gold, gemeinsam für Update-Skript und Seite. cal = config.holidays {extra, notHolidays, fridays, lbmaNoPm}.
      Am letzten Geschäftstag vor Weihnachten und vor Neujahr (isEve; meist 24.12./31.12., am Wochenende der Freitag davor) gibt es kein
      LBMA-Nachmittagsfixing, und die Börse schließt um 12:30 Uhr (Schlussauktion bis 12:35). Der Wochenschluss liegt am letzten Handelstag der
-     Woche; closeMin ist die Londoner Uhrzeit (Minuten), ab der er als geschlossen gilt: FTSE 16:40, an Halbtagen 12:40; Gold 16:40. */
+     Woche; closeMin ist die Londoner Uhrzeit (Minuten), ab der er als geschlossen gilt: FTSE 16:40, an Halbtagen 12:40; Gold 15:05, gleich nach
+     dem LBMA-Nachmittagsfixing um 15 Uhr (bis 30.09.2026 16:40; seit 01.10.2026 kommt der vorläufige Gold-Schluss sofort nach dem Fixing). */
   function calendar(cal) {
     cal = cal || {};
     var HOLI = {}, EVE = {};
@@ -318,9 +341,9 @@
     }
     function lastTradingDay(a, k) { for (var i = 4; i >= 0; i--) { var d = addDays(k, i); if (isTradingDay(a, d)) return d; } return null; }
     function prevTradingDay(a, d, k) { for (var x = addDays(d, -1); x >= k; x = addDays(x, -1)) if (isTradingDay(a, x)) return x; return k; }
-    function closeMin(a, d) { return a === 'ftse' && isEve(d) ? 12 * 60 + 40 : 16 * 60 + 40; }
-    /* Endet die Woche (Montag k) früher als am Freitagabend: Feiertag am Freitag (oder davor) oder Halbtag */
-    function earlyClose(a, k) { var d = lastTradingDay(a, k); return !!d && (d < addDays(k, 4) || closeMin(a, d) < 16 * 60 + 40); }
+    function closeMin(a, d) { return a === 'gold' ? 15 * 60 + 5 : isEve(d) ? 12 * 60 + 40 : 16 * 60 + 40; }
+    /* Endet die Woche (Montag k) früher als am Freitagabend: Feiertag am Freitag (oder davor) oder FTSE-Halbtag */
+    function earlyClose(a, k) { var d = lastTradingDay(a, k); return !!d && (d < addDays(k, 4) || (a === 'ftse' && isEve(d))); }
     return { isUkHoliday: isUkHoliday, lseDay: lseDay, isEve: isEve, halfDay: isEve, isTradingDay: isTradingDay, lastTradingDay: lastTradingDay, prevTradingDay: prevTradingDay, closeMin: closeMin, earlyClose: earlyClose };
   }
 
@@ -418,7 +441,7 @@
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf, edgeCase: edgeCase,
-    book: book, units: units, cost: cost, taxYear: taxYear, tax23: tax23, tax20: tax20, simSell: simSell, taxFreeMax: taxFreeMax, rebalance: rebalance, vorab: vorab
+    book: book, units: units, cost: cost, taxYear: taxYear, tax23: tax23, tax20: tax20, simSell: simSell, taxFreeMax: taxFreeMax, rebalance: rebalance, rebalDates: rebalDates, quarterOf: quarterOf, vorab: vorab
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = ENG;
   else root.ENG = ENG;

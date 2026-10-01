@@ -20,7 +20,12 @@ on:
     - cron: '23 8 * * 6'     #   … Winter
     - cron: '17 19 * * 0'    # So 21:17 Berlin (Sommer): Vorwarnung Bitcoin
     - cron: '17 20 * * 0'    #   … Winter
-    - cron: '7 0 * * 1'      # Mo 0:07 UTC (ganzjährig, die Bitcoin-Woche endet So 24 Uhr UTC): Wochenschluss Bitcoin, Push erst am Morgen
+    # Bitcoin-Wochenschluss pünktlich (die Bitcoin-Woche endet So 24 Uhr UTC, ganzjährig): Der Lauf startet vorher, wartet bis Mo 0:00:40 UTC und
+    # bucht sofort, die Nachricht geht sofort hinaus (Justus 01.10.2026). Zwei Starts, falls GitHub einen verschluckt; der zweite findet die
+    # Woche dann schon gebucht und endet ohne Commit. Startet GitHub erst nach Mitternacht, läuft er sofort.
+    - cron: '31 23 * * 0'    # So 23:31 UTC: Bitcoin-Wochenschluss pünktlich um 0 Uhr UTC
+    - cron: '46 23 * * 0'    # So 23:46 UTC: zweiter Start
+    - cron: '7 0 * * 1'      # Mo 0:07 UTC: Nachfassen Bitcoin (falls der pünktliche Lauf ausfiel), Bitcoin-Nachrichten sofort, alle anderen am Morgen
     - cron: '23 2 * * 1'     # Mo 2:23 UTC: Wiederholung, letzter Versuch der Nacht
     - cron: '53 5 * * 1'     # Mo 7:53 Berlin (Sommer): Benachrichtigungen vom Wochenende
     - cron: '53 6 * * 1'     #   … Winter
@@ -44,7 +49,7 @@ on:
         description: 'Schritt (auto erkennt ihn an der Uhrzeit)'
         type: choice
         default: auto
-        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, mo-close, mo-notify, eod, early-warn, early-close, early-warn-half, early-close-half, all, test-sources, test-eodhd, test-push]
+        options: [auto, live, fr-warn, fr-close, sa-close, so-warn, btc-close, mo-close, mo-notify, eod, early-warn, early-close, early-warn-half, early-close-half, all, test-sources, test-eodhd, test-push]
 
 permissions:
   contents: write
@@ -80,6 +85,8 @@ jobs:
             "23 8 * * 6")  STEP=sa-close; FINAL="--fallback"; SEASON=winter ;;
             "17 19 * * 0") STEP=so-warn; SEASON=summer ;;
             "17 20 * * 0") STEP=so-warn; SEASON=winter ;;
+            "31 23 * * 0") STEP=btc-close ;;
+            "46 23 * * 0") STEP=btc-close ;;
             "7 0 * * 1")   STEP=mo-close ;;
             "23 2 * * 1")  STEP=mo-close; FINAL="--final --fallback" ;;
             "53 5 * * 1")  STEP=mo-notify; SEASON=summer ;;
@@ -112,7 +119,8 @@ jobs:
     needs: gate
     if: needs.gate.outputs.run == 'true'
     runs-on: ubuntu-24.04
-    timeout-minutes: 15
+    # btc-close wartet bis zu 90 Minuten auf den Bitcoin-Wochenschluss (Mo 0:00 UTC), alle anderen Läufe enden nach höchstens 15 Minuten
+    timeout-minutes: ${{ needs.gate.outputs.step == 'btc-close' && 110 || 15 }}
     concurrency:
       group: regel-depot-update
       cancel-in-progress: false
@@ -143,6 +151,18 @@ jobs:
           git config user.name "regel-depot-bot"
           git config user.email "regel-depot-bot@users.noreply.github.com"
           run_step() { node scripts/update.mjs --step "$STEP" $FINAL; }
+          # Bitcoin-Wochenschluss: bis Montag 0:00:40 UTC warten (sonntags höchstens 90 Minuten, auch bei einem Start kurz nach Mitternacht),
+          # dann den neuesten Stand holen und sofort buchen
+          if [ "$STEP" = "btc-close" ]; then
+            case "$(date -u +%u)" in 7) D=$(date -u -d tomorrow +%F) ;; 1) D=$(date -u +%F) ;; *) D="" ;; esac
+            if [ -n "$D" ]; then
+              T=$(date -u -d "$D 00:00:40" +%s); W=$(( T - $(date -u +%s) ))
+              if [ "$W" -gt 0 ] && [ "$W" -le 5400 ]; then
+                echo "Warte ${W} Sekunden bis $(date -u -d @"$T" '+%a %H:%M:%S') UTC"; sleep "$W"
+                git fetch -q origin "$GITHUB_REF_NAME" && git reset -q --hard "origin/$GITHUB_REF_NAME"
+              fi
+            fi
+          fi
           save() {
             git add docs/data
             if git diff --cached --quiet; then echo "Keine Änderungen."; return 0; fi

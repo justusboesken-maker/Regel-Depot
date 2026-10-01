@@ -86,8 +86,8 @@
     if (l && l.usd > 0) return { usd: l.usd, eur: l.eur || null, t: l.t || (D.live && D.live.t), src: l.src, eod: !!l.eod, d: l.d || null, spot: !!l.spot };
     return null;
   }
-  /* Offene Woche wie im Update-Skript: FTSE und Gold ab dem Schluss am letzten Handelstag (meist Freitag 16:40 Uhr London, in Feiertagswochen
-     früher, an Halbtagen 12:40 Uhr) die nächste Woche,
+  /* Offene Woche wie im Update-Skript: FTSE und Gold ab dem Schluss am letzten Handelstag (meist Freitag, FTSE 16:40 Uhr London, Gold 15:05 Uhr
+     nach dem Nachmittagsfixing, in Feiertagswochen früher, an Halbtagen 12:40 Uhr) die nächste Woche,
      Bitcoin bis Sonntag 24 Uhr UTC. Fehlt die zuletzt geschlossene Woche noch in der Reihe (Buchung steht aus), bleibt sie die offene Woche;
      der aktuelle Kurs steht dann für ihren Schluss. Vorher rechnete der Live-Block am Wochenende mit der schon geschlossenen Woche. */
   /* Londoner Datum und Uhrzeit (Minuten) jetzt */
@@ -127,10 +127,14 @@
      Orderkosten) kommen immer aus der Konfiguration, Basiszins und VWCE-Kurs zu Jahresbeginn je Jahr (taxLaw.years). */
   var TAX_PER_YEAR = ['pbUsed', 'pbUsedDate', 'interestRest', 's23Other', 'headroom'], TAX_USER = TAX_PER_YEAR.concat(['lossOther', 'rate', 'nv', 'buffer', 'minOrder', 'cashRate', 'note']);
   function storedTaxYear(t) { if (t && +t.year > 2000) return +t.year; return t && t.pbUsedDate ? +String(t.pbUsedDate).slice(0, 4) : 2026; }
-  /* Rebalancing jedes Jahr am selben Tag (Justus: 30.12.): ein gewählter künftiger Tag gilt, ein vergangener rückt ins laufende oder nächste Jahr */
+  /* Rebalancing quartalsweise zum Quartalsende (Justus 01.10.2026, vorher jährlich am 30.12.): 31.03., 30.06., 30.09. und 30.12., erstmals am
+     30.12.2026 (taxLaw.rebalDays und rebalFrom; Wochenende oder Feiertag: der Handelstag davor, siehe ENG.rebalDates). Ein in den Einstellungen
+     gewählter Tag ersetzt den Stichtag seines Quartals. */
   /* Letzter Stichtag bis heute: bis 7 Tage danach lässt sich das vorgeschlagene Rebalancing noch als umgesetzt buchen (Justus 26.09.2026) */
-  function prevRebal(stored, day) { var today = todayISO(), md = stored ? String(stored).slice(5, 10) : (day || '12-30'), d = today.slice(0, 4) + '-' + md; if (d > today) d = (+today.slice(0, 4) - 1) + '-' + md; if (stored && stored <= today && stored > d) d = stored; return d; }
-  function nextRebal(stored, day) { var today = todayISO(), md = stored ? String(stored).slice(5, 10) : (day || '12-30'), d = today.slice(0, 4) + '-' + md; if (stored && stored >= today) return stored; return d >= today ? d : (+today.slice(0, 4) + 1) + '-' + md; }
+  function prevRebal(stored) { var today = todayISO(), r = ENG.rebalDates(CFG.taxLaw, stored, ENG.addDays(today, -400), today); return r.length ? r[r.length - 1] : null; }
+  function nextRebal(stored) { var today = todayISO(); return ENG.rebalDates(CFG.taxLaw, stored, today, ENG.addDays(today, 400))[0] || null; }
+  /* Einstellungen: ein gespeicherter Tag erscheint nur, wenn er vom Plan abweicht (leer = quartalsweise zum Quartalsende) */
+  function rebalOverride(stored) { var d = stored ? String(stored).slice(0, 10) : ''; return d && !ENG.rebalDates(CFG.taxLaw, null, d, d).length ? d : ''; }
   function taxCfg() {
     var law = CFG.taxLaw, t = STORE.load().tax || {}, year = +todayISO().slice(0, 4), yl = (law.years || {})[year] || null, cfg = {};
     ['pb', 'abg', 'tfs', 'fg', 'buffer', 'minOrder', 'fee'].forEach(function (k) { cfg[k] = law[k]; });
@@ -144,8 +148,8 @@
     cfg.rateKnown = t.rate !== undefined && t.rate !== null && t.rate !== '';
     cfg.rate = +cfg.rate; cfg.headroom = cfg.headroom == null || cfg.headroom === '' ? null : +cfg.headroom;
     cfg.cashRate = t.cashRate == null || t.cashRate === '' ? 0.025 : +t.cashRate;
-    cfg.rebalDate = nextRebal(t.rebalDate || null, law.rebalDay || (law.rebalDate ? String(law.rebalDate).slice(5) : '12-30'));
-    cfg.rebalPrev = prevRebal(t.rebalDate || null, law.rebalDay || (law.rebalDate ? String(law.rebalDate).slice(5) : '12-30'));
+    cfg.rebalDate = nextRebal(t.rebalDate || null);
+    cfg.rebalPrev = prevRebal(t.rebalDate || null);
     return cfg;
   }
   function pxOf(a) { var p = D.eur && D.eur.latest && D.eur.latest[a]; return p && p.p > 0 ? p : null; }
@@ -820,7 +824,7 @@
   /* ---------- Vergleich mit Buy & Hold 50/30/20 (Justus 26.09.2026) ----------
      Ab dem letzten Wochenschluss vor dem Regelstart je Tag (Justus 28.09.2026): dein Depot (Positionen samt Beimischung und Cash, wie „Wert“)
      zeitgewichtet gegen ein Buy-&-Hold-Depot, das zu diesem Wochenschluss den Gesamtwert deines Depots zu 50/30/20 in VWCE, Bitcoin und
-     Gold-ETC anlegt, jedes Jahr am Rebalancing-Stichtag
+     Gold-ETC anlegt, an jedem Rebalancing-Stichtag (seit 01.10.2026 quartalsweise wie das Depot)
      auf 50/30/20 zurückgeht und dieselben Ein- und Auszahlungen bekommt (Einzahlungen 50/30/20, Auszahlungen anteilig); ohne Gebühren und Steuern.
      Darunter der Drawdown beider Linien mit Max DD, Hoch → Tief und aktuellem Rückgang. */
   var BH_W = { ftse: 0.5, btc: 0.3, gold: 0.2 };
@@ -833,14 +837,15 @@
     if (t.type === 'verkauf') return Math.min(0, econDelta(t) - (v - fee));   /* nur, wenn weniger als der Erlös ins Cash ging */
     return 0;
   }
-  /* Rebalancing-Tage für Buy & Hold: je Jahr der gebuchte Stichtag (tx.reb), für Jahre ohne Buchung der Tag aus den Einstellungen (sonst 30.12.) */
+  /* Rebalancing-Tage für Buy & Hold: dieselben Stichtage wie beim Depot (quartalsweise, Justus 01.10.2026); ein gebuchtes Rebalancing (tx.reb)
+     ersetzt den Stichtag seines Quartals */
   function rebalDays(Mo, from, to) {
-    var md = rebalMd(Mo), booked = {}, out = [];
-    Mo.dep.tx.forEach(function (t) { var r = t && t.reb && ENG.parseDate(t.reb); if (r) { var y = r.slice(0, 4); if (!booked[y] || r < booked[y]) booked[y] = r; } });
-    for (var y = +from.slice(0, 4); y <= +to.slice(0, 4); y++) { var d = booked[y] || (y + '-' + md); if (d > from && d <= to) out.push(d); }
-    return out;
+    var t = (Mo.dep && Mo.dep.tax) || {}, booked = {}, out;
+    Mo.dep.tx.forEach(function (x) { var r = x && x.reb && ENG.parseDate(x.reb); if (r) { var q = ENG.quarterOf(r); if (!booked[q] || r < booked[q]) booked[q] = r; } });
+    out = ENG.rebalDates(CFG.taxLaw, t.rebalDate || null, from, to).map(function (d) { return booked[ENG.quarterOf(d)] || d; });
+    Object.keys(booked).forEach(function (q) { if (out.indexOf(booked[q]) < 0) out.push(booked[q]); });
+    return out.sort().filter(function (d, i, a) { return a.indexOf(d) === i && d > from && d <= to; });
   }
-  function rebalMd(Mo) { var t = (Mo.dep && Mo.dep.tax) || {}, law = CFG.taxLaw || {}; return t.rebalDate ? String(t.rebalDate).slice(5, 10) : (law.rebalDay || (law.rebalDate ? String(law.rebalDate).slice(5) : '12-30')); }
   /* Letzter Eintrag [Datum, Kurs] bis einschließlich d in einer nach Datum sortierten Liste (Binärsuche) */
   function lastAt(rows, d) { var lo = 0, hi = rows.length - 1, v = null; while (lo <= hi) { var mid = (lo + hi) >> 1; if (rows[mid][0] <= d) { v = rows[mid]; lo = mid + 1; } else hi = mid - 1; } return v; }
   function compareData(Mo) {
@@ -893,7 +898,7 @@
     var host = $('chPerf'), box = $('perfDD'), leg = $('perfLegend'), cap = $('perfCap');
     host.textContent = ''; box.textContent = ''; leg.textContent = ''; cap.textContent = '';
     function legItem(v, dash, text) { var sp = el('span'), i = el('i'); i.style.borderTopColor = 'var(' + v + ')'; i.style.width = '26px'; if (dash) i.className = 'dash'; else i.style.borderTopWidth = '3px'; sp.appendChild(i); sp.appendChild(document.createTextNode(text)); leg.appendChild(sp); }
-    var c = compareData(Mo), START = c.first || c.start, md = rebalMd(Mo), w = c.wait ? null : compareWindow(c);
+    var c = compareData(Mo), START = c.first || c.start, w = c.wait ? null : compareWindow(c);
     var few = w && w.dates.length < 2;
     /* Start mit dem Wochenschluss vor dem Regelstart (Justus 28.09.2026); VWCE und Gold-ETC haben da den Schlusskurs ihres letzten Handelstags.
        Fehlten zum Wochenschluss Euro-Kurse, startet der Vergleich am ersten Tag mit allen (wie bisher). */
@@ -972,8 +977,8 @@
   /* Abstand Berlin zu UTC in Stunden zu einem Zeitpunkt (Sommerzeit 2, Winterzeit 1) */
   function berlinOffsetH(d) { var p = {}; try { new Intl.DateTimeFormat('en-GB', { timeZone: 'Europe/Berlin', year: 'numeric', month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit', hour12: false }).formatToParts(d).forEach(function (x) { p[x.type] = x.value; }); } catch (e) { return 1; } return Math.round((Date.UTC(+p.year, +p.month - 1, +p.day, (+p.hour) % 24, +p.minute) - Math.floor(d.getTime() / 60000) * 60000) / 3600000); }
   function seasonOf(d) { return berlinOffsetH(d) === 2 ? 'summer' : 'winter'; }
-  /* Berliner Uhrzeit des Bitcoin-Wochenschlusses (Montag 0:07 UTC): 2:07 im Sommer, 1:07 im Winter */
-  function btcCloseTime() { var now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 7)); return (berlinOffsetH(d)) + ':07'; }
+  /* Berliner Uhrzeit des Bitcoin-Wochenschlusses (Montag 0 Uhr UTC, gebucht von btc-close kurz danach): 2:00 im Sommer, 1:00 im Winter */
+  function btcCloseTime() { var now = new Date(), d = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate(), 0, 1)); return (berlinOffsetH(d)) + ':00'; }
   /* Cron ("m h * * dow", UTC) -> nächster Zeitpunkt; season: nur Zeitpunkte in Berliner Sommer- bzw. Winterzeit (der Workflow lässt die anderen aus) */
   function nextCron(cron, now, season, ok) {
     var p = cron.split(/\s+/), mi = +p[0], h = +p[1], dows = [], mons = p[3] === '*' ? null : p[3].split(',').map(Number);
@@ -990,17 +995,18 @@
       if (when === 'early') return ['ftse', 'gold'].some(function (a) { return CAL.lastTradingDay(a, k) === d && CAL.earlyClose(a, k) && !(a === 'ftse' && CAL.isEve(d)); });
       if (when === 'half') return CAL.isEve(d) && CAL.lastTradingDay('ftse', k) === d;
       if (when === 'normal') return ['ftse', 'gold'].some(function (a) { return !CAL.earlyClose(a, k); });
+      if (when === 'gold') return CAL.lastTradingDay('gold', k) === d;
       return true;
     };
   }
   function renderSched() {
     var host = $('sched'); host.textContent = ''; var now = new Date(), seen = {};
-    var rn = $('runNote'); if (rn) rn.textContent = 'Die Läufe laufen automatisch bei GitHub und können sich um einige Minuten verschieben. Freitags wird der Wochenschluss ab 18:47 Uhr mehrfach versucht (zuletzt nachts um 1:37 Uhr und Samstag 9:23 Uhr), bis Alpha Vantage und LBMA die Schlusskurse veröffentlicht haben; Bitcoin schließt Montag ' + btcCloseTime() + ' Uhr, die Push-Nachrichten dazu kommen Montag um ' + ((CFG.push && CFG.push.mondayAt) || '07:53').replace(/^0/, '') + ' Uhr. Alle Zeiten Berliner Zeit, im Sommer wie im Winter. Der stündliche Kurs-Ticker erscheint hier nicht.';
-    (CFG.schedule || []).filter(function (s) { return !s.retry && !s.quiet; }).map(function (s) { return { d: nextCron(s.cron, now, s.season, schedOk(s.when)), label: s.label, id: s.id }; })
+    var rn = $('runNote'); if (rn) rn.textContent = 'Die Läufe laufen automatisch bei GitHub und können sich um einige Minuten verschieben. Bitcoin: Der Lauf startet vorher und wartet, gebucht wird Montag gleich nach ' + btcCloseTime() + ' Uhr (Sonntag 24 Uhr UTC), ein Signal kommt sofort per Push. Gold: Gleich nach dem Nachmittagsfixing (16 Uhr) gilt vorläufig der Spotpreis, ein Signal kommt sofort per Push; das LBMA-Fixing selbst folgt meist erst spät abends. Der FTSE-Schluss kommt ab 18:47 Uhr; fehlende Schlüsse werden bis nachts um 1:37 Uhr und Samstag 9:23 Uhr nachgeholt. Alle Zeiten Berliner Zeit, im Sommer wie im Winter. Der stündliche Kurs-Ticker erscheint hier nicht.';
+    (CFG.schedule || []).filter(function (s) { return !s.retry && !s.quiet; }).map(function (s) { return { d: nextCron(s.show || s.cron, now, s.season, schedOk(s.when)), label: s.label, id: s.id }; })
       /* erst nach Datum sortieren, dann Doppelte (Sommer-/Winterzeile desselben Laufs) entfernen: so bleibt immer der nächste Termin */
       .filter(function (o) { return !!o.d; }).sort(function (x, y) { return x.d - y.d; }).filter(function (o) { return !seen[o.id + o.label] && (seen[o.id + o.label] = 1); }).slice(0, 6).forEach(function (o) { var r = el('div'); r.appendChild(el('span', null, o.label)); r.appendChild(el('b', null, o.d.toLocaleString('de-DE', { weekday: 'short', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr')); host.appendChild(r); });
   }
-  var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE und Gold', 'sa-close': 'Samstag: fehlende Schlüsse', 'so-warn': 'Vorwarnung Bitcoin', 'mo-close': 'Wochenschluss Bitcoin', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'live': 'Kurs-Ticker', 'early-warn': 'Vorwarnung (Woche endet vorzeitig)', 'early-close': 'Vorgezogener Wochenschluss', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push', 'test-sources': 'Quellen-Test' };
+  var STEPS = { 'fr-warn': 'Vorwarnung FTSE und Gold', 'fr-close': 'Wochenschluss FTSE und Gold', 'sa-close': 'Samstag: fehlende Schlüsse', 'so-warn': 'Vorwarnung Bitcoin', 'btc-close': 'Wochenschluss Bitcoin (pünktlich)', 'mo-close': 'Wochenschluss Bitcoin (Nachfassen)', 'mo-notify': 'Benachrichtigungen', 'eod': 'Euro-Kurse', 'live': 'Kurs-Ticker', 'early-warn': 'Vorwarnung (Woche endet vorzeitig)', 'early-close': 'Vorgezogener Wochenschluss', 'all': 'Alles (manuell)', 'init': 'Startdaten', 'test-push': 'Test-Push', 'test-sources': 'Quellen-Test' };
   /* Auf- und Zuklappen (Justus 27.09.2026: „ausgeklappt bleiben, auch nach dem Aktualisieren; erst nach einer Stunde Nichtbenutzung wieder
      einklappen“). Alle Klappen merken sich ihren Zustand in diesem Browser (regelDepot.fold): Knöpfe mit data-fold (Buchungen, Hinweise, Letzte
      Läufe, Push-Nachrichten), die Bereiche <details class="box"> unter Depot und Einstellungen (box-<id>), die Handlungs-Boxen der Status-Karten
@@ -1379,7 +1385,9 @@
       cards.appendChild(card);
     });
     function note(t) { notes.appendChild(el('p', null, t)); }
-    note('Handelstage: Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Bitcoin kannst du bei Trade Republic auch am 31.12. handeln.');
+    var rlaw = CFG.taxLaw || {}, plan = (rlaw.rebalDays || []).map(function (md) { return md.slice(3) + '.' + md.slice(0, 2) + '.'; });
+    if (plan.length) note('Rhythmus: quartalsweise zum Quartalsende (' + plan.join(', ') + '; fällt der Tag auf ein Wochenende oder einen Feiertag, gilt der Handelstag davor)' + (rlaw.rebalFrom && rlaw.rebalFrom > today ? ', erstmals am ' + dDE(rlaw.rebalFrom) : '') + '. Umsetzen und buchen kannst du am Stichtag und bis 7 Tage danach. Buy & Hold im Vergleich geht an denselben Tagen auf 50/30/20 zurück.');
+    if (date.slice(5, 7) === '12') note('Handelstage: Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Bitcoin kannst du bei Trade Republic auch am 31.12. handeln.');
     note('Verkauft wird immer der älteste Kauf zuerst (FIFO). Einzelne Kauflose kannst du nicht auswählen.');
     note('Freigrenze: Liegen alle kurzfristigen Gewinne aus Bitcoin und Gold ' + cfg.year + ' zusammen bei 1.000 € oder mehr, ist der ganze Betrag steuerpflichtig, nicht nur der Teil darüber. Die Seite hält ' + eur(cfg.buffer) + ' Abstand.');
     note('Steuersatz ' + pctPlain(cfg.rate, 0) + (cfg.headroom != null ? ' (' + eur(cfg.headroom) + ' Spielraum bis zum Grundfreibetrag)' : '') + ': ' + (cfg.rate > 0 ? 'Über der Freigrenze wird der ganze kurzfristige Gewinn mit deinem Satz besteuert (Anlage SO). ' : 'Über der Freigrenze fällt keine Steuer an, aber eine Steuererklärung mit Anlage SO. ') + 'ETF-Gewinne über dem Pauschbetrag kürzt Trade Republic um 26,375 %' + (cfg.nv ? '; mit deiner NV-Bescheinigung entfällt der Abzug.' : '; zurück über die Anlage KAP (Günstigerprüfung) oder vermeidbar mit einer NV-Bescheinigung.'));
@@ -1389,8 +1397,10 @@
     if (!cfg.lawYearKnown && Mo.pos.ftse.u > 0) note('Vorabpauschale für ' + cfg.year + ': Basiszins und VWCE-Kurs zu Jahresbeginn ' + cfg.year + ' sind noch nicht eingetragen (das BMF veröffentlicht den Basiszins im Januar); die Schätzung erscheint, sobald sie in der Konfiguration stehen.');
     if (vp > 0.5) note('Vorabpauschale für ' + cfg.year + ' auf VWCE: ca. ' + eur(vp) + ', davon nach Teilfreistellung ' + eur(vp * (1 - cfg.tfs)) + ' steuerpflichtig. Sie wird Anfang Januar ' + (cfg.year + 1) + ' abgerechnet und zählt zum Pauschbetrag ' + (cfg.year + 1) + ', nicht ' + cfg.year + '.');
     note('Krypto-Neuregelung (Referentenentwurf, noch kein Gesetz): Bitcoin-Käufe ab 01.01.2027 sollen unabhängig von der Haltedauer mit 26,375 % besteuert werden. Käufe bis zum 31.12.2026, auch beim Rebalancing, behalten die Haltefrist-Regel.');
-    var left = R.frei.pbLeft;
-    if (left >= 50 && Mo.pos.ftse.lots.length && Mo.pos.ftse.px) { var gpu = 0, q = 0, room = left; for (var i = 0; i < Mo.pos.ftse.lots.length && room > 0; i++) { var l = Mo.pos.ftse.lots[i], g = (Mo.pos.ftse.px - l.cpu) * (1 - cfg.tfs); if (g <= 0) continue; var take = Math.min(l.units, room / g); q += take; room -= take * g; gpu += take * g; }
+    /* Pauschbetrag nutzen nur zum letzten Stichtag im Jahr (seit 01.10.2026 quartalsweise; vorher gab es nur den 30.12.) */
+    var left = R.frei.pbLeft, due = bookable ? prev : cfg.rebalDate;
+    var lastOfYear = !!due && date.slice(0, 4) === due.slice(0, 4) && !ENG.rebalDates(CFG.taxLaw, (Mo.dep.tax && Mo.dep.tax.rebalDate) || null, ENG.addDays(due, 1), due.slice(0, 4) + '-12-31').length;
+    if (left >= 50 && lastOfYear && Mo.pos.ftse.lots.length && Mo.pos.ftse.px) { var gpu = 0, q = 0, room = left; for (var i = 0; i < Mo.pos.ftse.lots.length && room > 0; i++) { var l = Mo.pos.ftse.lots[i], g = (Mo.pos.ftse.px - l.cpu) * (1 - cfg.tfs); if (g <= 0) continue; var take = Math.min(l.units, room / g); q += take; room -= take * g; gpu += take * g; }
       if (gpu >= 100) note('Pauschbetrag nutzen: Verkaufst du am ' + dDE(date) + ' ' + de(q, 2) + ' Stück VWCE und kaufst sie sofort zurück, realisierst du ' + eur(gpu) + ' steuerpflichtigen Gewinn ohne Abzug. Dein Einstand steigt, das spart später bis zu ' + eur(gpu * cfg.abg) + ' Abgeltungsteuer. Nur ein Hinweis, keine Automatik; kostet zwei Orders.'); }
   }
 
@@ -1403,7 +1413,7 @@
   function dataInfoText(dep, ready) { var c = dep.cash, m = dep.meta || {}; return ready ? (nBuch(dep.tx.length) + ', Cash ' + eur((c.ftse || 0) + (c.btc || 0) + (c.gold || 0), 2) + (m.imported ? ' · importiert ' + dtDE(m.imported) : '') + (m.saved ? ' · zuletzt gespeichert ' + dtDE(m.saved) : '') + (m.source ? ' · Quelle: ' + m.source : '')) : 'Noch keine Depotdaten in diesem Browser.'; }
   function fillForms(Mo) {
     var t = Mo.cfg, c = Mo.cash;
-    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? deIn(t.pbUsed, 2) : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = deIn(t.interestRest || 0, 2); $('tLoss').value = deIn(t.lossOther || 0, 2); $('tS23').value = deIn(t.s23Other || 0, 2); $('tRate').value = t.rateKnown ? deIn(t.rate * 100, 1) : ''; $('tHead').value = t.headroom == null ? '' : deIn(t.headroom, 2); $('tNv').checked = !!t.nv; $('tBuf').value = deIn(t.buffer, 2); $('tMin').value = deIn(t.minOrder, 2); $('tReb').value = t.rebalDate || ''; $('tCashRate').value = deIn((t.cashRate || 0) * 100, 2); }
+    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? deIn(t.pbUsed, 2) : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = deIn(t.interestRest || 0, 2); $('tLoss').value = deIn(t.lossOther || 0, 2); $('tS23').value = deIn(t.s23Other || 0, 2); $('tRate').value = t.rateKnown ? deIn(t.rate * 100, 1) : ''; $('tHead').value = t.headroom == null ? '' : deIn(t.headroom, 2); $('tNv').checked = !!t.nv; $('tBuf').value = deIn(t.buffer, 2); $('tMin').value = deIn(t.minOrder, 2); $('tReb').value = rebalOverride(t.rebalDate); $('tCashRate').value = deIn((t.cashRate || 0) * 100, 2); }
     if (!formDirty.cash) fillCash(c, Mo.dep.cashDate);
     $('taxYearLbl').textContent = String(t.year);
     var tn = $('taxNote'); tn.textContent = (Mo.dep.tax && Mo.dep.tax.note) || '';
@@ -1595,9 +1605,9 @@
     var sn = $('srcNotes'); sn.textContent = '';
     function note(t) { sn.appendChild(el('p', null, t)); }
     note('SMA50 = einfacher Durchschnitt der letzten 50 Wochenschlüsse einschließlich der aktuellen Woche. Nur abgeschlossene Wochen zählen. Feiertage: Der letzte Handelstag der Woche ist der Wochenschluss.');
-    note('Signale (US-Dollar): FTSE aus VWRD London mit wieder angelegten Ausschüttungen von Alpha Vantage, der Freitagsschluss zuerst von EODHD (geprüft: identisch); liefert Alpha Vantage nicht, rechnen die Wiederholungsläufe mit den EODHD-Tagesschlüssen weiter. Bitcoin BTC-USD von Coinbase (Tageskerzen, Wochenschluss Sonntag 24 Uhr UTC), Ersatz Kraken, Yahoo Finance oder Alpha Vantage. Gold LBMA-Nachmittagsfixing; fehlt es am Montagmorgen noch, gilt vorläufig der Spotpreis kurz nach dem Fixing vom Freitag, bis das Fixing kommt. Gebuchte Bitcoin- und Gold-Wochen bleiben, wie sie gebucht wurden (bis 20.09.2026 stammen die Bitcoin-Schlüsse von Yahoo Finance). Ersatzquellen und vorläufige Schlüsse sind gekennzeichnet.'); note('Depotbewertung (Euro): ETF und Gold-ETC ausschließlich mit Lang-&-Schwarz-Kursen (dieselben wie bei Trade Republic; tagsüber stündlich, Tagesschluss 23 Uhr). Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs mit Datum stehen, es gibt keine Ersatzkurse. Bitcoin, ETH und SOL mit Coinbase in Euro (stündlich und live beim Öffnen der Seite, Tagesschluss 24 Uhr UTC), Ersatz Kraken, gekennzeichnet. EUR/USD von der EZB nur für Umrechnungen.');
+    note('Signale (US-Dollar): FTSE aus VWRD London mit wieder angelegten Ausschüttungen von Alpha Vantage, der Freitagsschluss zuerst von EODHD (geprüft: identisch); liefert Alpha Vantage nicht, rechnen die Wiederholungsläufe mit den EODHD-Tagesschlüssen weiter. Bitcoin BTC-USD von Coinbase (Tageskerzen, Wochenschluss Sonntag 24 Uhr UTC), bei einem Fehlschlag sofort Kraken, Yahoo Finance oder Alpha Vantage; liefert keine die Tageskerze vom Sonntag, gilt vorläufig der Live-Kurs kurz nach 0 Uhr UTC, bis die Kerze kommt. Gold LBMA-Nachmittagsfixing; bis die LBMA es veröffentlicht (meist spät abends), gilt sofort vorläufig der Spotpreis kurz nach dem Fixing. Gebuchte Bitcoin- und Gold-Wochen bleiben, wie sie gebucht wurden (bis 20.09.2026 stammen die Bitcoin-Schlüsse von Yahoo Finance). Ersatzquellen und vorläufige Schlüsse sind gekennzeichnet.'); note('Depotbewertung (Euro): ETF und Gold-ETC ausschließlich mit Lang-&-Schwarz-Kursen (dieselben wie bei Trade Republic; tagsüber stündlich, Tagesschluss 23 Uhr). Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs mit Datum stehen, es gibt keine Ersatzkurse. Bitcoin, ETH und SOL mit Coinbase in Euro (stündlich und live beim Öffnen der Seite, Tagesschluss 24 Uhr UTC), Ersatz Kraken, gekennzeichnet. EUR/USD von der EZB nur für Umrechnungen.');
     var btcT = btcCloseTime(), monAt = ((CFG.push && CFG.push.mondayAt) || '07:53').replace(/^0/, '');
-    note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold, ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und Gold, mit Wiederholungen um 20:23 und 22:23 Uhr, in der Nacht um 1:37 Uhr und Samstag 9:23 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen. Der FTSE-Schluss kommt meist schon um 18:47 Uhr von EODHD; fehlt er noch, gilt ein vorläufiger Schluss aus dem aktuellen Kurs, der später bestätigt oder korrigiert wird. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag kurz nach 0 Uhr UTC (' + btcT + ' Uhr) Wochenschluss Bitcoin, Push-Nachrichten dazu um ' + monAt + ' Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Endet die Woche wegen eines Feiertags früher (etwa Gründonnerstag, Gold vor Weihnachten und Neujahr), kommen Vorwarnung um 15:17 Uhr und Wochenschluss ab 18:47 Uhr an diesem letzten Handelstag, Wiederholungen mit den Läufen um 19:37 und 23:37 Uhr; an Halbtagen (London schließt am letzten Geschäftstag vor Weihnachten und vor Neujahr um 12:30 Uhr) für den FTSE um 11:17 und 14:47 Uhr. Alle Zeiten Berliner Zeit, im Sommer wie im Winter (London stellt am selben Tag um). Andere Nachrichten kommen sofort, auch nachts.');
+    note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold; gleich nach dem Gold-Fixing (16 Uhr) im stündlichen Kurs-Ticker der vorläufige Gold-Schluss aus dem Spotpreis (ein Signal kommt sofort per Push); ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und das LBMA-Fixing für Gold, mit Wiederholungen um 20:23 und 22:23 Uhr, in der Nacht um 1:37 Uhr und Samstag 9:23 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen. Der FTSE-Schluss kommt meist schon um 18:47 Uhr von EODHD; fehlt er noch, gilt ein vorläufiger Schluss aus dem aktuellen Kurs, der später bestätigt oder korrigiert wird. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag gleich nach 0 Uhr UTC (' + btcT + ' Uhr) Wochenschluss Bitcoin, ein Signal kommt sofort per Push (der Lauf startet vorher und wartet; Nachfassen um 0:07 und 2:23 Uhr UTC), die Wochenübersicht um ' + monAt + ' Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Endet die Woche wegen eines Feiertags früher (etwa Gründonnerstag, Gold vor Weihnachten und Neujahr), kommen Vorwarnung um 15:17 Uhr, der vorläufige Gold-Schluss gleich nach dem Fixing und der Wochenschluss ab 18:47 Uhr an diesem letzten Handelstag, Wiederholungen mit den Läufen um 19:37 und 23:37 Uhr; an Halbtagen (London schließt am letzten Geschäftstag vor Weihnachten und vor Neujahr um 12:30 Uhr) für den FTSE um 11:17 und 14:47 Uhr. Alle Zeiten Berliner Zeit, im Sommer wie im Winter (London stellt am selben Tag um). Andere Nachrichten kommen sofort, auch nachts.');
     note('Die Läufe laufen als GitHub Actions in diesem Repo. Sie führen keine Käufe oder Verkäufe aus und kennen deine Depotdaten nicht; die liegen nur in deinem Browser.');
   }
 

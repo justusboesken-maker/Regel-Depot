@@ -142,7 +142,7 @@
     "weeklySummary": true,
     "maxSubscriptions": 5,
     "mondayAt": "07:53",
-    "note": "Wochenübersicht und die Nachrichten der Nacht zum Montag um mondayAt (Berliner Zeit); alle anderen Nachrichten sofort (Justus 26.09.2026)."
+    "note": "Wochenübersicht und die übrigen Nachrichten der Nacht zum Montag um mondayAt (Berliner Zeit); Bitcoin-Nachrichten (Wochenschluss Sonntag 24 Uhr UTC) sofort, auch nachts (Justus 01.10.2026); alle anderen Nachrichten sofort (Justus 26.09.2026)."
   },
   "schedule": [
     {
@@ -158,6 +158,38 @@
       "season": "winter",
       "label": "Vorwarnung FTSE All-World und Gold",
       "when": "normal"
+    },
+    {
+      "id": "gold-prelim",
+      "cron": "7 14 * * 5",
+      "season": "summer",
+      "label": "Wochenschluss Gold vorläufig (Spotpreis nach dem LBMA-Fixing, Signal sofort per Push)",
+      "when": "gold",
+      "display": true
+    },
+    {
+      "id": "gold-prelim",
+      "cron": "7 15 * * 5",
+      "season": "winter",
+      "label": "Wochenschluss Gold vorläufig (Spotpreis nach dem LBMA-Fixing, Signal sofort per Push)",
+      "when": "gold",
+      "display": true
+    },
+    {
+      "id": "gold-prelim",
+      "cron": "7 14 * * 1-4",
+      "season": "summer",
+      "label": "Wochenschluss Gold vorläufig (Spotpreis nach dem LBMA-Fixing, Signal sofort per Push)",
+      "when": "gold",
+      "display": true
+    },
+    {
+      "id": "gold-prelim",
+      "cron": "7 15 * * 1-4",
+      "season": "winter",
+      "label": "Wochenschluss Gold vorläufig (Spotpreis nach dem LBMA-Fixing, Signal sofort per Push)",
+      "when": "gold",
+      "display": true
     },
     {
       "id": "fr-close",
@@ -238,9 +270,22 @@
       "label": "Vorwarnung Bitcoin"
     },
     {
+      "id": "btc-close",
+      "cron": "31 23 * * 0",
+      "show": "0 0 * * 1",
+      "label": "Wochenschluss Bitcoin (pünktlich um 0 Uhr UTC, Signal sofort per Push)"
+    },
+    {
+      "id": "btc-close",
+      "cron": "46 23 * * 0",
+      "label": "Zweiter Start, falls GitHub den ersten verschluckt",
+      "retry": true
+    },
+    {
       "id": "mo-close",
       "cron": "7 0 * * 1",
-      "label": "Wochenschluss Bitcoin (und was noch fehlte)"
+      "label": "Nachfassen Bitcoin, falls der pünktliche Lauf ausfiel (und was bei Gold und FTSE noch fehlte)",
+      "retry": true
     },
     {
       "id": "mo-close",
@@ -362,7 +407,7 @@
     "note": "Lang & Schwarz handelt am 24.12. und 31.12. nicht, am 30.12. nur bis 14 Uhr. Handel zur Eröffnung der Folgewoche, Montag ab 7:30 Uhr; Bitcoin jederzeit."
   },
   "taxLaw": {
-    "note": "Rechtsstand September 2026, keine persönlichen Angaben. Persönliche Steuerdaten liegen nur im Browser (Einstellungen). Das Steuerjahr ist das Kalenderjahr; Basiszins und VWCE-Kurs zu Jahresbeginn stehen je Jahr unter years (jeden Januar ergänzen). Rebalancing jedes Jahr am rebalDay.",
+    "note": "Rechtsstand September 2026, keine persönlichen Angaben. Persönliche Steuerdaten liegen nur im Browser (Einstellungen). Das Steuerjahr ist das Kalenderjahr; Basiszins und VWCE-Kurs zu Jahresbeginn stehen je Jahr unter years (jeden Januar ergänzen). Rebalancing quartalsweise an den rebalDays (Quartalsende; Dezember am 30.12., weil Lang & Schwarz am 31.12. nicht handelt; Wochenende oder Feiertag: der Handelstag davor), erstmals am rebalFrom (Justus 01.10.2026, vorher jährlich am 30.12.).",
     "year": 2026,
     "pb": 1000,
     "abg": 0.26375,
@@ -382,7 +427,8 @@
         "note": "Basiszins BMF 13.01.2026; VWCE-Schluss 02.01.2026"
       }
     },
-    "rebalDay": "12-30"
+    "rebalDays": ["03-31", "06-30", "09-30", "12-30"],
+    "rebalFrom": "2026-12-30"
   },
-  "scheduleNote": "Cron-Zeiten in UTC; season: summer = Berliner Sommerzeit (UTC+2), winter = Winterzeit (UTC+1). Der Workflow lässt Läufe der anderen Jahreszeit aus, damit die Berliner Uhrzeit das ganze Jahr gleich bleibt. when: early = nur am letzten Handelstag einer Woche, die vor dem Freitagabend endet; half = nur an FTSE-Halbtagen; normal = nur freitags mit regulärem Wochenschluss (Anzeige auf der Seite, der Workflow prüft es selbst)."
+  "scheduleNote": "Cron-Zeiten in UTC; season: summer = Berliner Sommerzeit (UTC+2), winter = Winterzeit (UTC+1). Der Workflow lässt Läufe der anderen Jahreszeit aus, damit die Berliner Uhrzeit das ganze Jahr gleich bleibt. when: early = nur am letzten Handelstag einer Woche, die vor dem Freitagabend endet; half = nur an FTSE-Halbtagen; normal = nur freitags mit regulärem Wochenschluss (Anzeige auf der Seite, der Workflow prüft es selbst). show: angezeigte Zeit, wenn der Lauf vorher startet und wartet (Bitcoin-Wochenschluss, Start So 23:31 UTC, gebucht Mo 0:00 UTC). display: kein eigener Workflow-Lauf, nur Anzeige (der vorläufige Gold-Schluss kommt im stündlichen Kurs-Ticker); when gold = nur am letzten Gold-Handelstag der Woche."
 }
