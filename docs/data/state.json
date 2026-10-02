@@ -1,15 +1,15 @@
 {
  "version": 1,
- "updated": "2026-10-02T16:20:52.117Z",
+ "updated": "2026-10-02T16:58:09.376Z",
  "assets": {
   "ftse": {
-   "k": "2026-09-21",
-   "d": "2026-09-25",
-   "c": 186.92,
-   "m": 172.9621,
-   "dist": 0.080699,
+   "k": "2026-09-28",
+   "d": "2026-10-02",
+   "c": 186.24,
+   "m": 173.5255,
+   "dist": 0.073272,
    "st": 1,
-   "up": 74,
+   "up": 75,
    "dn": 0,
    "changed": false,
    "lastSwitch": {
@@ -20,24 +20,25 @@
     "m": 132.5619
    },
    "next": {
-    "above": 173.266,
-    "bandUp": 178.5733,
-    "bandDown": 167.9652
+    "above": 173.7646,
+    "bandUp": 179.0872,
+    "bandDown": 168.4486
    },
    "rule": {
     "type": "confirm",
     "n": 2
    },
-   "weeks": 749,
-   "updated": "2026-09-25T18:50:14.394Z",
-   "src": "alphavantage VWRD.LON weekly adjusted + Schlusskurs 2026-09-25 von EODHD (Tagesschluss)",
+   "weeks": 750,
+   "updated": "2026-10-02T16:58:09.376Z",
+   "src": "alphavantage VWRD.LON weekly adjusted + Schlusskurs 2026-10-02 von EODHD (Tagesschluss)",
    "fallback": false,
    "primaryError": null,
    "pending": null,
    "holiday": false,
    "partial": false,
    "edge": false,
-   "preliminary": null
+   "preliminary": null,
+   "prelimLabel": null
   },
   "btc": {
    "k": "2026-09-21",
@@ -156,7 +157,7 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-close",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-09-28",
