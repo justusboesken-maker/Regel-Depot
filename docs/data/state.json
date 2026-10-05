@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-10-04T21:25:38.939Z",
+ "updated": "2026-10-05T00:00:40.587Z",
  "assets": {
   "ftse": {
    "k": "2026-09-28",
@@ -41,15 +41,15 @@
    "prelimLabel": null
   },
   "btc": {
-   "k": "2026-09-21",
-   "d": "2026-09-27",
-   "c": 84462.14,
-   "m": 78173.6078,
-   "dist": 0.080443,
+   "k": "2026-09-28",
+   "d": "2026-10-04",
+   "c": 86507.11,
+   "m": 77730.4158,
+   "dist": 0.112912,
    "st": 1,
-   "up": 2,
+   "up": 3,
    "dn": 0,
-   "changed": true,
+   "changed": false,
    "lastSwitch": {
     "k": "2026-09-21",
     "d": "2026-09-27",
@@ -58,16 +58,16 @@
     "m": 78173.6078
    },
    "next": {
-    "above": 77551.2996,
-    "bandUp": 79926.7733,
-    "bandDown": 75178.7328
+    "above": 76980.5784,
+    "bandUp": 79338.5704,
+    "bandDown": 74625.472
    },
    "rule": {
     "type": "band",
     "p": 0.03
    },
-   "weeks": 628,
-   "updated": "2026-09-28T00:13:13.527Z",
+   "weeks": 629,
+   "updated": "2026-10-05T00:00:40.587Z",
    "src": "coinbase BTC-USD",
    "fallback": false,
    "primaryError": null,
@@ -157,7 +157,7 @@
   }
  },
  "queue": [],
- "step": "so-warn",
+ "step": "btc-close",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-09-28",
