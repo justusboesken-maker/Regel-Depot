@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-10-05T06:01:54.285Z",
+ "updated": "2026-10-05T06:29:57.614Z",
  "assets": {
   "ftse": {
    "k": "2026-09-28",
@@ -157,7 +157,7 @@
   }
  },
  "queue": [],
- "step": "mo-notify",
+ "step": "live",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-09-28",
