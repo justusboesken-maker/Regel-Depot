@@ -41,12 +41,16 @@
     var H = spec.hero, h = el('div', 'rd-hero');
     h.appendChild(el('b', 'hv', nb(H.v)));
     if (H.p) { var p = el('span', 'hp' + (H.cls ? ' ' + H.cls : ''), nb(H.p)); if (H.pTitle) p.title = H.pTitle; h.appendChild(p); }
-    h.appendChild(el('span', 'hs', H.label + ' · ' + spec.head));
+    var hs = el('span', 'hs'); if (H.key) { var k = el('i'); k.style.borderTopColor = H.key; hs.appendChild(k); } hs.appendChild(document.createTextNode(H.label + ' · ' + spec.head)); h.appendChild(hs);
     box.appendChild(h);
-    var row = el('div', 'rd-row rd-chips');
-    (spec.groups || []).forEach(function (g) { g.rows.forEach(function (r) { var it = el('span', 'rd-i'); if (r.color) { var i = el('i'); i.style.borderTopColor = r.color; it.appendChild(i); } it.appendChild(el('span', 'rd-l', r.short || r.label)); it.appendChild(el('b', 'rd-v', nb(r.val))); row.appendChild(it); }); });
-    if (spec.extra) row.appendChild(el('span', 'rd-x', nb(spec.extra)));
-    box.appendChild(row);
+    /* je Gruppe eine Zeile (Vergleich seit 02.10.2026: die Linien, darunter „Drawdown“); der Zusatz steht in der ersten Zeile */
+    var groups = spec.groups && spec.groups.length ? spec.groups : [{ title: '', rows: [] }];
+    groups.forEach(function (g, gi) {
+      var row = el('div', 'rd-row rd-chips'); if (g.title) row.appendChild(el('span', 'rd-t', g.title));
+      g.rows.forEach(function (r) { var it = el('span', 'rd-i'); if (r.color) { var i = el('i'); i.style.borderTopColor = r.color; if (r.dash) i.className = 'dash'; it.appendChild(i); } it.appendChild(el('span', 'rd-l', r.short || r.label)); it.appendChild(el('b', 'rd-v', nb(r.val))); row.appendChild(it); });
+      if (gi === 0 && spec.extra) row.appendChild(el('span', 'rd-x', nb(spec.extra)));
+      box.appendChild(row);
+    });
   }
   /* ---------- Werte-Zeile über den Charts (Justus 26.09.2026: statt eines Kästchens im Chart, damit nichts verdeckt wird) ----------
      spec: {head (fett), extra, extraCls, groups: [{title, rows: [{color, dash, strong, label, val}]}], note, noteCls}. Die Werte haben eine
@@ -75,7 +79,7 @@
     function spec(i) {
       var groups = [];
       /* Erster Chart mit großer Zahl (Depotentwicklung): die übrigen Charts liefern die Chips darunter */
-      if (G.charts[0].hero) { G.charts.slice(1).forEach(function (c) { groups.push({ title: '', rows: c.rows(i) }); }); return { hero: G.charts[0].hero(i), head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups }; }
+      if (G.charts[0].hero) { if (G.charts[0].heroRows) groups.push({ title: '', rows: G.charts[0].heroRows(i) }); G.charts.slice(1).forEach(function (c) { groups.push({ title: c.title || '', rows: c.rows(i) }); }); return { hero: G.charts[0].hero(i), head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups }; }
       G.charts.forEach(function (c) { var rows = c.rows(i); if (!groups.length || c.title) groups.push({ title: c.title || '', rows: rows }); else groups[groups.length - 1].rows = groups[groups.length - 1].rows.concat(rows); });
       return { head: G.charts[0].head(i), extra: G.charts[0].sub(i), groups: groups };
     }
@@ -119,7 +123,7 @@
     }
     G.reset = function () {
       if (!G.charts.length) return;
-      if (box && !G.w) { G.w = G.charts.reduce(function (w, c, k) { return k === 0 && c.hero ? w : Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
+      if (box && !G.w) { G.w = G.charts.reduce(function (w, c, k) { return k === 0 && c.hero && !c.heroRows ? w : Math.max(w, c.wmax ? c.wmax() : 0); }, 0); if (G.w) box.style.setProperty('--rdw', (G.w + 0.5) + 'ch'); }
       if (box && !G.fit) { G.fit = true; if (G.charts[0].hero) fitHero(); else fitHead(); }
       readout(box, spec(G.charts[0].n - 1));
     };
@@ -408,15 +412,23 @@
     G.reset();
     if (cap) cap.textContent = capText || '';
   }
-  /* ---------- Prozent-Linien über Tagen (Vergleich mit Buy & Hold, Drawdown) ----------
-     dates: [ISO], lines: [{vals (Anteile, 0,05 = +5 %), color (CSS-Variable), dash, width, label, fill (CSS-Variable: Fläche bis 0)}],
-     opts: {height, dd (Skala bis 0 %), ends (Endwerte rechts beschriften), sub(i) (Zeile unter den Werten im Tooltip), aria} */
+  /* ---------- Prozent-Linien über Tagen (Vergleich mit der reinen Regel und Buy & Hold, Drawdown) ----------
+     dates: [ISO], lines: [{vals (Anteile, 0,05 = +5 %), color (CSS-Variable), dash, width, label, short, area (Fläche im Farbverlauf)}],
+     opts: {height, dd (Skala bis 0 %), ends (Namen und Endwerte rechts), sub(i) (Zusatz in der Werte-Zeile), aria, title, sync,
+     hero(i) (große Zahl in der Werte-Zeile für die erste Linie; die übrigen Linien stehen darunter als Chips)}.
+     Seit 07.10.2026 im Stil von Gewinn und Wert (Justus 02.10.2026: „gestalte den Chart auch im Stil wie bei Gewinn und Wert“): Linien
+     geglättet (ohne Überschwingen); die Linie mit area bekommt eine Fläche bis zur Null-Linie im Farbverlauf (30 % am oberen bzw. unteren
+     Rand, 0 % an der Null-Linie; über 0 wie bei Gewinn, unter 0 gespiegelt, etwa beim Drawdown) und einen Hof am Endpunkt; Ränder wie dort;
+     Namen und Werte am Linienende in Textfarbe (die Linie trägt die Farbe), bei zu nahen Enden auseinandergerückt mit feiner Linie zum Endpunkt. */
+  /* Prozent ohne „−0,0 %“: erst auf die angezeigten Stellen runden, dann das Vorzeichen setzen */
+  function pctR(v, d) { if (v == null || !isFinite(v)) return '–'; var f = Math.pow(10, (d == null ? 1 : d) + 2), r = Math.round(v * f) / f; return pct(r === 0 ? 0 : r, d); }
   function pctChart(host, dates, lines, opts) {
     opts = opts || {}; host.textContent = '';
     var n = dates.length; if (n < 2) return;
-    var col = { grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), surface: css('--surface') };
+    var col = { grid: css('--grid'), axis: css('--axis'), muted: css('--muted'), ink: css('--ink'), ink2: css('--ink-2'), surface: css('--surface') };
     var W = Math.max(300, host.clientWidth || 700), narrow = W < 560, H = opts.height || (narrow ? 220 : 260);
-    var m = { t: 12, r: opts.ends ? (narrow ? 62 : 74) : 14, b: 28, l: narrow ? 50 : 58 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
+    /* Ränder wie bei Gewinn und Wert; rechts auf breiten Bildschirmen 150 statt 132 px, weil hier Name und Wert am Linienende stehen */
+    var m = { t: 14, r: opts.ends ? (narrow ? 74 : 150) : 14, b: 30, l: narrow ? 66 : 80 }, iw = W - m.l - m.r, ih = H - m.t - m.b;
     var svg = mk('svg', { viewBox: '0 0 ' + W + ' ' + H, width: W, height: H, focusable: 'false' }, host);
     var lo = Infinity, hi = -Infinity;
     lines.forEach(function (L) { L.vals.forEach(function (v) { if (v == null || !isFinite(v)) return; if (v < lo) lo = v; if (v > hi) hi = v; }); });
@@ -437,20 +449,44 @@
     if (n <= 95) { var step = Math.max(1, Math.ceil(n / Math.max(2, Math.floor(iw / 64)))); for (var i = 0; i < n; i += step) tks.push({ i: i, l: dShort(dates[i]) }); }
     else { var prevM = null; dates.forEach(function (d, k) { var ym = d.slice(0, 7); if (prevM !== null && ym !== prevM) tks.push({ i: k, l: MON[+d.slice(5, 7) - 1] + (d.slice(5, 7) === '01' ? ' ' + d.slice(2, 4) : '') }); prevM = ym; }); var maxT = Math.max(2, Math.floor(iw / 56)); if (tks.length > maxT) { var st = Math.ceil(tks.length / maxT); tks = tks.filter(function (t, k) { return k % st === 0; }); } }
     tks.forEach(function (t) { var x = X(t.i); mk('line', { x1: x, x2: x, y1: m.t + ih, y2: m.t + ih + 4, stroke: col.axis }, g); var tx = mk('text', { x: x, y: m.t + ih + 18, 'text-anchor': t.i === 0 && n > 2 ? 'start' : 'middle', 'font-size': 11, fill: col.muted }, g); tx.textContent = t.l; });
+    /* zusammenhängende Stücke einer Linie als Punkte [[x, y], …] (Lücken ohne Wert trennen) */
+    function segsOf(L) { var segs = [], seg = null; L.vals.forEach(function (v, k) { if (v == null || !isFinite(v)) { seg = null; return; } if (!seg) { seg = []; segs.push(seg); } seg.push([X(k), Y(v)]); }); return segs; }
     /* Flächen zuerst, dann die Linien; die erste Linie liegt oben */
-    lines.forEach(function (L) { if (!L.fill) return; var d = 'M' + X(0).toFixed(1) + ',' + Y(0).toFixed(1); L.vals.forEach(function (v, k) { d += 'L' + X(k).toFixed(1) + ',' + Y(v == null ? 0 : v).toFixed(1); }); d += 'L' + X(n - 1).toFixed(1) + ',' + Y(0).toFixed(1) + 'Z'; mk('path', { d: d, fill: css(L.fill), 'fill-opacity': 0.12, stroke: 'none' }, svg); });
+    var y0 = Y(0), zo = Math.max(0, Math.min(1, (y0 - Y(hi)) / ((Y(lo) - Y(hi)) || 1)));
+    lines.forEach(function (L) {
+      if (!L.area) return;
+      var c = css(L.color), gid = 'pcg' + (++GRAD_N), lg = mk('linearGradient', { id: gid, x1: 0, x2: 0, y1: Y(hi).toFixed(1), y2: Y(lo).toFixed(1), gradientUnits: 'userSpaceOnUse' }, mk('defs', {}, svg));
+      [[0, 0.3], [zo, 0], [1, 0.3]].forEach(function (s) { mk('stop', { offset: s[0].toFixed(4), 'stop-color': c, 'stop-opacity': s[1] }, lg); });
+      segsOf(L).forEach(function (P) { if (P.length < 2) return; mk('path', { d: smoothPath(P) + 'L' + P[P.length - 1][0].toFixed(1) + ',' + y0.toFixed(1) + 'L' + P[0][0].toFixed(1) + ',' + y0.toFixed(1) + 'Z', fill: 'url(#' + gid + ')', stroke: 'none' }, svg); });
+    });
     var ends = [];
     lines.slice().reverse().forEach(function (L) {
-      var d = '', started = false, color = css(L.color);
-      L.vals.forEach(function (v, k) { if (v == null || !isFinite(v)) { started = false; return; } d += (started ? 'L' : 'M') + X(k).toFixed(1) + ',' + Y(v).toFixed(1); started = true; });
-      if (!d) return;
-      mk('path', { d: d, fill: 'none', stroke: color, 'stroke-width': L.width || 2, 'stroke-dasharray': L.dash ? '6 4' : null, 'stroke-linejoin': 'round', 'stroke-linecap': L.dash ? 'butt' : 'round' }, svg);
-      var lv = L.vals[n - 1]; if (lv != null && isFinite(lv)) { mk('circle', { cx: X(n - 1), cy: Y(lv), r: L.dash ? 3.5 : 4.5, fill: color, stroke: col.surface, 'stroke-width': 2 }, svg); ends.push({ y: Y(lv), v: lv, L: L, color: color }); }
+      var color = css(L.color), segs = segsOf(L);
+      segs.forEach(function (P) { mk('path', { d: smoothPath(P), fill: 'none', stroke: color, 'stroke-width': L.width || 2, 'stroke-dasharray': L.dash ? '6 4' : null, 'stroke-linejoin': 'round', 'stroke-linecap': L.dash ? 'butt' : 'round' }, svg); });
+      var lv = L.vals[n - 1];
+      if (lv != null && isFinite(lv)) {
+        if (L.area) mk('circle', { cx: X(n - 1), cy: Y(lv), r: 10, fill: color, 'fill-opacity': 0.16 }, svg);
+        mk('circle', { cx: X(n - 1), cy: Y(lv), r: L.area ? 4.5 : 3.5, fill: color, stroke: col.surface, 'stroke-width': 2 }, svg);
+        ends.push({ y: Y(lv), v: lv, L: L });
+      }
     });
-    if (opts.ends) {
-      /* Endwerte ohne Überlappung (mindestens 14 px Abstand, erste Linie zuerst) */
-      ends.reverse(); var used = [];
-      ends.forEach(function (e) { var y = e.y; while (used.some(function (u) { return Math.abs(u - y) < 14; })) y += (e.y >= used[0] ? 14 : -14); used.push(y); var t = mk('text', { x: m.l + iw + 8, y: y + 4, 'font-size': 11.5, fill: e.color, 'font-weight': e.L.dash ? 400 : 600 }, svg); t.textContent = pct(e.v, 1); });
+    if (opts.ends && ends.length) {
+      /* Beschriftung am Linienende: auf breiten Bildschirmen Name und Wert, sonst (oder wenn es nicht passt) nur der Wert; mindestens 15 px
+         Abstand, unten nicht über den Rand; eine verschobene Beschriftung bekommt eine feine Linie zu ihrem Endpunkt */
+      ends.sort(function (a, b) { return a.y - b.y; });
+      var x0 = X(n - 1), lx = m.l + iw + 14, gap = 15, names = !narrow, cx = null, ys, k;
+      var text = function (e) { return (names ? (e.L.short || e.L.label) + ' ' : '') + pctR(e.v, 1); };
+      try { cx = document.createElement('canvas').getContext('2d'); } catch (err) { cx = null; }
+      if (names && cx) { var ff = getComputedStyle(host).fontFamily; names = ends.every(function (e) { cx.font = (e.L.area ? '600 12.5px ' : '11px ') + ff; return lx + cx.measureText(text(e)).width <= W - 2; }); }
+      ys = ends.map(function (e) { return e.y; });
+      for (k = 1; k < ys.length; k++) ys[k] = Math.max(ys[k], ys[k - 1] + gap);
+      if (ys[ys.length - 1] > H - 6) { ys[ys.length - 1] = H - 6; for (k = ys.length - 2; k >= 0; k--) ys[k] = Math.min(ys[k], ys[k + 1] - gap); }
+      ends.forEach(function (e, k) {
+        var y = ys[k];
+        if (Math.abs(y - e.y) > 3) mk('line', { x1: (x0 + (e.L.area ? 7 : 5)).toFixed(1), y1: e.y.toFixed(1), x2: (lx - 3).toFixed(1), y2: y.toFixed(1), stroke: col.axis, 'stroke-width': 1 }, svg);
+        var t = mk('text', { x: lx, y: y + 4, 'font-size': e.L.area ? 12.5 : 11, fill: e.L.area ? col.ink : col.ink2, 'font-weight': e.L.area ? 600 : 400 }, svg);
+        t.textContent = text(e);
+      });
     }
     /* Darüberfahren und Tastatur: Linie und Punkte, die Werte stehen in der Werte-Zeile der Gruppe (opts.sync); alle Charts der Gruppe zeigen denselben Tag */
     var cross = mk('line', { y1: m.t, y2: m.t + ih, stroke: col.axis, 'stroke-width': 1, visibility: 'hidden' }, svg);
@@ -460,9 +496,10 @@
     function sub(k) { return opts.sub ? opts.sub(k) : ''; }
     function mark(k) { var x = X(k); cross.setAttribute('x1', x); cross.setAttribute('x2', x); cross.setAttribute('visibility', 'visible'); lines.forEach(function (L, li) { var v = L.vals[k]; if (v == null || !isFinite(v)) { dots[li].setAttribute('visibility', 'hidden'); return; } dots[li].setAttribute('cx', x); dots[li].setAttribute('cy', Y(v)); dots[li].setAttribute('visibility', 'visible'); }); }
     function unmark() { cross.setAttribute('visibility', 'hidden'); dots.forEach(function (d) { d.setAttribute('visibility', 'hidden'); }); }
-    function rows(k) { return lines.map(function (L) { var v = L.vals[k]; return { color: css(L.color), dash: L.dash, label: L.label, short: L.short, val: v == null || !isFinite(v) ? '–' : pct(v, 1) }; }); }
-    function wmax() { var w = 1; lines.forEach(function (L) { L.vals.forEach(function (v) { if (v != null && isFinite(v)) w = Math.max(w, pct(v, 1).length); }); }); return w; }
-    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax });
+    function rows(k) { return lines.map(function (L) { var v = L.vals[k]; return { color: css(L.color), dash: L.dash, label: L.label, short: L.short, val: pctR(v, 1) }; }); }
+    function wmax() { var w = 1; lines.forEach(function (L) { L.vals.forEach(function (v) { if (v != null && isFinite(v)) w = Math.max(w, pctR(v, 1).length); }); }); return w; }
+    /* Große Zahl (opts.hero): sie steht für die erste Linie, die übrigen Linien kommen als Chips darunter (heroRows) */
+    S.add({ n: n, title: opts.title || '', head: head, sub: sub, mark: mark, unmark: unmark, rows: rows, wmax: wmax, hero: opts.hero || null, heroRows: opts.hero ? function (k) { return rows(k).slice(1); } : null });
     function go(k) { if (k < 0 || k >= n) return; cur = k; S.show(k); }
     function at() { return S.cur != null ? S.cur : cur; }
     function idx(e) { var bx = svg.getBoundingClientRect(), x = (e.clientX - bx.left) * W / bx.width; return Math.max(0, Math.min(n - 1, Math.round((x - m.l) / (iw / (n - 1))))); }

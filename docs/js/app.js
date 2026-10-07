@@ -1021,33 +1021,42 @@
     if (c.wait || few) {
       var why = c.wait || ('Im Zeitraum „' + w.label + '“ gibt es noch keine zwei Tagespunkte. Wähl einen längeren Zeitraum oder „Alles“.');
       /* Noch kein Verlauf: feste Legende statt Werte-Zeile */
-      leg.classList.remove('readout'); legItem('--ink', false, 'Dein Depot'); legItem('--rp', false, 'Regel pur'); legItem('--muted', true, 'Buy & Hold 50/30/20');
+      leg.classList.remove('readout'); legItem('--accent', false, 'Dein Depot'); legItem('--rp', false, 'Regel pur'); legItem('--bh', true, 'Buy & Hold 50/30/20');
       box.hidden = true; resetKeys(host); host.appendChild(el('p', 'small muted', why)); host.setAttribute('aria-label', 'Vergleich mit Buy & Hold: ' + why); return;
     }
     var n = w.dates.length, pM = w.pM, pB = w.pB, narrow = (host.clientWidth || 700) < 560, since = (w.cut ? w.label + ' ab ' : 'seit ') + dDE(w.dates[0]);
     function pp(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' Prozentpunkte'; }
+    /* Prozent ohne „−0,0 %“: erst runden, dann das Vorzeichen */
+    function pc(v) { var r = Math.round(v * 1000) / 1000; return pct(r === 0 ? 0 : r, 1); }
+    /* Abstand zweier Renditen mit „%“ geschrieben (Justus 07.10.2026: „doch mit Schreibweise 2“), ±0,0 % bei Gleichstand */
+    function pq(v) { var x = Math.round(v * 1000) / 10; return (x > 0 ? '+' : x < 0 ? '−' : '±') + de(Math.abs(x), 1) + ' %'; }
     /* Werte-Zeile statt Kästchen (Justus 26.09.2026): gleicher Tag oben und im Drawdown, die Werte stehen über den Charts */
     var G = CH.syncGroup(leg), pR = w.pR, hasR = !!pR;
-    /* Drei Linien (Justus 28.09.2026): dein Depot, die reine Regel („Regel pur“, Farbe --rp) und Buy & Hold */
-    var lines = [{ vals: pM, color: '--ink', width: 2.5, label: 'Dein Depot', short: 'Dein Depot' }];
+    /* Drei Linien (Justus 28.09.2026) im Stil von Gewinn und Wert (Justus 02.10.2026): dein Depot in der Akzentfarbe mit Fläche, die reine
+       Regel („Regel pur“, --rp) und Buy & Hold (--bh, gestrichelt). Oben wie bei Gewinn und Wert die große Zahl: dein Depot in Prozent,
+       daneben der Abstand zu Buy & Hold (Justus 07.10.2026: „zu buy and hold in der kopfzeile statt zu Regel pur“; grün besser, rot
+       schlechter), darunter Regel pur und Buy & Hold mit dem Abstand zur Regel */
+    var lines = [{ vals: pM, color: '--accent', width: 2.25, area: true, label: 'Dein Depot', short: 'Dein Depot' }];
     if (hasR) lines.push({ vals: pR, color: '--rp', width: 2, label: 'Regel pur', short: 'Regel pur' });
-    lines.push({ vals: pB, color: '--muted', dash: true, width: 2, label: 'Buy & Hold 50/30/20', short: 'Buy & Hold' });
-    CH.pctChart(host, w.dates, lines, { height: narrow ? 280 : 360, ends: true, sync: G, /* so hoch wie der Chart in „Gewinn“ und „Wert“ (27.09.2026, vorher 280 / 230 px) */
-      sub: function (i) { return (hasR ? 'Zur Regel ' + pp(pM[i] - pR[i]) + ', zu Buy & Hold ' : 'Unterschied ') + pp(pM[i] - pB[i]) + ' · Wert ' + eur(w.vals[i]) + (hasR ? ', Regel pur ' + eur(w.rVals[i]) : '') + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · ' + (hasR ? 'Regel und Buy & Hold' : 'Buy & Hold') + ' zurück auf 50/30/20' : ''); },
+    lines.push({ vals: pB, color: '--bh', dash: true, width: 2, label: 'Buy & Hold 50/30/20', short: 'Buy & Hold' });
+    function hero(i) { var d = pM[i] - pB[i], x = Math.round(d * 1000) / 10; return { v: pc(pM[i]), p: pq(d) + ' zu Buy & Hold', cls: x > 0 ? 'good' : x < 0 ? 'bad' : '', pTitle: 'Abstand deines Depots zu Buy & Hold 50/30/20: Unterschied der beiden Renditen (Prozentpunkte)', label: 'Dein Depot ' + since, key: css('--accent') }; }
+    CH.pctChart(host, w.dates, lines, { height: narrow ? 280 : 360, ends: true, sync: G, hero: hero, /* so hoch wie der Chart in „Gewinn“ und „Wert“ (27.09.2026, vorher 280 / 230 px) */
+      sub: function (i) { return (hasR ? 'Zur Regel pur ' + pq(pM[i] - pR[i]) + ' · ' : '') + 'Wert ' + eur(w.vals[i]) + (hasR ? ', Regel pur ' + eur(w.rVals[i]) : '') + ', Buy & Hold ' + eur(w.bhVals[i]) + (w.flows[i] ? ' · ' + (w.flows[i] > 0 ? 'Einzahlung ' : 'Auszahlung ') + eur(Math.abs(w.flows[i])) : '') + (w.reb[i] ? ' · ' + (hasR ? 'Regel und Buy & Hold' : 'Buy & Hold') + ' zurück auf 50/30/20' : ''); },
       aria: 'Vergleich ' + since + ': dein Depot ' + pct(pM[n - 1], 1) + (hasR ? ', Regel pur ' + pct(pR[n - 1], 1) : '') + ', Buy & Hold 50/30/20 ' + pct(pB[n - 1], 1) });
     box.hidden = false;
     var ddBox = el('div', 'splitbox'), ddCh = el('div', 'chart'); ddCh.setAttribute('role', 'img');
     ddBox.appendChild(ddCh); box.appendChild(ddBox); /* ohne Unterüberschrift (Justus 27.09.2026); „Drawdown“ steht in der Werte-Zeile */
-    var ddLines = [{ vals: w.ddMine.dd, color: '--ink', width: 2, label: 'Dein Depot', fill: '--neg' }];
+    /* Drawdown im selben Stil: dein Depot in der Akzentfarbe mit Fläche (von unten, statt rot), Regel pur und Buy & Hold wie oben */
+    var ddLines = [{ vals: w.ddMine.dd, color: '--accent', width: 2.25, area: true, label: 'Dein Depot' }];
     if (hasR) ddLines.push({ vals: w.ddRule.dd, color: '--rp', width: 2, label: 'Regel pur' });
-    ddLines.push({ vals: w.ddBh.dd, color: '--muted', dash: true, width: 2, label: 'Buy & Hold' });
+    ddLines.push({ vals: w.ddBh.dd, color: '--bh', dash: true, width: 2, label: 'Buy & Hold' });
     CH.pctChart(ddCh, w.dates, ddLines, { height: narrow ? 140 : 160, dd: true, ends: true, sync: G, title: 'Drawdown', aria: 'Drawdown ' + since + ': Max DD dein Depot ' + pct(w.ddMine.max.v, 1) + (hasR ? ', Regel pur ' + pct(w.ddRule.max.v, 1) : '') + ', Buy & Hold ' + pct(w.ddBh.max.v, 1) });
     /* Kennzahlen */
     var tw = el('div', 'tablewrap'), t = el('table', 'ddtab'), th = el('thead'), tr = el('tr'), tb = el('tbody'), DDS = hasR ? [w.ddMine, w.ddRule, w.ddBh] : [w.ddMine, w.ddBh];
     t.appendChild(el('caption', 'sr-only', 'Max Drawdown im Vergleich, ' + since));
     (hasR ? ['', 'Dein Depot', 'Regel pur', 'Buy & Hold'] : ['', 'Dein Depot', 'Buy & Hold']).forEach(function (h, k) { var x = el('th', k ? 'n' : null, h); x.scope = 'col'; tr.appendChild(x); }); th.appendChild(tr); t.appendChild(th);
     function span(D) { return D.max.peak < 0 ? 'kein Rückgang' : dDE(w.dates[D.max.peak]) + ' → ' + dDE(w.dates[D.max.trough]); }
-    [['Max DD', function (D) { return pct(D.max.v, 1); }, ''], ['Hoch → Tief', span, 'wrap'], ['Aktuell', function (D) { return pct(D.cur, 1); }, '']].forEach(function (row) {
+    [['Max DD', function (D) { return pc(D.max.v); }, ''], ['Hoch → Tief', span, 'wrap'], ['Aktuell', function (D) { return pc(D.cur); }, '']].forEach(function (row) {
       var r = el('tr'), h = el('th', null, row[0]); h.scope = 'row'; r.appendChild(h);
       DDS.forEach(function (D) { r.appendChild(el('td', 'n' + (row[2] ? ' ' + row[2] : ''), row[1](D))); }); tb.appendChild(r);
     });
