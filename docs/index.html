@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="icons/apple-touch-icon.png">
 <script>try{var t=localStorage.getItem("regelDepot.theme");if(t==="dark"||t==="light")document.documentElement.setAttribute("data-theme",t);}catch(e){}</script>
 <script>/* Seite schon vor dem ersten Zeichnen merken (Titel auf „Depot“ in Gold, ohne Aufblitzen); app.js showPage setzt es danach genau */try{var h=location.hash.slice(1),m=JSON.parse(localStorage.getItem("regelDepot.page")||"null"),p=h||(m&&m.t>0&&Date.now()-m.t<3600000?m.page:"");if(p)document.documentElement.setAttribute("data-page",p);}catch(e){}</script>
-<link rel="stylesheet" href="css/app.css?v=20261007-0038">
+<link rel="stylesheet" href="css/app.css?v=20261007-2245">
 </head>
 <body>
 
@@ -91,6 +91,7 @@
         <label id="lUnits">Stück<input type="text" id="fUnits" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label id="lPrice"><span id="lPriceText">Kurs je Stück in €</span><input type="text" id="fPrice" required inputmode="decimal" autocomplete="off" spellcheck="false"></label>
         <label id="lFee">Gebühr in €<input type="text" id="fFee" value="1" inputmode="decimal" autocomplete="off" spellcheck="false"></label>
+        <label id="lTax" hidden>Steuer einbehalten in €<small>falls Trade Republic Steuer abgezogen hat</small><input type="text" id="fTax" inputmode="decimal" autocomplete="off" spellcheck="false" placeholder="0"></label>
         <label>Notiz<small>optional</small><input type="text" id="fNote" maxlength="120"></label>
         <button class="btn" type="submit" id="fSubmit">Eintragen</button>
       </form>
@@ -102,7 +103,7 @@
 
 <section id="rebalancing" aria-labelledby="h-reb" hidden>
   <h2 class="eyebrow sec" id="h-reb">Rebalancing</h2>
-  <p class="rebwhen">Stichtag <span id="rebDate">30.12.2026</span> · quartalsweise</p>
+  <div class="rebhero"><b class="hv" id="rebDate"></b><span class="hp" id="rebLeft"></span><span class="hs" id="rebSub"></span></div>
   <div id="rebBanner"></div>
   <div class="grid2" id="rebCards"></div>
   <div class="card pad" id="rebNotesCard"><div class="cardhead"><p class="subhd">Hinweise</p><button type="button" class="fold" data-fold="rebnotes" aria-controls="rebNotesBody" aria-expanded="false" data-open="0">Ausklappen</button></div><div id="rebNotesBody" style="margin-top:8px"><div class="notes" id="rebNotes"></div></div></div>
@@ -198,7 +199,7 @@
 <section id="regeln" aria-labelledby="h-regeln" hidden>
   <h2 class="eyebrow sec" id="h-regeln">Regeln</h2>
   <div class="rules" id="ruleCards"></div>
-  <div class="card pad"><p class="subhd" style="margin-bottom:8px">Datenquellen und Ablauf</p><div class="notes" id="srcNotes"></div></div>
+  <div class="card pad" id="srcCard"><div class="cardhead"><p class="subhd">Datenquellen und Ablauf</p><button type="button" class="fold" data-fold="srcnotes" aria-controls="srcBody" aria-expanded="false" data-open="0">Ausklappen</button></div><div id="srcBody" style="margin-top:8px"><div class="notes" id="srcNotes"></div></div></div>
 </section>
 
 <footer id="foot" hidden><p id="footSrc"></p></footer>
@@ -206,10 +207,10 @@
 
 <div class="modal" id="bigModal" hidden role="dialog" aria-modal="true" aria-label="Großansicht"><div class="modalbox" id="bigBox"></div></div>
 
-<script src="js/engine.js?v=20261007-0038"></script>
-<script src="js/store.js?v=20261007-0038"></script>
-<script src="js/charts.js?v=20261007-0038"></script>
-<script src="js/icons.js?v=20261007-0038"></script>
-<script src="js/app.js?v=20261007-0038"></script>
+<script src="js/engine.js?v=20261007-2245"></script>
+<script src="js/store.js?v=20261007-2245"></script>
+<script src="js/charts.js?v=20261007-2245"></script>
+<script src="js/icons.js?v=20261007-2245"></script>
+<script src="js/app.js?v=20261007-2245"></script>
 </body>
 </html>

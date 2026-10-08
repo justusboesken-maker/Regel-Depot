@@ -122,8 +122,14 @@ section>*{min-width:0}
 /* Abschnittstitel sichtbar entfernt (Justus 27.09.2026: „diese Überschriften sollen weg“; seit den eigenen Seiten nennt das Menü die Seite):
    nur für Screenreader da, als Beschriftung des Abschnitts und als Fokusziel nach einem Seitenwechsel (wie .sr-only) */
 h2.eyebrow.sec{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0,0,0,0);white-space:nowrap;border:0}
-/* Stichtag des Rebalancings, stand bis dahin im Abschnittstitel */
-.rebwhen{margin:0;font-size:14px;color:var(--muted);letter-spacing:.02em}
+/* Rebalancing-Stichtag als große Zahl (Justus 07.10.2026, Vorschlag 8): wie die große Zahl der Depotentwicklung (.rd-hero), daneben die
+   Restzeit (fällig: Warnfarbe), dahinter klein die Erklärung; vorher eine kleine graue Zeile „Stichtag … · quartalsweise“ */
+.rebhero{display:flex;flex-wrap:wrap;align-items:baseline;gap:2px 14px;margin:0 0 clamp(8px,1.5vw,18px)}
+.rebhero .hv{font-size:42px;font-weight:600;letter-spacing:-.01em;line-height:1.15;color:var(--ink);font-variant-numeric:tabular-nums}
+.rebhero .hp{font-size:19px;font-weight:600;color:var(--ink-2)}
+.rebhero .hp.due{color:var(--warn)}
+.rebhero .hs{font-size:13.5px;color:var(--muted)}
+@media (max-width:560px){.rebhero .hv{font-size:34px} .rebhero .hp{font-size:17px}}
 /* Seiten (Justus 27.09.2026): jeder Menüpunkt ist eine eigene Seite, sichtbar ist nur der Abschnitt zur Adresse (#status, #depot …;
    app.js wirePages). Der Titel bekommt nach einem Seitenwechsel den Fokus (für Screenreader), ohne Rahmen */
 section[hidden]{display:none!important}
@@ -215,6 +221,12 @@ button.chip:focus-visible{outline:2px solid var(--accent);outline-offset:2px}
 .scard .edgex p{margin:0}
 .scard .edgex .alt{font-weight:600}
 .scard .edgex .why{font-size:12.5px;color:var(--ink-2)}
+/* „· vorläufig“ bzw. „· Ersatzquelle“ hinter dem Datum des Wochenschlusses als Knopf zum Aufklappen der Erklärung (Justus 07.10.2026,
+   Vorschlag 2); gleiche Schrift und Zeilenhöhe wie das Datum, damit Wochenschluss und große Zahl in allen drei Karten auf einer Linie bleiben */
+.scard .fig .fl .pre{font:inherit;font-weight:600;color:var(--warn);background:none;border:0;padding:0;margin:0;cursor:pointer;display:inline-flex;align-items:baseline;gap:5px}
+.scard .fig .fl .pre::after{content:"";width:5px;height:5px;border-right:1.5px solid currentColor;border-bottom:1.5px solid currentColor;transform:translateY(-2.5px) rotate(45deg)}
+.scard .fig .fl .pre[aria-expanded="true"]::after{transform:translateY(0) rotate(-135deg)}
+.scard .fig .fl .pre:focus-visible{outline:2px solid var(--accent);outline-offset:2px;border-radius:3px}
 .scard .act{border-radius:8px;padding:10px 12px;background:var(--surface-2);display:grid;gap:3px}
 .scard .act b{font-size:15.5px}
 .scard .act.buy{background:var(--good-bg)} .scard .act.buy b{color:var(--good)}
@@ -492,7 +504,6 @@ tfoot td{font-weight:600;border-top:1px solid var(--rule-strong);border-bottom:0
 @media (max-width:980px){#rebalancing #rebCards:not(.one){grid-template-columns:minmax(0,1fr)} #rebalancing #rebCards>*+*::before{display:none} #rebalancing #rebCards>*+*{border-top:1px solid var(--rule);margin-top:14px;padding-top:18px}}
 /* Rebalancing besser lesbar (Justus 27.09.2026: „Bereich größer machen“): Stichtag, Hinweise oben, Titel, Kennzahlen, Tabelle und
    Zeile darunter je 1,5–4,5 px größer als die Grundschriften, Tabellenzeilen etwas luftiger */
-#rebalancing .rebwhen{font-size:15.5px}
 #rebalancing #rebBanner .banner{font-size:15.5px;padding:13px 16px;gap:5px}
 #rebalancing .rv .hd{gap:6px}
 #rebalancing .rv .hd h3{font-size:21px}
@@ -564,6 +575,7 @@ button.link{font:inherit;background:none;border:0;color:var(--accent);text-decor
 .rv .rebact .btn{white-space:normal;text-align:left}
 .rebpanel{display:grid;gap:10px;width:100%;min-width:0}
 .rebpanel table input{width:8.5em;text-align:right;padding:6px 8px;font-size:14px}
+.rebpanel table input.sm{width:5.5em} /* Gebühr und Steuer: schmaler, damit die Tabelle mit der Spalte „Steuer“ in die Karte passt */
 .rebpanel .rebdate{display:flex;flex-wrap:wrap;gap:8px;align-items:center;font-size:13px;color:var(--ink-2)}
 .rebpanel .rebdate input{width:auto}
 .rebprev{font-size:13px;color:var(--ink-2);margin:0}

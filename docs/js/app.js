@@ -86,6 +86,15 @@
     if (l && l.usd > 0) return { usd: l.usd, eur: l.eur || null, t: l.t || (D.live && D.live.t), src: l.src, eod: !!l.eod, d: l.d || null, spot: !!l.spot };
     return null;
   }
+  /* Zeitpunkt eines Kurses (Justus 07.10.2026, Vorschlag 2 „Kursstand eindeutig“): von heute „Aktuell 14:07 Uhr“, sonst mit Datum
+     „Stand 06.10., 23:48 Uhr“ (vorher stand bei einem Kurs von gestern nur die Uhrzeit). short: ohne Uhrzeit (Großansicht: „Aktuell“ bzw.
+     „Stand 06.10.“) */
+  function liveWhen(lp, short) {
+    var t = lp && lp.t ? new Date(lp.t) : null; if (!t || isNaN(t)) return 'Aktuell';
+    var day = t.getFullYear() + '-' + String(t.getMonth() + 1).padStart(2, '0') + '-' + String(t.getDate()).padStart(2, '0'), hm = t.toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr';
+    if (day === todayISO()) return short ? 'Aktuell' : 'Aktuell ' + hm;
+    return short ? 'Stand ' + dShort(day) : 'Stand ' + dShort(day) + ', ' + hm;
+  }
   /* Offene Woche wie im Update-Skript: FTSE und Gold ab dem Schluss am letzten Handelstag (meist Freitag, FTSE 16:40 Uhr London, Gold 15:05 Uhr
      nach dem Nachmittagsfixing, in Feiertagswochen früher, an Halbtagen 12:40 Uhr) die nächste Woche,
      Bitcoin bis Sonntag 24 Uhr UTC. Fehlt die zuletzt geschlossene Woche noch in der Reihe (Buchung steht aus), bleibt sie die offene Woche;
@@ -191,6 +200,26 @@
     return { level: 'ok', text: t + 'Unter der Freigrenze von 1.000 €: steuerfrei, nichts zu erklären.' };
   }
 
+  /* ---------- Vorläufige Wochenschlüsse (Prüfbericht 02.10.2026 Punkt 7) ----------
+     update.mjs führt sie je Anlage als Liste (state.assets[a].prelim; ältere Stände nur preliminary für die jüngste Woche). Ein Signal aus einer
+     vorläufigen Woche heißt überall „vorläufig“: Chip, Handlung, Großansicht und Verlauf, nicht nur in der Fußzeile der Karte. */
+  function prelimOf(a) {
+    var st = D.state && D.state.assets && D.state.assets[a]; if (!st) return [];
+    var list = Array.isArray(st.prelim) ? st.prelim.filter(function (p) { return p && p.k && p.d; }) : [];
+    if (st.preliminary && st.k && !list.some(function (p) { return p.k === st.k; })) list.push({ k: st.k, d: st.preliminary, label: st.prelimLabel || null });
+    return list.sort(function (x, y) { return x.k < y.k ? -1 : x.k > y.k ? 1 : 0; });
+  }
+  function prelimWeek(a, k) { var l = prelimOf(a); for (var i = 0; i < l.length; i++) if (l[i].k === k) return l[i]; return null; }
+  function prelimNote(pw, sw) { return pw ? ' Der Wochenschluss' + (sw ? ' des Signals (' + dDE(pw.d) + ')' : '') + ' ist vorläufig (' + (pw.label || 'aus dem aktuellen Kurs vom ' + dDE(pw.d)) + '); kommt der endgültige anders, meldet die Seite das unter „Signale“ und per Push.' : ''; }
+
+  /* Frühere vorläufige Wochen als Satz (Karte): „Auch der Wochenschluss 02.10. ist noch vorläufig.“ bzw. „Die Wochenschlüsse 02.10. und 09.10.
+     sind noch vorläufig.“; prelimWhy: was danach passiert, für n vorläufige Schlüsse */
+  function olderPrelim(pl, also) {
+    var d = pl.map(function (p) { return dShort(p.d); }), s = (d.length > 1 ? 'die Wochenschlüsse ' + d.slice(0, -1).join(', ') + ' und ' + d[d.length - 1] + ' sind' : 'der Wochenschluss ' + d[0] + ' ist') + ' noch vorläufig.';
+    return also ? 'Auch ' + s : s.charAt(0).toUpperCase() + s.slice(1);
+  }
+  function prelimWhy(n) { return n > 1 ? 'Die endgültigen Schlüsse folgen mit einem der nächsten Läufe und werden gemeldet, wenn sich die Regel dadurch ändert.' : 'Der endgültige Schluss folgt mit einem der nächsten Läufe und wird gemeldet, wenn sich die Regel dadurch ändert.'; }
+
   /* ---------- Aktion je Position (Regel × Bestand) ---------- */
   function flipInfo(a) { return ENG.flipThreshold(C[a].E, CFG.assets[a].rule); }
   function dueText(due) { var t = todayISO(); if (t < due) return 'zur Eröffnung am Montag, ' + dShort(due); if (t === due) return 'heute zur Eröffnung (' + dShort(due) + ')'; return 'seit Montag, ' + dShort(due) + ' (überfällig)'; }
@@ -198,17 +227,19 @@
     var L = C[a].E.last, st = L.st, due = nextMonday(L.d), today = todayISO(), fresh = today <= due;
     var nc = weekCloseDay(a, ENG.addDays(ENG.mondayOf(L.d), 7)), due2 = nextMonday(nc), fi = flipInfo(a), P = Mo.pos[a];
     if (!Mo.ready) return { cls: '', title: st === 1 ? 'Regel investiert' : 'Regel nicht investiert', text: 'Importiere deine Depotdaten (Einstellungen), dann steht hier, was für dich zu tun ist.' };
-    var holding = P.u > 1e-9, ls = L.lastSwitch;
-    if (st === 1 && holding) return { cls: '', title: 'Halten', text: (L.changed && fresh ? 'Neues Kaufsignal zum Wochenschluss, du bist schon investiert.' : 'Regel investiert, Position im Depot.') + (P.cash >= Mo.cfg.minOrder ? ' Das Cash dieser Position (' + eur(P.cash, 2) + ') gehört laut Regel mit angelegt.' : '') };
+    var holding = P.u > 1e-9, ls = L.lastSwitch, pw = L.changed && fresh ? prelimWeek(a, L.k) : null, pv = pw ? ' (vorläufig)' : '';
+    /* Liegt der Wechsel in einer älteren, noch vorläufigen Woche (z. B. Gold mehrere Wochen auf dem Spotpreis), heißt auch die offene Handlung „vorläufig“ */
+    var pws = !(L.changed && fresh) && ls ? prelimWeek(a, ls.k) : null, pvs = pws ? ' (vorläufig)' : '';
+    if (st === 1 && holding) return { cls: '', title: 'Halten', text: (L.changed && fresh ? 'Neues Kaufsignal zum ' + (pw ? 'vorläufigen ' : '') + 'Wochenschluss, du bist schon investiert.' : 'Regel investiert, Position im Depot.') + (P.cash >= Mo.cfg.minOrder ? ' Das Cash dieser Position (' + eur(P.cash, 2) + ') gehört laut Regel mit angelegt.' : '') };
     if (st === 0 && !holding) return { cls: '', title: 'Nichts tun', text: 'Das Geld bleibt als Cash' + (P.cash > 0 ? ' (' + eur(P.cash) + ')' : '') + '.' };
     if (st === 1) {
-      return { cls: 'buy', title: 'Kaufen', text: (L.changed && fresh ? 'Kaufsignal: ' : 'Laut Regel investiert, die Position fehlt noch: ') + 'kaufen ' + dueText(due) + (P.cash > 0 ? '. Betrag: Cash der Position, ' + eur(P.cash) : '') + '.', todo: true,
+      return { cls: 'buy', title: 'Kaufen' + pv + pvs, text: (L.changed && fresh ? (pw ? 'Vorläufiges Kaufsignal: ' : 'Kaufsignal: ') : 'Laut Regel investiert, die Position fehlt noch: ') + 'kaufen ' + dueText(due) + (P.cash > 0 ? '. Betrag: Cash der Position, ' + eur(P.cash) : '') + '.' + prelimNote(pw) + prelimNote(pws, true), todo: true,
         next: !fresh && fi.can ? 'Nächster Wochenschluss am ' + dShort(nc) + ': Unter ' + usd(a, fi.thr) + ' wäre die Regel wieder draußen.' : '' };
     }
     var val = P.val ? ' (ca. ' + eur(P.val) + ')' : '';
-    if (L.changed && fresh) return { cls: 'sell', title: 'Verkaufen', text: 'Verkaufssignal: alle ' + holdingText(a, P) + val + ' verkaufen ' + dueText(due) + '.', tax: saleTax(a, Mo), todo: true };
+    if (L.changed && fresh) return { cls: 'sell', title: 'Verkaufen' + pv, text: (pw ? 'Vorläufiges Verkaufssignal: ' : 'Verkaufssignal: ') + 'alle ' + holdingText(a, P) + val + ' verkaufen ' + dueText(due) + '.' + prelimNote(pw), tax: saleTax(a, Mo), todo: true };
     var te = fi.can ? thrEur(a, fi.thr) : null, pxThr = (te && P.px) ? Math.min(P.px, te) : null;
-    return { cls: 'sell', title: 'Verkaufen', text: 'Laut Regel' + (ls ? ' seit ' + dDE(ls.d) : '') + ' nicht investiert, du hältst noch ' + holdingText(a, P) + val + '.', todo: true,
+    return { cls: 'sell', title: 'Verkaufen' + pvs, text: 'Laut Regel' + (ls ? ' seit ' + dDE(ls.d) : '') + ' nicht investiert, du hältst noch ' + holdingText(a, P) + val + '.' + prelimNote(pws, true), todo: true,
       next: fi.can ? 'Verkaufen zur Eröffnung am Montag, ' + dShort(due2) + ' – außer der Wochenschluss am ' + dShort(nc) + ' liegt über ' + usd(a, fi.thr) + ', dann gibt es ein Kaufsignal und du behältst die Position.' : 'Verkaufen, sobald es passt.',
       tax: saleTax(a, Mo, pxThr) };
   }
@@ -286,6 +317,7 @@
     var g = $('globalBanner'); g.textContent = '';
     var r = lastRun(), age = r ? ENG.daysBetween(r.t.slice(0, 10), todayISO()) : null;
     if (D.errors.length) { var b0 = el('div', 'banner bad'); b0.appendChild(el('b', null, 'Ein Teil der Daten konnte nicht geladen werden')); b0.appendChild(el('span', null, D.errors.join(' · '))); g.appendChild(b0); }
+    if (STORE.memOnly()) { var bm = el('div', 'banner bad'); bm.appendChild(el('b', null, 'Nicht dauerhaft gespeichert')); bm.appendChild(el('span', null, 'Der Browser lässt die Seite gerade nichts speichern (privates Fenster oder Speicher voll). Deine letzten Eingaben gehen beim Schließen oder Neuladen verloren. Sichere sie unter Einstellungen als Datei.')); g.appendChild(bm); }
     /* Fehlgeschlagener letzter Lauf: kein roter Hinweis oben mehr (Justus 27.09.2026: „wird ja schon unten angezeigt“), nur die Fußzeile (renderFoot) */
     if (age != null && age > 8) { var b1 = el('div', 'banner'); b1.appendChild(el('b', null, 'Die automatischen Läufe sind seit ' + age + ' Tagen ausgeblieben')); b1.appendChild(el('span', null, 'Die Kurse und Signale sind möglicherweise veraltet. Prüfe bei GitHub unter „Actions“, ob der Workflow „Regel-Depot Update“ läuft.')); g.appendChild(b1); }
     if (!Mo.ready && !STORE.corruptInfo()) { var b2 = el('div', 'banner info'); b2.appendChild(el('b', null, 'Depotdaten fehlen in diesem Browser')); b2.appendChild(el('span', null, 'Importiere deine Depot-Datei unter „Einstellungen“ (oder trage Käufe von Hand ein). Kurse und Signale funktionieren auch ohne Depot.'));
@@ -388,18 +420,33 @@
         right.appendChild(sn); }
       hd.appendChild(right);
       top.appendChild(hd);
-      var fig = el('div', 'fig'); fig.appendChild(el('span', 'fl', 'Wochenschluss ' + dDE(L.d))); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
+      var fig = el('div', 'fig'), fl = el('span', 'fl', 'Wochenschluss ' + dDE(L.d)); fig.appendChild(fl); fig.appendChild(el('b', 'fv', usd(a, L.c))); fig.appendChild(el('span', 'fd', pct(L.dist, 1) + ' zum SMA50')); top.appendChild(fig);
+      /* Vorläufiger Schluss oder Ersatzquelle direkt am Wochenschluss (Justus 07.10.2026, Vorschlag 2 „Kursstand eindeutig“): „· vorläufig“ bzw.
+         „· Ersatzquelle“ hinter dem Datum, ein Klick klappt die Erklärung darunter auf (wie beim Grenzfall; offen merkt sich die Seite je
+         Baustein und Woche). Ersetzt den Chip „Ersatzquelle“ und den Absatz unter dem Chart. */
+      var polder = prelimOf(a).filter(function (p) { return p.k !== L.k; }), preHint = !!(st && (st.preliminary || st.fallback));
+      if (preHint) {
+        var pk = 'pre-' + a + ':' + L.k, po = !!foldState()[pk], pb = el('button', 'pre tog', st.preliminary ? 'vorläufig' : 'Ersatzquelle'), preBox = el('div', 'edgex prex'), p1 = el('p');
+        pb.type = 'button'; preBox.id = 'prex-' + a; preBox.hidden = !po;
+        p1.appendChild(el('b', null, st.preliminary ? 'Vorläufiger Wochenschluss: ' : 'Ersatzquelle: '));
+        p1.appendChild(document.createTextNode((st.preliminary ? (st.prelimLabel || 'aus dem aktuellen Kurs vom ' + dDE(st.preliminary)) + '.' : st.src ? st.src.replace(/ adjclose/, ' bereinigt') + ' (Hauptquelle nicht erreichbar).' : 'Die Hauptquelle war nicht erreichbar.') + (polder.length ? ' ' + olderPrelim(polder, !!st.preliminary) : '')));
+        preBox.appendChild(p1);
+        var nP = (st.preliminary ? 1 : 0) + polder.length; if (nP) preBox.appendChild(el('p', 'why', prelimWhy(nP)));
+        pb.setAttribute('aria-controls', preBox.id); pb.setAttribute('aria-expanded', String(po)); pb.title = 'Erklärung ein- oder ausklappen';
+        pb.addEventListener('click', function () { var o = preBox.hidden; preBox.hidden = !o; pb.setAttribute('aria-expanded', String(o)); foldSet(pk, o); });
+        fl.appendChild(document.createTextNode(' · ')); fl.appendChild(pb); top.appendChild(preBox);
+      }
       var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null;
       if (lp && rn) {
         var lv = el('div', 'live' + (rn.would ? ' would ' + (rn.wouldSt ? 'buy' : 'sell') : '')); /* Kursbox grün bei möglichem Kauf-, rot bei möglichem Verkaufssignal (Justus 27.09.2026) */
-        var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : 'Aktuell ' + (lp.t ? new Date(lp.t).toLocaleTimeString('de-DE', { hour: '2-digit', minute: '2-digit' }) + ' Uhr' : ''))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
+        var head = el('div', 'lh'); head.appendChild(el('span', 'll', lp.eod ? 'Letzter Schluss ' + (lp.d ? dShort(lp.d) : '') : liveWhen(lp))); head.appendChild(el('b', 'lv', usd(a, lp.usd))); lv.appendChild(head);
         var what = rn.would ? ('Schließt die Woche so: ' + (rn.wouldSt ? 'Kaufsignal' : 'Verkaufssignal')) : (CFG.assets[a].rule.type === 'confirm' && ((rn.st === 1 && lp.usd < rn.thr) || (rn.st === 0 && lp.usd > rn.thr)) ? 'So wäre das der ' + (lp.usd > rn.thr ? rn.up : rn.dn) + '. Schluss ' + (lp.usd > rn.thr ? 'über' : 'unter') + ' dem SMA50, Signal erst nach ' + CFG.assets[a].rule.n : 'Schließt die Woche so, bleibt die Regel ' + (rn.wouldSt ? 'investiert' : 'auf Cash'));
         lv.appendChild(el('p', 'ld', pct(rn.dist, 1) + ' zur Schwelle ' + usd(a, rn.thr) + ' · ' + what + '.'));
         var ls1 = el('p', 'ls', lp.live ? 'Live im Browser' : lp.spot ? 'Spotpreis, stündlich aktualisiert' : lp.eod ? 'Tagesschluss (für den ETF gibt es keinen Live-Kurs)' : 'stündlich aktualisiert'); if (lp.src) ls1.title = 'Quelle: ' + lp.src; lv.appendChild(ls1);
         top.appendChild(lv);
       }
       var row = el('div', 'row'), ti = thresholdInfo(a);
-      if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal'));
+      if (L.changed) row.appendChild(chip(L.st === 1 ? 'buy' : 'sell', (L.st === 1 ? 'Neues Kaufsignal' : 'Neues Verkaufssignal') + (prelimWeek(a, L.k) ? ' (vorläufig)' : '')));
       var edgeBox = null;
       if (ti.edge) {
         /* Chip als Knopf, die Erklärung klappt unter der Chip-Zeile auf; offen merkt sich die Seite je Baustein und Woche (foldSet, ti.edge setzt ti.ec voraus) */
@@ -412,7 +459,6 @@
         row.appendChild(eb);
       }
       if (a === 'gold' && D.state && D.state.cross && D.state.cross.goldf && D.state.cross.goldf.st != null && D.state.cross.goldf.st !== L.st) row.appendChild(chip('info', 'COMEX-Future: ' + (D.state.cross.goldf.st === 1 ? 'investiert' : 'Cash')));
-      if (st && st.fallback) row.appendChild(chip('warn', 'Ersatzquelle'));
       if (st && st.pending) row.appendChild(chip('info', 'Schluss fehlt noch'));
       if (row.childNodes.length) top.appendChild(row);
       if (edgeBox) top.appendChild(edgeBox);
@@ -430,8 +476,12 @@
       cw.appendChild(cr); cw.appendChild(ch); card.appendChild(cw);
       var bot = el('div', 'bot');
       var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); bot.appendChild(wb); }
-      if (st && st.fallback && st.src && !st.preliminary) bot.appendChild(el('p', 'small muted', 'Ersatzquelle: ' + st.src.replace(/ adjclose/, ' bereinigt') + ' (Hauptquelle nicht erreichbar)'));
-      if (st && st.preliminary) bot.appendChild(el('p', 'small muted', 'Vorläufiger Wochenschluss (' + (st.prelimLabel || 'aus dem aktuellen Kurs vom ' + dDE(st.preliminary)) + '); der endgültige Schluss folgt mit einem der nächsten Läufe und wird gemeldet, wenn sich die Regel dadurch ändert.'));
+      /* Frühere, noch vorläufige Wochen (z. B. bei länger fehlendem LBMA-Fixing; Prüfbericht 02.10.2026 Punkt 2): Ist der jüngste Schluss selbst
+         vorläufig oder aus der Ersatzquelle, stehen sie in der Erklärung am Wochenschluss (oben), sonst hier. Dazu ein Ausfall der LBMA
+         (state.outage.lbma) als Warnung (Punkt 3). */
+      if (polder.length && !preHint) bot.appendChild(el('p', 'small muted', olderPrelim(polder, false) + ' ' + prelimWhy(polder.length)));
+      var lbo = a === 'gold' && D.state && D.state.outage && D.state.outage.lbma;
+      if (lbo && lbo.since) { var lb = el('div', 'warnbox'); lb.innerHTML = ICON.warn; lb.appendChild(el('span', null, 'Das LBMA-Fixing ist seit ' + dtDE(lbo.since) + ' nicht abrufbar' + (lbo.err ? ' (' + lbo.err + ')' : '') + '. Bis es wieder kommt, gelten die Gold-Schlüsse vorläufig mit dem Spotpreis nach dem Fixing.')); bot.appendChild(lb); }
       if (bot.childNodes.length) card.appendChild(bot); /* SMA50, Serie, Schwellen und Wochentabelle stehen in der Großansicht */
       host.appendChild(card);
     });
@@ -525,10 +575,11 @@
     var tools = el('div', 'toolbar');
     var facts = el('div', 'bigfacts');
     function fact(l, v, cls) { var f = el('div', 'bf ' + (cls || '')); f.appendChild(el('span', 'k', l)); f.appendChild(el('b', 'v', v)); facts.appendChild(f); }
-    fact('Wochenschluss ' + dShort(L.d), usd(a, L.c)); fact('SMA50', usd(a, L.m)); fact('Abstand', pct(L.dist, 1)); fact('Serie', streakText(L));
+    /* Wochenschluss, SMA50 und Abstand stehen in der Werte-Zeile direkt über dem Chart und oben nicht noch einmal (Justus 07.10.2026, Vorschlag 5) */
+    fact('Serie', streakText(L));
     var lp = livePrice(a), rn = lp ? ruleNow(a, lp.usd) : null, pf = perfSince(a, lp);
     if (pf) fact(pf.label, pf.text, 'perf ' + pf.cls);
-    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : 'Aktuell', usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? (rn.wouldSt ? 'good' : 'bad') : ''); /* wie die Kursbox der Karte: grün Kauf-, rot Verkaufssignal */
+    if (lp && rn) fact(lp.eod ? 'Letzter Schluss' : liveWhen(lp, true), usd(a, lp.usd) + ' (' + pct(rn.dist, 1) + ' zur Schwelle)', rn.would ? (rn.wouldSt ? 'good' : 'bad') : ''); /* wie die Kursbox der Karte: grün Kauf-, rot Verkaufssignal */
     tools.appendChild(facts);
     var seg = el('div', 'seg'); seg.setAttribute('role', 'group'); seg.setAttribute('aria-label', 'Zeitraum');
     [[52, '1 J'], [156, '3 J'], [260, '5 J'], [520, '10 J'], [0, 'Max']].forEach(function (r) { var b = el('button', null, r[1]); b.type = 'button'; b.setAttribute('aria-pressed', String(BIG.range === r[0])); b.addEventListener('click', function () { BIG.range = r[0]; Array.prototype.forEach.call(seg.querySelectorAll('button'), function (x) { x.setAttribute('aria-pressed', String(x === b)); }); drawBig(a); }); seg.appendChild(b); });
@@ -539,7 +590,7 @@
     var w = currentWarn(a); if (w && w.level !== 'none') { var wb = el('div', 'warnbox'); wb.innerHTML = ICON.warn; wb.appendChild(el('span', null, 'Vorwarnung ' + dtDE(w.t) + ': ' + (w.text || ''))); box.appendChild(wb); }
     var swl = el('div', 'bigsw'); swl.appendChild(el('p', 'subhd', 'Signale der letzten Jahre'));
     var sws = E.sw.slice(-8).reverse(); if (!sws.length) swl.appendChild(el('p', 'small muted', 'Noch keine Signale.'));
-    sws.forEach(function (sw) { var r = el('div', 'swrow'); r.appendChild(chip(sw.to ? 'buy' : 'sell', sw.to ? 'Kauf' : 'Verkauf')); r.appendChild(el('span', null, dDE(sw.d) + ' · Schluss ' + usd(a, sw.c) + ' · SMA50 ' + usd(a, sw.m) + ' · Handel ' + dShort(nextMonday(sw.d)))); swl.appendChild(r); });
+    sws.forEach(function (sw) { var r = el('div', 'swrow'); r.appendChild(chip(sw.to ? 'buy' : 'sell', sw.to ? 'Kauf' : 'Verkauf')); r.appendChild(el('span', null, dDE(sw.d) + (prelimWeek(a, sw.k) ? ' (vorläufig)' : '') + ' · Schluss ' + usd(a, sw.c) + ' · SMA50 ' + usd(a, sw.m) + ' · Handel ' + dShort(nextMonday(sw.d)))); swl.appendChild(r); });
     box.appendChild(swl);
     mo.hidden = false; document.body.style.overflow = 'hidden';
     drawBig(a); cb.focus();
@@ -656,8 +707,8 @@
         r.appendChild(el('td', 'small', tax));
       } else {
         var rl = realBy[x.id];
-        r.appendChild(el('td', 'n', units(a, x.units))); var sp = el('td', 'n', eur(x.price, a === 'btc' ? 0 : 2)); if ((x.fee || 0) > 0) sp.appendChild(el('span', 'sub', '− ' + eur(x.fee, 2) + ' Gebühr')); r.appendChild(sp);
-        r.appendChild(el('td', 'n', eur(x.units * x.price - (x.fee || 0), 2))); r.appendChild(el('td', 'n', '–'));
+        r.appendChild(el('td', 'n', units(a, x.units))); var sp = el('td', 'n', eur(x.price, a === 'btc' ? 0 : 2)); if ((x.fee || 0) > 0) sp.appendChild(el('span', 'sub', '− ' + eur(x.fee, 2) + ' Gebühr')); if ((x.tax || 0) > 0) sp.appendChild(el('span', 'sub', '− ' + eur(x.tax, 2) + ' Steuer')); r.appendChild(sp);
+        r.appendChild(el('td', 'n', eur(x.units * x.price - (x.fee || 0) - (x.tax || 0), 2))); r.appendChild(el('td', 'n', '–'));
         if (rl) {
           r.appendChild(el('td', 'n ' + (rl.gain >= 0 ? 'up' : 'down'), sgnEur(rl.gain) + ' realisiert'));
           /* Kurz- oder langfristig nach den verkauften Kauflosen, nicht nach dem Gewinn (ein Gewinn von 0 heißt nicht „Haltefrist vorbei“) */
@@ -685,6 +736,13 @@
       if (bad.length) { TXMSG = { text: 'Nicht gelöscht: Dieser Kauf deckt den Verkauf vom ' + dDE(bad[0].d) + '. Lösch zuerst den Verkauf oder trag vorher den richtigen Kauf ein.', err: true }; schedule(); return; }
     }
     var b = bucketOf(x.a), applied = typeof x.cash === 'number' && isFinite(x.cash) ? x.cash : null, text = '';
+    /* Würde die Rücknahme mehr Cash brauchen, als der Baustein hat (das Geld ist schon verwendet, etwa für einen späteren Kauf), wird nicht gelöscht:
+       Vorher kappte die Seite bei 0, und das spätere Löschen der anderen Buchung erzeugte Cash, das es nie gab (Prüfbericht 02.10.2026 Punkt 10). */
+    var need = x.type === 'umbuchung' ? +x.amount || 0 : (!x.hist && applied != null && applied > 0 ? applied : 0), from = x.type === 'umbuchung' ? x.to : b, haveC = dep.cash[from] || 0;
+    if (need > haveC + 0.005) {
+      TXMSG = { text: 'Nicht gelöscht: Diese Buchung hat dem Cash von ' + bname(from) + ' ' + eur(need, 2) + ' gebracht, davon ist nur noch ' + eur(haveC, 2) + ' da; der Rest wurde schon verwendet' + (x.reb ? '.' : ' (zum Beispiel für einen späteren Kauf).') + ' Lösch zuerst die Buchungen, die das Geld verwendet haben' + (x.reb ? '; ein ganzes Rebalancing machst du am einfachsten unter Einstellungen → „Frühere Stände“ → „vor dem Rebalancing“ rückgängig.' : ', oder pass das Cash unter Einstellungen an.'), err: true };
+      schedule(); return;
+    }
     if (!saveOr(null, function (d) {
       d.tx = d.tx.filter(function (t) { return t.id !== x.id; });
       if (x.type === 'umbuchung') {
@@ -715,7 +773,7 @@
   }
   /* Depotverlauf je Woche: Positionen zu Euro-Wochenkursen, Cash je Baustein rückwärts aus den Buchungen abgeleitet,
      Zinsen auf Cash (cashRate p. a.) wöchentlich aufgelaufen. Einzahlungen/Auszahlungen als Buchungen vom Typ einzahlung/auszahlung. */
-  function cashDelta(t) { if (t.type === 'kauf') return -(t.units * t.price + (t.fee || 0)); if (t.type === 'verkauf') return t.units * t.price - (t.fee || 0); if (t.type === 'einzahlung') return +t.amount || 0; if (t.type === 'auszahlung') return -(+t.amount || 0); return 0; }
+  function cashDelta(t) { if (t.type === 'kauf') return -(t.units * t.price + (t.fee || 0)); if (t.type === 'verkauf') return t.units * t.price - (t.fee || 0) - (t.tax || 0); if (t.type === 'einzahlung') return +t.amount || 0; if (t.type === 'auszahlung') return -(+t.amount || 0); return 0; }
   /* Wirkung auf das echte Cash des Bausteins (für den Verlauf): nachgetragene Bewegungen voll (sie stecken im heutigen Cash), sonst der beim
      Eintragen vermerkte Betrag (ein Kauf über das Cash hinaus war zum Teil von außen bezahlt), ohne Vermerk die Buchung selbst */
   function econDelta(t) { if (t.hist) return cashDelta(t); if (typeof t.cash === 'number' && isFinite(t.cash)) return t.cash; return cashDelta(t); }
@@ -829,12 +887,13 @@
      Darunter der Drawdown beider Linien mit Max DD, Hoch → Tief und aktuellem Rückgang. */
   var BH_W = { ftse: 0.5, btc: 0.3, gold: 0.2 };
   /* Geld von außen je Buchung: Ein- und Auszahlungen; bei einem Kauf der Teil, den das Cash des Bausteins nicht gedeckt hat (tx.cash kleiner als
-     der Kaufbetrag, gilt als von außen bezahlt). Verkäufe und Umbuchungen bleiben im Depot. */
+     der Kaufbetrag, gilt als von außen bezahlt). Verkäufe und Umbuchungen bleiben im Depot. Von Trade Republic einbehaltene Steuer (tx.tax) zählt
+     wie die Gebühr als Kosten deines Depots, nicht als Auszahlung (Buy & Hold rechnet ohne Gebühren und Steuern). */
   function extFlow(t) {
     if (t.type === 'einzahlung' || t.type === 'auszahlung') return econDelta(t);
     var v = (+t.units || 0) * (+t.price || 0), fee = +t.fee || 0;
     if (t.type === 'kauf') return Math.max(0, v + fee + econDelta(t));
-    if (t.type === 'verkauf') return Math.min(0, econDelta(t) - (v - fee));   /* nur, wenn weniger als der Erlös ins Cash ging */
+    if (t.type === 'verkauf') return Math.min(0, econDelta(t) + (+t.tax || 0) - (v - fee));   /* nur, wenn weniger als der Erlös ins Cash ging */
     return 0;
   }
   /* Rebalancing-Tage für Buy & Hold: dieselben Stichtage wie beim Depot (quartalsweise, Justus 01.10.2026); ein gebuchtes Rebalancing (tx.reb)
@@ -1136,7 +1195,7 @@
   function renderFeed() {
     var items = [], host = $('feed'); host.textContent = '';
     var since = ENG.addDays(todayISO(), -730);
-    A.forEach(function (a) { C[a].E.sw.forEach(function (s) { if (s.d >= since) items.push({ a: a, kind: s.to ? 'buy' : 'sell', d: s.d, t: s.d + 'T23:59:59Z', title: CFG.assets[a].name + ': ' + (s.to ? 'Kaufsignal' : 'Verkaufssignal'), text: switchText(a, s), key: 'sig:' + a + ':' + s.d }); }); });
+    A.forEach(function (a) { C[a].E.sw.forEach(function (s) { if (s.d < since) return; var pw = prelimWeek(a, s.k); items.push({ a: a, kind: s.to ? 'buy' : 'sell', d: s.d, t: s.d + 'T23:59:59Z', title: CFG.assets[a].name + ': ' + (s.to ? 'Kaufsignal' : 'Verkaufssignal') + (pw ? ' (vorläufig)' : ''), text: switchText(a, s) + (pw ? ' Vorläufiger Wochenschluss (' + (pw.label || 'aus dem aktuellen Kurs vom ' + dDE(pw.d)) + ').' : ''), key: 'sig:' + a + ':' + s.d }); }); });
     (D.events || []).forEach(function (ev) { if (!ev) return; if (!ev.id) ev = Object.assign({ id: (ev.kind || 'ev') + ':' + (ev.a || '') + ':' + (ev.t || ev.d || '') }, ev); var kind = ev.kind === 'kauf' ? 'buy' : ev.kind === 'verkauf' ? 'sell' : ev.kind === 'vorwarnung' ? 'warn' : ev.kind === 'fehler' ? 'bad' : 'info'; var key = 'sig:' + ev.a + ':' + ev.d; if ((kind === 'buy' || kind === 'sell') && items.some(function (i) { return i.key === key; })) return; items.push({ a: ev.a, kind: kind, d: ev.d || (ev.t || '').slice(0, 10), t: ev.t, title: ev.title || (ev.a ? CFG.assets[ev.a].name : ''), text: ev.text || '', key: ev.id }); });
     items.sort(function (x, y) { return x.t < y.t ? 1 : x.t > y.t ? -1 : 0; });
     var seen = seenList(), unread = items.filter(function (i) { return i.key && ENG.daysBetween(i.d, todayISO()) <= 7 && (i.kind === 'buy' || i.kind === 'sell' || i.kind === 'warn') && seen.indexOf(i.key) < 0; });
@@ -1379,12 +1438,14 @@
   }
   function rebPlan(r, Mo, base, open) {
     var FEE = (CFG.taxLaw && CFG.taxLaw.fee) || 0, lines = [], planned = {}, sellFee = {}, cut = {};
-    function sellLine(c, b, units, label, full) { lines.push({ kind: 'verkauf', a: c.id, b: b, units: units, price: c.px, fee: FEE, label: label, max: c.units, full: full }); }
+    function sellLine(c, b, units, label, full) { lines.push({ kind: 'verkauf', a: c.id, b: b, units: units, price: c.px, fee: FEE, tax: 0, label: label, max: c.units, full: full }); }
     open.forEach(function (b) { rebCoins(Mo, b).forEach(function (c) { if (c.units > 1e-12) sellLine(c, b, c.units, 'Regel-Verkauf (offen)', true); }); });
     A.forEach(function (b) {
       var x = r.rows[b], cs = rebCoins(Mo, b), V = cs.reduce(function (sx, c) { return sx + c.units * (c.px || 0); }, 0);
       sellFee[b] = 0;
       if (x.sell > 0.5 && V > 0) { var f = Math.min(1, x.sell / V); cs.forEach(function (c) { if (c.units * f > 1e-12) { sellLine(c, b, c.units * f, x.ruleSale ? 'Regel-Verkauf' : 'Verkaufen', f >= 1 - 1e-9); sellFee[b] += FEE; } }); }
+      /* Abzug bei Trade Republic (Abgeltungsteuer auf den FTSE-Gewinn über dem freien Pauschbetrag): vorausgefüllt in der Verkaufszeile, änderbar (Prüfbericht 02.10.2026 Punkt 11) */
+      if (b === 'ftse' && x.sell > 0.5 && r.withheld20 > 0.5) { var fl = lines.filter(function (l) { return l.kind === 'verkauf' && l.b === 'ftse' && l.label !== 'Regel-Verkauf (offen)'; }).pop(); if (fl) fl.tax = Math.round(r.withheld20 * 100) / 100; }
       /* geplanter Cash-Zufluss (+) oder -abfluss (−) je Baustein laut Vorschlag; Verkäufe bringen den Erlös nach Gebühr */
       planned[b] = (x.st === 1 ? 0 : x.after) - (base.cash[b] || 0) - (x.sell || 0) + (x.buy || 0) + sellFee[b];
     });
@@ -1403,7 +1464,7 @@
   function rebCompute(lines, planned, cash0) {
     var flow = {}, N = {}, cash1 = {}, out = { cash: {}, transfers: [], ext: 0 };
     A.forEach(function (b) { flow[b] = 0; N[b] = planned[b] || 0; });
-    lines.forEach(function (l) { if (!(l.units > 1e-12) || !(l.price > 0)) return; flow[l.b] += l.kind === 'verkauf' ? l.units * l.price - (l.fee || 0) : -(l.units * l.price + (l.fee || 0)); });
+    lines.forEach(function (l) { if (!(l.units > 1e-12) || !(l.price > 0)) return; flow[l.b] += l.kind === 'verkauf' ? l.units * l.price - (l.fee || 0) - (l.tax || 0) : -(l.units * l.price + (l.fee || 0)); });
     /* Ein Baustein gibt höchstens ab, was er nach seinen Orders hat (Verkauf kleiner oder billiger als geplant); die Empfänger bekommen dann anteilig weniger */
     A.forEach(function (b) { if (N[b] < 0) N[b] = -Math.min(-N[b], Math.max(0, (cash0[b] || 0) + flow[b])); });
     var gv = A.reduce(function (sx, b) { return sx + Math.max(0, -N[b]); }, 0), gt = A.reduce(function (sx, b) { return sx + Math.max(0, N[b]); }, 0);
@@ -1432,12 +1493,13 @@
   }
   function rebReadLines(plan, inputs, msgEl) {
     var bad = [], lines = plan.lines.map(function (l, i) {
-      var u = ENG.parseNum(inputs[i].u.value, true), p = ENG.parseNum(inputs[i].p.value), f = ENG.parseNum(inputs[i].f.value);
+      var u = ENG.parseNum(inputs[i].u.value, true), p = ENG.parseNum(inputs[i].p.value), f = ENG.parseNum(inputs[i].f.value), tx = inputs[i].t ? ENG.parseNum(inputs[i].t.value) : 0;
       var who = INFO(l.a).short + ' (' + l.label + ')';
-      if (u === null) u = 0; if (f === null) f = 0;
-      if (isNaN(u) || u < 0) bad.push(who + ': Stück'); if (u > 0 && !(p > 0)) bad.push(who + ': Kurs'); if (isNaN(f) || f < 0) bad.push(who + ': Gebühr');
+      if (u === null) u = 0; if (f === null) f = 0; if (tx === null) tx = 0;
+      if (isNaN(u) || u < 0) bad.push(who + ': Stück'); if (u > 0 && !(p > 0)) bad.push(who + ': Kurs'); if (isNaN(f) || f < 0) bad.push(who + ': Gebühr'); if (isNaN(tx) || tx < 0) bad.push(who + ': Steuer');
       if (l.kind === 'verkauf' && u > l.max && u - l.max < 1e-6) u = l.max;   /* Rundung der Anzeige, nicht mehr als der Bestand */
-      return Object.assign({}, l, { units: u || 0, price: p || 0, fee: f || 0 });
+      if (l.kind === 'verkauf' && tx > 0 && tx > (u || 0) * (p || 0) - (f || 0) + 0.005) bad.push(who + ': Steuer höher als der Erlös');
+      return Object.assign({}, l, { units: u || 0, price: p || 0, fee: f || 0, tax: l.kind === 'verkauf' ? tx || 0 : 0 });
     });
     if (bad.length) { if (msgEl) { msgEl.textContent = 'Nicht lesbar: ' + bad.join(', ') + '. Bitte so eingeben: 2708,50 oder 0,0125.'; msgEl.className = 'formmsg err'; } return null; }
     return lines;
@@ -1455,7 +1517,7 @@
     var use = lines.filter(function (l) { return l.units > 1e-12; }), dep = STORE.load();
     /* Verkäufe gedeckt? (wie beim einzelnen Verkauf, zum Buchungsdatum) */
     var ts = Date.now(), k = 0, note = 'Rebalancing ' + dDE(dueDate) + ' (' + vLabel + ')', txs = [];
-    use.forEach(function (l) { var v = l.units * l.price; txs.push({ id: 'reb' + ts + '-' + k, d: d, a: l.a, type: l.kind, units: l.units, price: l.price, fee: l.fee, note: note, ts: ts + k++, cash: l.kind === 'verkauf' ? v - l.fee : -(v + l.fee), reb: dueDate, _b: l.b }); });
+    use.forEach(function (l) { var v = l.units * l.price, t = { id: 'reb' + ts + '-' + k, d: d, a: l.a, type: l.kind, units: l.units, price: l.price, fee: l.fee, note: note, ts: ts + k++, cash: l.kind === 'verkauf' ? v - l.fee - (l.tax || 0) : -(v + l.fee), reb: dueDate, _b: l.b }; if (l.kind === 'verkauf' && l.tax > 0) t.tax = l.tax; txs.push(t); });
     var openBefore = ENG.book(dep.tx).real.filter(function (r) { return r.open > 1e-9; }).map(function (r) { return r.id; });
     var bad = ENG.book(dep.tx.concat(txs.filter(function (t) { return t.type === 'verkauf'; }))).real.filter(function (r) { return r.open > 1e-9 && openBefore.indexOf(r.id) < 0; });
     if (bad.length) { msgEl.textContent = 'Nicht gebucht: Der Verkauf ' + INFO(bad[0].a).short + ' ist mit den eingetragenen Stück zum ' + dDE(d) + ' nicht gedeckt. Prüf die Stückzahl.'; msgEl.className = 'formmsg err'; return; }
@@ -1475,21 +1537,25 @@
   function rebPanel(host, r, Mo, base, open, dueDate, vLabel) {
     var plan = rebPlan(r, Mo, base, open), panel = el('div', 'rebpanel'); panel.id = 'rebPanel';
     panel.appendChild(el('p', 'subhd', 'Umgesetzt: ' + vLabel));
-    panel.appendChild(el('p', 'small muted', 'Vorausgefüllt mit dem Vorschlag. Trag bei Bedarf die Werte aus Trade Republic ein (Stück, Ausführungskurs, Gebühr); Zeilen mit 0 Stück werden nicht gebucht. Das Cash zwischen den Bausteinen bucht die Seite als Umbuchung.'));
+    panel.appendChild(el('p', 'small muted', 'Vorausgefüllt mit dem Vorschlag. Trag bei Bedarf die Werte aus Trade Republic ein (Stück, Ausführungskurs, Gebühr, bei Verkäufen die einbehaltene Steuer); Zeilen mit 0 Stück werden nicht gebucht. Das Cash zwischen den Bausteinen bucht die Seite als Umbuchung.'));
     var dl = el('label', 'rebdate'), di = el('input'); dl.appendChild(el('span', null, 'Ausgeführt am')); di.type = 'date'; di.value = todayISO(); di.min = dueDate; di.max = todayISO(); dl.appendChild(di); panel.appendChild(dl);
     var tw = el('div', 'tablewrap'), t = el('table'), th = el('thead'), tr = el('tr');
-    ['Position', 'Order', 'Stück', 'Kurs je Stück (€)', 'Gebühr (€)'].forEach(function (h, i) { var c = el('th', i >= 2 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
+    ['Position', 'Order', 'Stück', 'Kurs je Stück (€)', 'Gebühr (€)', 'Steuer (€)'].forEach(function (h, i) { var c = el('th', i >= 2 ? 'n' : null, h); c.scope = 'col'; tr.appendChild(c); }); th.appendChild(tr); t.appendChild(th);
     var tb = el('tbody'), inputs = [];
     plan.lines.forEach(function (l) {
       var row = el('tr'), c0 = el('td'), sw = aicon(l.a); c0.appendChild(sw); c0.appendChild(document.createTextNode(INFO(l.a).short)); row.appendChild(c0);
       var ca = el('td', null, (l.label === 'Kaufen' ? 'Kauf' : l.label === 'Verkaufen' ? 'Verkauf' : l.label) + ' '); if (l.optional) ca.appendChild(el('span', 'tag', 'optional')); row.appendChild(ca);
-      function inp(val, dec, lab) { var td = el('td', 'n'), x = el('input'); x.type = 'text'; x.setAttribute('inputmode', 'decimal'); x.autocomplete = 'off'; x.spellcheck = false; x.value = deIn(val, dec); x.setAttribute('aria-label', INFO(l.a).short + ', ' + (l.kind === 'verkauf' ? 'Verkauf' : 'Kauf') + ': ' + lab); td.appendChild(x); row.appendChild(td); return x; }
+      function inp(val, dec, lab, cls) { var td = el('td', 'n'), x = el('input'); x.type = 'text'; if (cls) x.className = cls; x.setAttribute('inputmode', 'decimal'); x.autocomplete = 'off'; x.spellcheck = false; x.value = deIn(val, dec); x.setAttribute('aria-label', INFO(l.a).short + ', ' + (l.kind === 'verkauf' ? 'Verkauf' : 'Kauf') + ': ' + lab); td.appendChild(x); row.appendChild(td); return x; }
       var ud = l.a === 'btc' ? 8 : 6, uv = l.kind === 'verkauf' ? (l.full ? l.units : Math.floor(l.units * Math.pow(10, ud)) / Math.pow(10, ud)) : l.units;
-      inputs.push({ u: inp(uv, l.kind === 'verkauf' && l.full ? 10 : ud, 'Stück'), p: inp(l.price, 2, 'Kurs je Stück in Euro'), f: inp(l.fee, 2, 'Gebühr in Euro') });
+      var io = { u: inp(uv, l.kind === 'verkauf' && l.full ? 10 : ud, 'Stück'), p: inp(l.price, 2, 'Kurs je Stück in Euro'), f: inp(l.fee, 2, 'Gebühr in Euro', 'sm') };
+      if (l.kind === 'verkauf') io.t = inp(l.tax || 0, 2, 'einbehaltene Steuer in Euro', 'sm'); else row.appendChild(el('td', 'n muted', '–'));
+      inputs.push(io);
       tb.appendChild(row);
     });
-    if (!plan.lines.length) { var er = el('tr'), ec = el('td', 'muted', 'Keine Orders, nur Umbuchung des Cash.'); ec.colSpan = 5; er.appendChild(ec); tb.appendChild(er); }
+    if (!plan.lines.length) { var er = el('tr'), ec = el('td', 'muted', 'Keine Orders, nur Umbuchung des Cash.'); ec.colSpan = 6; er.appendChild(ec); tb.appendChild(er); }
     t.appendChild(tb); tw.appendChild(t); panel.appendChild(tw);
+    var tl = plan.lines.filter(function (l) { return l.tax > 0; });
+    if (tl.length) panel.appendChild(el('p', 'small', 'Steuer: Beim Verkauf ' + tl.map(function (l) { return INFO(l.a).short; }).join(', ') + ' ist der geschätzte Abzug bei Trade Republic von ' + eur(tl.reduce(function (sx, l) { return sx + l.tax; }, 0), 2) + ' eingetragen (Spalte „Steuer“ in der Tabelle). Trag den Betrag aus der Abrechnung ein; er mindert das Cash, nicht den Gewinn.'));
     var pv = el('p', 'rebprev'), msgEl = el('p', 'formmsg'); msgEl.setAttribute('role', 'status');
     function upd() { var ls = rebReadLines(plan, inputs, null); if (!ls) { pv.textContent = 'Eingaben prüfen.'; return; } msgEl.textContent = ''; msgEl.className = 'formmsg'; pv.textContent = rebPreviewText(rebCompute(ls, plan.planned, Mo.cash)); }
     panel.addEventListener('input', upd); upd(); panel.appendChild(pv);
@@ -1511,22 +1577,30 @@
     var cfg = Mo.cfg, today = todayISO(), prev = cfg.rebalPrev, since = prev ? ENG.daysBetween(prev, today) : -1;
     var rebTx = prev ? Mo.dep.tx.filter(function (t) { return t.reb === prev; }) : [], inWin = since >= 0 && since <= 7, bookable = Mo.ready && inWin && !rebTx.length;
     var date = bookable ? today : cfg.rebalDate, days = ENG.daysBetween(today, date);
-    $('rebDate').textContent = bookable ? dDE(prev) + (since === 0 ? ' · heute' : ' · seit ' + since + (since === 1 ? ' Tag' : ' Tagen') + ' fällig, noch nicht gebucht') : dDE(date) + (days > 0 ? ' · noch ' + days + ' Tage' : ' · heute');
+    /* Stichtag als große Zahl (Justus 07.10.2026, Vorschlag 8, wie die große Zahl der Depotentwicklung): Datum, daneben die Restzeit bzw.
+       „seit … fällig“ (Warnfarbe), dahinter klein die Erklärung; vorher eine kleine Zeile „Stichtag … · noch … Tage · quartalsweise“ */
+    var rov = rebalOverride(Mo.dep.tax && Mo.dep.tax.rebalDate), rl = $('rebLeft');
+    $('rebDate').textContent = dDE(bookable ? prev : date);
+    rl.textContent = bookable ? (since === 0 ? 'heute' : 'seit ' + since + (since === 1 ? ' Tag' : ' Tagen') + ' fällig') : days > 1 ? 'in ' + days + ' Tagen' : days === 1 ? 'morgen' : days === 0 ? 'heute' : '';
+    rl.classList.toggle('due', bookable);
+    $('rebSub').textContent = bookable ? 'Rebalancing-Stichtag · noch nicht gebucht' : 'Nächster Rebalancing-Stichtag · ' + (rov && rov === date ? 'abweichender Stichtag aus den Einstellungen' : 'quartalsweise zum Quartalsende');
     if (!bookable) REBUI.open = null;
     if (REBUI.msg && !rebTx.length) REBUI.msg = null;
     if (REBUI.msg) { var bm = el('div', 'banner info'); bm.appendChild(el('b', null, 'Gebucht')); bm.appendChild(el('span', null, REBUI.msg + ' Rückgängig: Einstellungen → „Frühere Stände“ → Stand „vor dem Rebalancing“ wiederherstellen.')); ban.appendChild(bm); }
     else if (inWin && rebTx.length) { var bk = el('div', 'banner info'); bk.appendChild(el('b', null, 'Rebalancing vom ' + dDE(prev) + ' gebucht')); bk.appendChild(el('span', null, nBuch(rebTx.length) + ' (' + (rebTx[0].note || '') + '). Rückgängig: Einstellungen → „Frühere Stände“ → Stand „vor dem Rebalancing“ wiederherstellen. Darunter die Vorschau für den nächsten Stichtag.')); ban.appendChild(bk); }
     if (!Mo.ready) { cards.appendChild(el('div', 'card pad muted', 'Ohne Depotdaten keine Vorschau. Importiere dein Depot unter Einstellungen.')); return; }
     if (!cfg.pbKnown) { var b = el('div', 'banner'); b.appendChild(el('b', null, 'Pauschbetrag noch ohne Angabe von Trade Republic')); b.appendChild(el('span', null, 'Gerechnet wird, als wären die vollen 1.000 € frei, abzüglich der geschätzten Zinsen. Trag den genutzten Betrag unter Einstellungen ein.')); ban.appendChild(b); }
-    var st = {}, px = {}, pos = {}, cash = {}, ty = { pbFree: Mo.ty.pbFree, s23Before: Mo.ty.s23Before }, open = [], noPx = [];
+    var st = {}, px = {}, pos = {}, cash = {}, ty = { pbFree: Mo.ty.pbFree, s23Before: Mo.ty.s23Before }, open = [], noPx = [], groups = {};
     A.forEach(function (a) { st[a] = C[a].E.last.st; px[a] = Mo.pos[a].px || 0; cash[a] = Mo.cash[a] || 0; pos[a] = Mo.pos[a].lots.map(function (l) { return { d: l.d, units: l.units, cpu: l.cpu }; }); if (Mo.pos[a].missing) noPx.push(CFG.assets[a].name);
       if (st[a] === 0 && Mo.pos[a].u > 1e-9 && px[a] > 0) { var fi = flipInfo(a), te = fi.can ? thrEur(a, fi.thr) : null, ps = te ? Math.min(px[a], te) : px[a];
         var sm = ENG.simSell(pos[a], Mo.pos[a].u * ps, ps, todayISO(), a, cfg); if (a === 'ftse') ty.pbFree -= sm.taxable20; else ty.s23Before += sm.sg; cash[a] += Mo.pos[a].u * ps; pos[a] = []; open.push(a); } });
+    /* Krypto-Baustein mit Beimischung: Lose je Coin, damit die Vorschau wie die Buchung anteilig je Coin verkauft (Prüfbericht 02.10.2026 Punkt 5) */
+    if (pos.btc.length) { var byCoin = {}; Mo.pos.btc.lots.forEach(function (l) { var g = l.alt || 'btc'; (byCoin[g] = byCoin[g] || []).push({ d: l.d, units: l.units, cpu: l.cpu }); }); var gl = Object.keys(byCoin).map(function (g) { return byCoin[g]; }); if (gl.length > 1) groups.btc = gl; }
     /* Ohne Euro-Kurs ist der Wert einer Position unbekannt; mit 0 € gerechnet, schlüge die Vorschau Käufe vor. Deshalb keine Vorschau. */
     if (noPx.length) { var nb = el('div', 'banner bad'); nb.appendChild(el('b', null, 'Euro-Kurs fehlt für ' + noPx.join(', '))); nb.appendChild(el('span', null, 'Ohne Kurs ist der Wert dieser Position unbekannt. Die Vorschau erscheint wieder, sobald der Kurs da ist (nächster Lauf oder Neuladen der Seite).')); ban.appendChild(nb); cards.classList.add('one'); cards.appendChild(el('div', 'card pad muted', 'Keine Rebalancing-Vorschau ohne Euro-Kurs.')); return; }
     if (open.length) { var ob = el('div', 'banner info'); ob.appendChild(el('b', null, 'Offene Regel-Aktion: ' + open.map(function (a) { return CFG.assets[a].name + ' verkaufen'; }).join(', '))); ob.appendChild(el('span', null, 'Die Vorschau geht davon aus, dass du das vorher erledigst (siehe Status); der Gewinn daraus ist in Freigrenze und Pauschbetrag schon eingerechnet.')); ban.appendChild(ob); }
     var base = { date: date, w: { ftse: 0.5, btc: 0.3, gold: 0.2 }, st: st, px: px, cash: cash, cfg: cfg, ty: ty };
-    function run(v) { var o = {}; for (var k in base) o[k] = base[k]; o.variant = v; o.pos = JSON.parse(JSON.stringify(pos)); return ENG.rebalance(o); }
+    function run(v) { var o = {}; for (var k in base) o[k] = base[k]; o.variant = v; o.pos = JSON.parse(JSON.stringify(pos)); o.groups = JSON.parse(JSON.stringify(groups)); return ENG.rebalance(o); }
     var R = { frei: run('frei'), voll: run('voll') }, withAlts = hasAlts(Mo);
     var same = Math.abs(R.frei.tax - R.voll.tax) < 0.5 && A.every(function (a) { var x = R.frei.rows[a], y = R.voll.rows[a]; return Math.abs((x.sell || 0) - (y.sell || 0)) < 0.5 && Math.abs((x.buy || 0) - (y.buy || 0)) < 0.5 && Math.abs((x.after || 0) - (y.after || 0)) < 0.5; });
     cards.classList.toggle('one', same);
@@ -1590,7 +1664,7 @@
   function dataInfoText(dep, ready) { var c = dep.cash, m = dep.meta || {}; return ready ? (nBuch(dep.tx.length) + ', Cash ' + eur((c.ftse || 0) + (c.btc || 0) + (c.gold || 0), 2) + (m.imported ? ' · importiert ' + dtDE(m.imported) : '') + (m.saved ? ' · zuletzt gespeichert ' + dtDE(m.saved) : '') + (m.source ? ' · Quelle: ' + m.source : '')) : 'Noch keine Depotdaten in diesem Browser.'; }
   function fillForms(Mo) {
     var t = Mo.cfg, c = Mo.cash;
-    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? deIn(t.pbUsed, 2) : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = deIn(t.interestRest || 0, 2); $('tLoss').value = deIn(t.lossOther || 0, 2); $('tS23').value = deIn(t.s23Other || 0, 2); $('tRate').value = t.rateKnown ? deIn(t.rate * 100, 1) : ''; $('tHead').value = t.headroom == null ? '' : deIn(t.headroom, 2); $('tNv').checked = !!t.nv; $('tBuf').value = deIn(t.buffer, 2); $('tMin').value = deIn(t.minOrder, 2); $('tReb').value = rebalOverride(t.rebalDate); $('tCashRate').value = deIn((t.cashRate || 0) * 100, 2); }
+    if (!formDirty.tax) { $('tPbUsed').value = t.pbKnown ? deIn(t.pbUsed, 2) : ''; $('tPbDate').value = t.pbUsedDate || ''; $('tInt').value = deIn(t.interestRest || 0, 2); $('tLoss').value = deIn(t.lossOther || 0, 2); $('tS23').value = deIn(t.s23Other || 0, 2); $('tRate').value = t.rateKnown ? deIn(t.rate * 100, 1) : ''; $('tHead').value = t.headroom == null ? '' : deIn(t.headroom, 2); $('tNv').checked = !!t.nv; $('tBuf').value = deIn(t.buffer, 2); $('tMin').value = deIn(t.minOrder, 2); $('tReb').value = rebalOverride((Mo.dep.tax && Mo.dep.tax.rebalDate) || null); /* der gespeicherte Tag, nicht der nächste Termin (Prüfbericht 02.10.2026 Punkt 6) */ $('tCashRate').value = deIn((t.cashRate || 0) * 100, 2); }
     if (!formDirty.cash) fillCash(c, Mo.dep.cashDate);
     $('taxYearLbl').textContent = String(t.year);
     var tn = $('taxNote'); tn.textContent = (Mo.dep.tax && Mo.dep.tax.note) || '';
@@ -1605,7 +1679,10 @@
     if (bad.length) { msg(msgId, 'Nicht lesbar: ' + bad.join(', ') + '. Bitte so eingeben: 2708,50 oder 2.708,50.', true); return null; }
     return out;
   }
-  function msg(id, text, err) { var m = $(id); if (!m) return; m.textContent = text; m.className = 'formmsg' + (err ? ' err' : ''); }
+  /* Speichert der Browser gerade nicht dauerhaft (privates Fenster, Speicher voll), steht das bei jeder Bestätigung eines Formulars dabei und oben als
+     roter Hinweis (Prüfbericht 02.10.2026 Punkt 12; vorher meldete die Seite „eingetragen“, und nach dem Neuladen war es weg) */
+  var MEM_WARN = ' Achtung: nur in diesem Fenster gespeichert, der Browser speichert gerade nicht dauerhaft (privates Fenster oder Speicher voll). Sichere deine Daten unter Einstellungen als Datei, bevor du die Seite schließt.';
+  function msg(id, text, err) { var m = $(id); if (!m) return; m.textContent = text + (!err && STORE.memOnly() && ['fMsg', 'accMsg', 'tMsg', 'cMsg', 'dMsg'].indexOf(id) >= 0 ? MEM_WARN : ''); m.className = 'formmsg' + (err ? ' err' : ''); }
   function download(name, text, type) { var blob = new Blob([text], { type: type || 'application/json' }), a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = name; document.body.appendChild(a); a.click(); setTimeout(function () { URL.revokeObjectURL(a.href); a.remove(); }, 500); }
   function bname(a) { return CFG && CFG.assets[a] ? CFG.assets[a].short : ({ ftse: 'FTSE', btc: 'Bitcoin', gold: 'Gold' })[a] || a; }
   /* Depotdaten sichern, importieren, zurücksetzen: funktioniert auch, wenn die Kursdaten nicht geladen werden konnten */
@@ -1682,9 +1759,13 @@
   }
   function wireForms() {
     $('fDate').value = todayISO();
-    /* Kein Datum in der Zukunft (Buchungen, Kontobewegungen, Cash-Stand); die Grenze folgt dem Tag, auch bei lange offenem Tab */
-    function capDates() { var t = todayISO(); ['fDate', 'accDate', 'cDate'].forEach(function (id) { if ($(id)) $(id).max = t; }); }
-    capDates(); document.addEventListener('visibilitychange', function () { if (!document.hidden) capDates(); });
+    /* Kein Datum in der Zukunft (Buchungen, Kontobewegungen, Cash-Stand); die Grenze folgt dem Tag, auch bei lange offenem Tab. Das vorausgefüllte
+       Datum von Buchung und Kontobewegung folgt ebenfalls dem Tag, solange es nicht von Hand geändert wurde (Prüfbericht 02.10.2026 Punkt 8: bei
+       über Nacht offener Seite blieb das Datum vom Öffnungstag stehen) */
+    var AUTO_DATES = ['fDate', 'accDate'];
+    AUTO_DATES.forEach(function (id) { var e = $(id); if (!e) return; e.dataset.auto = '1'; ['input', 'change'].forEach(function (ev) { e.addEventListener(ev, function () { e.dataset.auto = e.value === todayISO() ? '1' : ''; }); }); });
+    function capDates() { var t = todayISO(); ['fDate', 'accDate', 'cDate'].forEach(function (id) { if ($(id)) $(id).max = t; }); AUTO_DATES.forEach(function (id) { var e = $(id); if (e && e.dataset.auto === '1' && e.value !== t) e.value = t; }); }
+    capDates(); document.addEventListener('visibilitychange', function () { if (!document.hidden) capDates(); }); setInterval(capDates, 60 * 1000);
     ['taxForm', 'cashForm'].forEach(function (f) { $(f).addEventListener('input', function () { formDirty[f === 'taxForm' ? 'tax' : 'cash'] = true; }); });
     $('taxForm').addEventListener('submit', function (e) { e.preventDefault();
       var n = readNums([['tPbUsed', 'Pauschbetrag genutzt'], ['tInt', 'Weitere Zinsen'], ['tLoss', 'Verlusttopf'], ['tS23', 'Andere private Veräußerungen'], ['tRate', 'Grenzsteuersatz'], ['tHead', 'Spielraum bis zum Grundfreibetrag'], ['tBuf', 'Abstand zur Freigrenze'], ['tMin', 'Mindestbetrag je Order'], ['tCashRate', 'Zins auf Cash']], 'tMsg');
@@ -1705,15 +1786,15 @@
       if (cd > todayISO()) { msg('cMsg', 'Das Datum „Stand vom“ liegt in der Zukunft.', true); return; }
       if (!saveOr('cMsg', function (d) { d.cash = c; d.cashDate = cd; })) return; formDirty.cash = false;
       msg('cMsg', 'Gespeichert (in diesem Browser): FTSE ' + eur(c.ftse, 2) + ', Bitcoin ' + eur(c.btc, 2) + ', Gold ' + eur(c.gold, 2) + ', Stand vom ' + dDE(cd) + '. Der Depotverlauf zeigt dieses Cash ab diesem Tag.'); schedule(); });
-    function syncTxForm() { var ty = $('fType').value, cashMove = ty === 'einzahlung' || ty === 'auszahlung' || ty === 'umbuchung'; $('lUnits').hidden = cashMove; $('lFee').hidden = cashMove; $('lTo').hidden = ty !== 'umbuchung'; $('lAssetText').textContent = ty === 'umbuchung' ? 'Von Baustein' : 'Position'; $('lPriceText').textContent = cashMove ? 'Betrag in €' : 'Kurs je Stück in €'; }
+    function syncTxForm() { var ty = $('fType').value, cashMove = ty === 'einzahlung' || ty === 'auszahlung' || ty === 'umbuchung'; $('lUnits').hidden = cashMove; $('lFee').hidden = cashMove; if ($('lTax')) $('lTax').hidden = ty !== 'verkauf'; $('lTo').hidden = ty !== 'umbuchung'; $('lAssetText').textContent = ty === 'umbuchung' ? 'Von Baustein' : 'Position'; $('lPriceText').textContent = cashMove ? 'Betrag in €' : 'Kurs je Stück in €'; }
     $('fType').addEventListener('change', syncTxForm); syncTxForm();
     /* Kauf, Verkauf, Ein- und Auszahlung eines Bausteins. Jede Buchung merkt sich, um wie viel sie das Cash tatsächlich verändert hat (tx.cash):
        Löschen bucht genau das zurück. Ein Kauf über das vorhandene Cash hinaus zieht das Cash auf 0; der Rest gilt als von außen bezahlt (Meldung). */
-    $('txForm').addEventListener('submit', function (e) { e.preventDefault(); TXMSG = null;
+    $('txForm').addEventListener('submit', function (e) { e.preventDefault(); TXMSG = null; capDates();
       var d = $('fDate').value, a = $('fAsset').value, type = $('fType').value, note = $('fNote').value.trim(), cashMove = type === 'einzahlung' || type === 'auszahlung' || type === 'umbuchung';
       if (!d) { msg('fMsg', 'Bitte ein Datum angeben.', true); return; }
       if (d > todayISO()) { msg('fMsg', 'Das Datum liegt in der Zukunft. Trag Buchungen erst ein, wenn sie ausgeführt sind. Nichts eingetragen.', true); return; }
-      var n = readNums(cashMove ? [['fPrice', 'Betrag']] : [['fUnits', 'Stück', true], ['fPrice', 'Kurs je Stück'], ['fFee', 'Gebühr']], 'fMsg'); if (!n) return;
+      var n = readNums(cashMove ? [['fPrice', 'Betrag']] : [['fUnits', 'Stück', true], ['fPrice', 'Kurs je Stück'], ['fFee', 'Gebühr']].concat(type === 'verkauf' && $('fTax') ? [['fTax', 'Steuer']] : []), 'fMsg'); if (!n) return;
       var b = bucketOf(a), dep = STORE.load(), have = dep.cash[b] || 0, bn = bname(b), p = n.fPrice;
       if (type === 'umbuchung') {
         /* Cash von Baustein b nach Baustein to; nur so viel, wie b hat (Summe bleibt gleich, kein Kauf oder Verkauf) */
@@ -1731,8 +1812,10 @@
         if (!saveOr('fMsg', function (dp) { dp.tx.push({ id: 'tx' + Date.now(), d: d, a: a, type: type, amount: p, fee: 0, note: note, ts: Date.now(), cash: dc }); dp.cash[b] = Math.max(0, (dp.cash[b] || 0) + dc); })) return;
         msg('fMsg', (type === 'einzahlung' ? 'Einzahlung' : 'Auszahlung') + ' eingetragen: ' + eur(p, 2) + ' am ' + dDE(d) + '. Cash ' + bn + ' ' + eur(have, 2) + ' → ' + eur(Math.max(0, have + dc), 2) + '.'); $('fPrice').value = ''; $('fNote').value = ''; schedule(); return;
       }
-      var u = n.fUnits, fee = n.fFee || 0;
+      var u = n.fUnits, fee = n.fFee || 0, wtax = type === 'verkauf' ? n.fTax || 0 : 0;
       if (!(u > 0)) { msg('fMsg', 'Bitte die Stückzahl angeben.', true); return; } if (!(p > 0)) { msg('fMsg', 'Bitte den Kurs je Stück in Euro angeben.', true); return; } if (fee < 0) { msg('fMsg', 'Die Gebühr kann nicht negativ sein.', true); return; }
+      /* Steuer, die Trade Republic beim Verkauf einbehalten hat (Prüfbericht 02.10.2026 Punkt 11): mindert das Cash, nicht den Gewinn (FIFO bleibt) */
+      if (wtax < 0) { msg('fMsg', 'Die Steuer kann nicht negativ sein.', true); return; } if (wtax > u * p - fee + 0.005) { msg('fMsg', 'Die einbehaltene Steuer ist höher als der Erlös. Nichts eingetragen.', true); return; }
       if (type === 'verkauf') {
         /* Deckung zum Verkaufsdatum (FIFO): auch ein rückdatierter Verkauf braucht die Stücke an seinem Datum, und spätere Verkäufe müssen gedeckt bleiben */
         var openBefore = ENG.book(dep.tx).real.filter(function (r) { return r.open > 1e-9; }).map(function (r) { return r.id; });
@@ -1743,16 +1826,16 @@
           return;
         }
       }
-      var amount = type === 'verkauf' ? u * p - fee : u * p + fee, delta = type === 'verkauf' ? amount : -Math.min(have, amount);
+      var amount = type === 'verkauf' ? u * p - fee - wtax : u * p + fee, delta = type === 'verkauf' ? amount : -Math.min(have, amount);
       var extra = type === 'kauf' && amount > have + 0.005 ? ' Das Cash des Bausteins reichte nicht: ' + eur(have, 2) + ' abgezogen, der Rest von ' + eur(amount - have, 2) + ' gilt als von außen bezahlt.' : '';
-      if (!saveOr('fMsg', function (dp) { dp.tx.push({ id: 'tx' + Date.now(), d: d, a: a, type: type, units: u, price: p, fee: fee, note: note, ts: Date.now(), cash: delta }); dp.cash[b] = Math.max(0, (dp.cash[b] || 0) + delta); })) return;
-      msg('fMsg', (type === 'kauf' ? 'Kauf' : 'Verkauf') + ' eingetragen: ' + units(a, u) + ' zu ' + eur(p, 2) + (fee > 0 ? (type === 'kauf' ? ' + ' : ' − ') + eur(fee, 2) + ' Gebühr' : '') + ' = ' + eur(amount, 2) + ' am ' + dDE(d) + '. Cash ' + bn + ' ' + eur(have, 2) + ' → ' + eur(Math.max(0, have + delta), 2) + '.' + extra);
-      $('fUnits').value = ''; $('fPrice').value = ''; $('fNote').value = ''; schedule(); });
+      if (!saveOr('fMsg', function (dp) { var tx = { id: 'tx' + Date.now(), d: d, a: a, type: type, units: u, price: p, fee: fee, note: note, ts: Date.now(), cash: delta }; if (wtax > 0) tx.tax = wtax; dp.tx.push(tx); dp.cash[b] = Math.max(0, (dp.cash[b] || 0) + delta); })) return;
+      msg('fMsg', (type === 'kauf' ? 'Kauf' : 'Verkauf') + ' eingetragen: ' + units(a, u) + ' zu ' + eur(p, 2) + (fee > 0 ? (type === 'kauf' ? ' + ' : ' − ') + eur(fee, 2) + ' Gebühr' : '') + (wtax > 0 ? ' − ' + eur(wtax, 2) + ' Steuer' : '') + ' = ' + eur(amount, 2) + ' am ' + dDE(d) + '. Cash ' + bn + ' ' + eur(have, 2) + ' → ' + eur(Math.max(0, have + delta), 2) + '.' + extra);
+      $('fUnits').value = ''; $('fPrice').value = ''; $('fNote').value = ''; if ($('fTax')) $('fTax').value = ''; schedule(); });
     /* Ein-/Auszahlung aufs Konto: Einzahlungen gehen an die Bausteine, deren Regel auf Cash steht (nach Zielgewicht), sonst an alle nach Zielgewicht;
        Auszahlungen kommen aus dem Cash der nicht investierten Bausteine (anteilig), notfalls aus anderem Cash. Nie ein Verkauf. */
     function splitDeposit(amount) { var outs = A.filter(function (a) { return C[a].E.last.st === 0; }); if (!outs.length) outs = A.slice(); var wsum = outs.reduce(function (sx, a) { return sx + CFG.assets[a].w; }, 0), parts = {}, acc = 0; outs.forEach(function (a, i) { var v = i === outs.length - 1 ? Math.round((amount - acc) * 100) / 100 : Math.round(amount * CFG.assets[a].w / wsum * 100) / 100; acc += v; parts[a] = v; }); return { parts: parts, why: outs.length === A.length ? 'alle drei Regeln investiert, deshalb nach Zielgewicht auf alle Bausteine als Cash bis zum Rebalancing' : 'auf die Bausteine mit Regel auf Cash (' + outs.map(function (a) { return CFG.assets[a].short; }).join(', ') + ') nach Zielgewicht' }; }
     function splitWithdrawal(amount, cash) { var outs = A.filter(function (a) { return C[a].E.last.st === 0 && cash[a] > 0.005; }), parts = {}, rest = amount, pool = outs.reduce(function (sx, a) { return sx + cash[a]; }, 0); outs.forEach(function (a) { var v = Math.min(cash[a], Math.round(amount * cash[a] / (pool || 1) * 100) / 100); parts[a] = v; rest -= v; }); if (rest > 0.005) { A.forEach(function (a) { if (rest <= 0.005) return; var free = cash[a] - (parts[a] || 0); if (free > 0.005) { var v = Math.min(free, rest); parts[a] = Math.round(((parts[a] || 0) + v) * 100) / 100; rest -= v; } }); } return { parts: parts, rest: Math.max(0, Math.round(rest * 100) / 100), fromInvested: A.some(function (a) { return parts[a] > 0.005 && C[a].E.last.st === 1; }) }; }
-    $('accForm').addEventListener('submit', function (e) { e.preventDefault();
+    $('accForm').addEventListener('submit', function (e) { e.preventDefault(); capDates();
       var n = readNums([['accAmount', 'Betrag']], 'accMsg'); if (!n) return;
       var d = $('accDate').value, type = $('accType').value, amt = n.accAmount, note = $('accNote').value.trim(), cash = STORE.load().cash, pick = $('accAsset').value, hist = $('accHist').checked;
       if (!d) { msg('accMsg', 'Bitte ein Datum angeben.', true); return; } if (!(amt > 0)) { msg('accMsg', 'Bitte den Betrag angeben.', true); return; }
@@ -1782,7 +1865,7 @@
     var sn = $('srcNotes'); sn.textContent = '';
     function note(t) { sn.appendChild(el('p', null, t)); }
     note('SMA50 = einfacher Durchschnitt der letzten 50 Wochenschlüsse einschließlich der aktuellen Woche. Nur abgeschlossene Wochen zählen. Feiertage: Der letzte Handelstag der Woche ist der Wochenschluss.');
-    note('Signale (US-Dollar): FTSE aus VWRD London mit wieder angelegten Ausschüttungen von Alpha Vantage, der Freitagsschluss zuerst von EODHD (geprüft: identisch); liefert Alpha Vantage nicht, rechnen die Wiederholungsläufe mit den EODHD-Tagesschlüssen weiter. Bitcoin BTC-USD von Coinbase (Tageskerzen, Wochenschluss Sonntag 24 Uhr UTC), bei einem Fehlschlag sofort Kraken, Yahoo Finance oder Alpha Vantage; liefert keine die Tageskerze vom Sonntag, gilt vorläufig der Live-Kurs kurz nach 0 Uhr UTC, bis die Kerze kommt. Gold LBMA-Nachmittagsfixing; bis die LBMA es veröffentlicht (meist spät abends), gilt sofort vorläufig der Spotpreis kurz nach dem Fixing. Gebuchte Bitcoin- und Gold-Wochen bleiben, wie sie gebucht wurden (bis 20.09.2026 stammen die Bitcoin-Schlüsse von Yahoo Finance). Ersatzquellen und vorläufige Schlüsse sind gekennzeichnet.'); note('Depotbewertung (Euro): ETF und Gold-ETC ausschließlich mit Lang-&-Schwarz-Kursen (dieselben wie bei Trade Republic; tagsüber stündlich, Tagesschluss 23 Uhr). Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs mit Datum stehen, es gibt keine Ersatzkurse. Bitcoin, ETH und SOL mit Coinbase in Euro (stündlich und live beim Öffnen der Seite, Tagesschluss 24 Uhr UTC), Ersatz Kraken, gekennzeichnet. EUR/USD von der EZB nur für Umrechnungen.');
+    note('Signale (US-Dollar): FTSE aus VWRD London mit wieder angelegten Ausschüttungen von Alpha Vantage, der Freitagsschluss zuerst von EODHD (geprüft: identisch); liefert Alpha Vantage nicht, rechnen die Wiederholungsläufe mit den EODHD-Tagesschlüssen weiter. Bitcoin BTC-USD von Coinbase (Tageskerzen, Wochenschluss Sonntag 24 Uhr UTC), bei einem Fehlschlag sofort Kraken, Yahoo Finance oder Alpha Vantage; liefert keine die Tageskerze vom Sonntag, gilt vorläufig der Live-Kurs kurz nach 0 Uhr UTC, bis die Kerze kommt. Den Sonntagsschluss gleicht die Seite mit Kraken ab: Weicht er um mehr als 1 % ab, gilt er nur vorläufig; passen die Quellen später zusammen, wird er endgültig, sonst gilt ab der Wochenübersicht am Montag Coinbase. Gold LBMA-Nachmittagsfixing; bis die LBMA es veröffentlicht (meist spät abends), gilt sofort vorläufig der Spotpreis kurz nach dem Fixing. Ist die LBMA länger nicht erreichbar, bleiben alle betroffenen Wochen vorläufig, bis das Fixing kommt; am Montag kommt dazu eine Meldung. Gebuchte Bitcoin- und Gold-Wochen bleiben, wie sie gebucht wurden (bis 20.09.2026 stammen die Bitcoin-Schlüsse von Yahoo Finance). Ersatzquellen und vorläufige Schlüsse sind gekennzeichnet.'); note('Depotbewertung (Euro): ETF und Gold-ETC ausschließlich mit Lang-&-Schwarz-Kursen (dieselben wie bei Trade Republic; tagsüber stündlich, Tagesschluss 23 Uhr). Ist L&S nicht erreichbar, bleibt der letzte L&S-Kurs mit Datum stehen, es gibt keine Ersatzkurse. Bitcoin, ETH und SOL mit Coinbase in Euro (stündlich und live beim Öffnen der Seite, Tagesschluss 24 Uhr UTC), Ersatz Kraken, gekennzeichnet. EUR/USD von der EZB nur für Umrechnungen.');
     var btcT = btcCloseTime(), monAt = ((CFG.push && CFG.push.mondayAt) || '07:53').replace(/^0/, '');
     note('Ablauf: Freitag 15:17 Uhr Vorwarnung FTSE und Gold; gleich nach dem Gold-Fixing (16 Uhr) im stündlichen Kurs-Ticker der vorläufige Gold-Schluss aus dem Spotpreis (ein Signal kommt sofort per Push); ab 18:47 Uhr Wochenschluss FTSE (nach Londoner Börsenschluss) und das LBMA-Fixing für Gold, mit Wiederholungen um 20:23 und 22:23 Uhr, in der Nacht um 1:37 Uhr und Samstag 9:23 Uhr, weil Alpha Vantage und LBMA die Schlusskurse oft erst Stunden später veröffentlichen. Der FTSE-Schluss kommt meist schon um 18:47 Uhr von EODHD; fehlt er noch, gilt ein vorläufiger Schluss aus dem aktuellen Kurs, der später bestätigt oder korrigiert wird. Sonntag 21:17 Uhr Vorwarnung Bitcoin; Montag gleich nach 0 Uhr UTC (' + btcT + ' Uhr) Wochenschluss Bitcoin, ein Signal kommt sofort per Push (der Lauf startet vorher und wartet; Nachfassen um 0:07 und 2:23 Uhr UTC), die Wochenübersicht um ' + monAt + ' Uhr; Montag bis Donnerstag 19:37 und 23:37 Uhr Euro-Kurse. Endet die Woche wegen eines Feiertags früher (etwa Gründonnerstag, Gold vor Weihnachten und Neujahr), kommen Vorwarnung um 15:17 Uhr, der vorläufige Gold-Schluss gleich nach dem Fixing und der Wochenschluss ab 18:47 Uhr an diesem letzten Handelstag, Wiederholungen mit den Läufen um 19:37 und 23:37 Uhr; an Halbtagen (London schließt am letzten Geschäftstag vor Weihnachten und vor Neujahr um 12:30 Uhr) für den FTSE um 11:17 und 14:47 Uhr. Alle Zeiten Berliner Zeit, im Sommer wie im Winter (London stellt am selben Tag um). Andere Nachrichten kommen sofort, auch nachts.');
     note('Die Läufe laufen als GitHub Actions in diesem Repo. Sie führen keine Käufe oder Verkäufe aus und kennen deine Depotdaten nicht; die liegen nur in deinem Browser.');
