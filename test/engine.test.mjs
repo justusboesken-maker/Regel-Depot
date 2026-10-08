@@ -408,3 +408,42 @@ test('Rebalancing quartalsweise: gewählter Tag ersetzt den Stichtag seines Quar
 test('Rebalancing ohne Quartalsplan in der Konfiguration: einmal im Jahr am rebalDay', () => {
   assert.deepEqual(ENG.rebalDates({ rebalDay: '12-30' }, null, '2026-01-01', '2027-12-31'), ['2026-12-30', '2027-12-30']);
 });
+
+/* ---------- Prüfbericht 02.10.2026, Punkte 4 und 5: Freigrenze gemeinsam, Beimischung anteilig ---------- */
+test('Rebalancing steuerfrei: Bitcoin und Gold-ETC teilen sich die § 23-Freigrenze (Bitcoin zuerst)', () => {
+  const o = { st: { ftse: 1, btc: 1, gold: 1 }, px: { ftse: 160, btc: 75000, gold: 350 }, pos: { ftse: [{ d: '2026-09-18', units: 10, cpu: 150 }], btc: [{ d: '2026-07-01', units: 0.1, cpu: 50000 }], gold: [{ d: '2026-10-05', units: 20, cpu: 300 }] }, cash: { ftse: 0, btc: 0, gold: 0 }, cfg: CFG, ty: { pbFree: 900, s23Before: 300 } };
+  const F = reb(o, 'frei');
+  assert.equal(r2(F.rows.btc.sg), 699.99); assert.equal(r2(F.rows.gold.sell), 0); assert.equal(F.rows.gold.capped, true);
+  assert.equal(r2(F.s23After), 999.99); assert.equal(F.declare23, false); assert.equal(F.tax, 0);
+  const V = reb(o, 'voll');
+  assert.equal(r2(V.rows.btc.sell), 2670); assert.equal(r2(V.rows.gold.sell), 3780); assert.equal(r2(V.s23After), 1730); assert.equal(V.declare23, true);
+});
+test('Rebalancing steuerfrei: Gewinn eines offenen Regel-Verkaufs zählt vor dem Deckel der anderen Anlage', () => {
+  const o = { st: { ftse: 1, btc: 0, gold: 1 }, px: { ftse: 160, btc: 75000, gold: 350 }, pos: { ftse: [{ d: '2026-09-18', units: 10, cpu: 150 }], btc: [{ d: '2026-07-01', units: 0.01, cpu: 50000 }], gold: [{ d: '2026-10-05', units: 20, cpu: 300 }] }, cash: { ftse: 0, btc: 0, gold: 0 }, cfg: CFG, ty: { pbFree: 900, s23Before: 300 } };
+  const F = reb(o, 'frei');
+  assert.equal(F.rows.btc.ruleSale, true); assert.equal(r2(F.rows.btc.sg), 250);
+  assert.equal(r2(F.rows.gold.sg), 449.99); assert.equal(r2(F.s23After), 999.99); assert.equal(F.declare23, false);
+});
+test('Rebalancing mit Beimischung: Vorschau verkauft anteilig je Coin wie die Buchung (Bitcoin alt, ETH kurzfristig)', () => {
+  const btcLots = [{ d: '2025-03-01', units: 0.05, cpu: 40000 }], ethEq = [{ d: '2026-08-01', units: 0.02, cpu: 50000 }];
+  const o = { st: { ftse: 1, btc: 1, gold: 0 }, px: { ftse: 160, btc: 80000, gold: 0 }, pos: { ftse: [{ d: '2026-09-18', units: 10, cpu: 150 }], btc: btcLots.concat(ethEq), gold: [] }, cash: { ftse: 0, btc: 0, gold: 0 }, cfg: CFG, ty: { pbFree: 900, s23Before: 900 } };
+  const old = reb(o, 'frei');                                  /* ohne Gruppen: FIFO über alle Coins nach Datum (alte Rechnung) */
+  assert.equal(r2(old.rows.btc.sg), 0, 'alte Rechnung verkauft nur das alte Bitcoin-Los');
+  const F = reb(Object.assign({}, o, { groups: { btc: [btcLots, ethEq] } }), 'frei');
+  const V = 0.05 * 80000 + 0.02 * 80000, ethShort = 600 * F.rows.btc.sell / V;   /* Buchung: ETH anteilig, Gewinn 30.000 € je BTC-Äquivalent */
+  assert.equal(r2(F.rows.btc.sg), r2(ethShort)); assert.equal(r2(F.s23After), 999.99); assert.equal(F.declare23, false);
+  assert.ok(F.rows.btc.sell > 900 && F.rows.btc.sell < 940, 'gedeckelt: ' + F.rows.btc.sell);
+  assert.equal(F.rows.btc.anyShort, true);
+});
+test('Steuerfreier Höchstbetrag über Gruppen: gleich dem Einzelfall und einer schrittweisen Suche', () => {
+  const cfg = { ...CFG, buffer: 25 }, ty = { pbFree: 0, s23Before: 100 };
+  const one = [{ d: '2026-02-01', units: 0.01, cpu: 90000 }, { d: '2026-05-01', units: 0.02, cpu: 60000 }, { d: '2026-07-01', units: 0.03, cpu: 70000 }];
+  assert.equal(r2(ENG.taxFreeMaxGroups([one], 80000, '2026-12-30', 'btc', cfg, ty)), r2(ENG.taxFreeMax(one, 80000, '2026-12-30', 'btc', cfg, ty)));
+  let seed = 7; const rnd = () => { seed = (seed * 16807) % 2147483647; return seed / 2147483647; };
+  for (let n = 0; n < 25; n++) {
+    const groups = [0, 1, 2].map(() => Array.from({ length: 1 + Math.floor(rnd() * 3) }, () => ({ d: rnd() < 0.3 ? '2025-0' + (1 + Math.floor(rnd() * 9)) + '-15' : '2026-0' + (1 + Math.floor(rnd() * 9)) + '-15', units: 0.002 + rnd() * 0.02, cpu: 40000 + rnd() * 60000 })).sort((x, y) => (x.d < y.d ? -1 : 1)));
+    const acc0 = rnd() * 900, VT = groups.flat().reduce((s, l) => s + l.units * 80000, 0), cap = ENG.taxFreeMaxGroups(groups, 80000, '2026-12-30', 'btc', cfg, ty, acc0);
+    let brute = VT; for (let v = 0; v <= VT; v += 0.25) { if (acc0 + ENG.simSellGroups(groups, v, 80000, '2026-12-30', 'btc', cfg).sg > cfg.fg - cfg.buffer - 0.01 + 1e-9) { brute = v; break; } }
+    assert.ok(Math.abs(cap - brute) <= 0.3, 'Fall ' + n + ': ' + cap + ' gegen ' + brute);
+  }
+});

@@ -148,3 +148,16 @@ test('Umbuchung zwischen Bausteinen: Import prüft von/nach, Rebalancing-Datum b
   assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'x', d: '2026-09-25', a: 'gold', to: 'gold', type: 'umbuchung', amount: 1 }] })), /zwei verschiedene Bausteine/);
   assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'x', d: '2026-09-25', a: 'eth', to: 'gold', type: 'umbuchung', amount: 1 }] })), /zwei verschiedene Bausteine/);
 });
+
+test('Import: einbehaltene Steuer beim Verkauf bleibt erhalten (Rundreise), negative wird abgelehnt (Prüfbericht 02.10.2026 Punkt 11)', () => {
+  const S = freshStore();
+  const n = S.importJson(JSON.stringify({ ...base, tx: [
+    { id: 'k', d: '2026-06-01', a: 'ftse', type: 'kauf', units: 10, price: 150, fee: 1 },
+    { id: 'v', d: '2026-07-01', a: 'ftse', type: 'verkauf', units: 10, price: 200, fee: 1, tax: '12,34', cash: 1986.66 }
+  ] }));
+  const v = n.tx.find((t) => t.id === 'v');
+  assert.equal(v.tax, 12.34); assert.equal(v.cash, 1986.66);
+  const again = S.importJson(S.exportJson ? S.exportJson() : JSON.stringify(S.load()));
+  assert.equal(again.tx.find((t) => t.id === 'v').tax, 12.34, 'Export und Import behalten die Steuer');
+  assert.throws(() => S.importJson(JSON.stringify({ ...base, tx: [{ id: 'k', d: '2026-06-01', a: 'ftse', type: 'kauf', units: 10, price: 150 }, { id: 'v', d: '2026-07-01', a: 'ftse', type: 'verkauf', units: 10, price: 200, tax: -5 }] })), /Steuer/);
+});

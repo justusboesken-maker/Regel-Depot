@@ -18,11 +18,11 @@ GitHub-Cron kennt nur UTC. Deshalb stehen die meisten Zeiten doppelt im Workflow
 | Wann | Schritt |
 |---|---|
 | Fr 15:17 | Vorwarnung FTSE und Gold |
-| Fr ab 16:07 (stündlicher Kurs-Ticker, 15:07 London) | Gold vorläufig: der Spotpreis gleich nach dem LBMA-Nachmittagsfixing gilt sofort als Wochenschluss, Push sofort; das Fixing ersetzt ihn, sobald die LBMA es veröffentlicht (meist spät abends), mit Korrektur nur, wenn sich die Regel ändert |
+| Fr ab 16:07 (stündlicher Kurs-Ticker, 15:07 London) | Gold vorläufig: der Spotpreis gleich nach dem LBMA-Nachmittagsfixing gilt sofort als Wochenschluss, Push sofort; das Fixing ersetzt ihn, sobald die LBMA es veröffentlicht (meist spät abends), mit Korrektur nur, wenn sich die Regel ändert. Bleibt die LBMA länger weg, bleiben alle betroffenen Wochen vorläufig, bis das Fixing kommt; der letzte Montagslauf meldet das als Fehler mit Push (`state.outage.lbma`) |
 | Fr 18:47 | Wochenschluss FTSE, Gold (falls das Fixing schon da ist), Euro-Kurse |
 | Fr 20:23, 22:23, Sa 1:37, Sa 9:23 | Wiederholungen für fehlende Schlüsse |
 | So 21:17 | Vorwarnung Bitcoin |
-| Start So 23:31 und 23:46 UTC, gebucht Mo 0:00:40 UTC | Wochenschluss Bitcoin pünktlich (die Bitcoin-Woche endet So 24 Uhr UTC): Der Lauf wartet bis kurz nach Mitternacht UTC, holt die Tageskerze (Coinbase, bei einem Fehlschlag sofort Kraken, Yahoo, Alpha Vantage; notfalls vorläufig der Live-Kurs) und schickt die Nachricht sofort, auch nachts |
+| Start So 23:31 und 23:46 UTC, gebucht Mo 0:00:40 UTC | Wochenschluss Bitcoin pünktlich (die Bitcoin-Woche endet So 24 Uhr UTC): Der Lauf wartet bis kurz nach Mitternacht UTC, holt die Tageskerze (Coinbase, bei einem Fehlschlag sofort Kraken, Yahoo, Alpha Vantage; notfalls vorläufig der Live-Kurs) und schickt die Nachricht sofort, auch nachts. Gegenprobe mit Kraken: weicht der Coinbase-Schluss um mehr als 1 % ab (`signal.crossPct`), gilt er nur vorläufig; passen die Quellen später zusammen, wird er endgültig, sonst gilt ab der Wochenübersicht Coinbase |
 | Mo 0:07 UTC, 2:23 UTC | Nachfassen Bitcoin, falls der pünktliche Lauf ausfiel |
 | Mo 7:53 | Wochenübersicht und die übrigen Nachrichten der Nacht zum Montag (Bitcoin-Nachrichten kommen sofort) |
 | Mo–Do 19:37 und 23:37 | Euro-Kurse, FTSE-Tagesschluss |

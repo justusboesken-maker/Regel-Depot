@@ -48,7 +48,8 @@
         "sym": "BTC-USD",
         "adj": false,
         "keepBooked": true,
-        "label": "Coinbase BTC-USD, Woche Montag bis Sonntag (UTC); weitere Quellen Kraken, Yahoo, Alpha Vantage"
+        "crossPct": 0.01,
+        "label": "Coinbase BTC-USD, Woche Montag bis Sonntag (UTC); weitere Quellen Kraken, Yahoo, Alpha Vantage; Gegenprobe mit Kraken (über 1 % Abweichung nur vorläufig)"
       },
       "eur": {
         "src": "coinbase",

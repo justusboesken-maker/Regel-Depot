@@ -85,6 +85,8 @@ const WD = ['Montag', 'Dienstag', 'Mittwoch', 'Donnerstag', 'Freitag', 'Samstag'
 const dow = (d) => (new Date(d + 'T00:00:00Z').getUTCDay() + 6) % 7;
 const dDE = (d) => d.slice(8, 10) + '.' + d.slice(5, 7) + '.' + d.slice(0, 4);
 const name = (a) => CFG.assets[a].name;
+/* Zeitpunkt in Berliner Zeit für Meldungstexte: „02.10., 16:22 Uhr“ */
+const dtB = (t) => new Date(t).toLocaleString('de-DE', { timeZone: 'Europe/Berlin', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' }) + ' Uhr';
 
 /* ---------- Ergebnis eines Laufs ---------- */
 let QUIET = null;
@@ -148,9 +150,11 @@ async function fetchMock(key) {
 }
 const AVKEY = process.env.ALPHAVANTAGE_KEY || '', EODKEY = process.env.EODHD_KEY || '';
 const AVMEMO = {}, LSMEMO = {}, LBMAMEMO = {};
+const LBMA_FIX = (CFG.assets.gold && CFG.assets.gold.signal && CFG.assets.gold.signal.fix) || 'pm';
 const F = {
   yahoo: (sym, opts) => OPT.mock ? fetchMock('yahoo_' + sym) : SRC.yahooDaily(sym, opts),
-  lbma: (fix) => LBMAMEMO[fix] || (LBMAMEMO[fix] = OPT.mock ? fetchMock('lbma_' + fix) : SRC.lbmaGold(fix)), /* je Lauf einmal (auch ein Fehlschlag gilt für den ganzen Lauf) */
+  /* je Lauf einmal (auch ein Fehlschlag gilt für den ganzen Lauf); Ausfälle des Signal-Fixings merkt srcDown, die Rückkehr srcUp */
+  lbma: (fix) => LBMAMEMO[fix] || (LBMAMEMO[fix] = (OPT.mock ? fetchMock('lbma_' + fix) : SRC.lbmaGold(fix)).then((r) => { if (fix === LBMA_FIX) srcUp('lbma'); return r; }, (e) => { if (fix === LBMA_FIX) srcDown('lbma', e); throw e; })),
   coinbase: (p) => OPT.mock ? fetchMock('coinbase_' + p) : SRC.coinbaseDaily(p, 60),
   coinbaseSpot: (p) => OPT.mock ? fetchMock('coinbasespot_' + p) : SRC.coinbaseSpot(p),
   av: (sym) => AVMEMO[sym] || (AVMEMO[sym] = OPT.mock ? fetchMock('av_' + sym) : SRC.alphaVantageWeeklyAdjusted(sym, AVKEY)), /* je Lauf nur einmal laden */
@@ -171,6 +175,24 @@ const F = {
   krakenTicker: (pair) => OPT.mock ? fetchMock('krakenticker_' + pair) : SRC.krakenTicker(pair)
 };
 const KRAKEN_PAIR = { 'BTC-USD': 'XBTUSD', 'BTC-EUR': 'XBTEUR', 'ETH-EUR': 'ETHEUR', 'SOL-EUR': 'SOLEUR' };
+/* Ausfall einer Signalquelle merken (Prüfbericht 02.10.2026 Punkt 3, Justus 07.10.2026): seit wann die LBMA nicht antwortet (STATE.outage.lbma
+   {since, last, err}). Die Seite zeigt das bei Gold, der letzte Montagslauf meldet einen Dauerausfall als Fehler mit Push (lbmaAlert). Beim ersten
+   Eintrag gilt als Beginn die vorläufige Gold-Buchung, die schon wegen eines LBMA-Fehlers entstand (Stand vor dieser Version). */
+function srcDown(src, e) {
+  STATE.outage = STATE.outage || {};
+  const o = STATE.outage[src], g = STATE.assets && STATE.assets.gold;
+  const first = src === 'lbma' && g && g.preliminary && /LBMA/.test(g.primaryError || '') && g.updated ? g.updated : NOW.toISOString();
+  STATE.outage[src] = { since: (o && o.since) || first, last: NOW.toISOString(), err: mask(e && e.message ? e.message : String(e)).slice(0, 160) };
+  RUN.changed = true;
+}
+function srcUp(src) {
+  const o = STATE.outage && STATE.outage[src]; if (!o) return;
+  note((src === 'lbma' ? 'LBMA' : src) + ' antwortet wieder (nicht erreichbar seit ' + dtB(o.since) + ')');
+  /* Eine wartende Meldung „LBMA-Fixing fehlt“ (lbmaAlert, wartet bis 7:53 Uhr) ist damit überholt */
+  const stale = src === 'lbma' ? (STATE.queue || []).filter((p) => /^err-lbma-/.test(p.id)) : [];
+  if (stale.length) { STATE.queue = STATE.queue.filter((p) => !stale.includes(p)); note('Push „LBMA-Fixing fehlt“ verworfen, die LBMA antwortet wieder'); }
+  delete STATE.outage[src]; RUN.changed = true;
+}
 /* Hauptquellen laut config (Alpha Vantage für den FTSE, Coinbase für Bitcoin, LBMA für Gold). Weitere Quellen (Kraken, Yahoo, Alpha-Vantage-Krypto)
    erst im zweiten Anlauf; geprüft: Alpha Vantage weicht von Yahoo seit 2014 unter 0,01 % ab, Coinbase von Yahoo im Mittel 0,05 %. */
 const STEP0 = OPT.step;
@@ -337,6 +359,27 @@ function switchText(a, s, pre) {
   return { title: name(a) + ': ' + (buy ? 'Kaufsignal' : 'Verkaufssignal') + (pre ? ' (vorläufig)' : ''), body: 'Wochenschluss ' + ds(s.d) + ': ' + why + '. Laut Regel ' + (buy ? 'kaufen' : 'verkaufen') + ' zur Eröffnung am Montag, ' + ds(mon) + pv };
 }
 function lastState(a) { return STATE.assets && STATE.assets[a] ? STATE.assets[a] : null; }
+/* Vorläufig gebuchte Wochen (Prüfbericht 02.10.2026 Punkt 2, Justus 07.10.2026): Jede vorläufig gebuchte Woche bleibt ersetzbar, bis die
+   Hauptquelle sie liefert, auch wenn danach schon weitere Wochen gebucht sind (vorher nur die jüngste: ein vorläufiger Gold-Schluss wurde mit der
+   nächsten vorläufigen Buchung still endgültig). STATE.assets[a].prelim = [{k, d, c, label, why, src, fallback, primaryError}], why: 'spot' (Gold
+   aus dem Spotpreis), 'live' (Bitcoin aus dem Live-Kurs), 'cross' (Bitcoin weicht von Kraken ab), sonst null (FTSE aus Live-Kurs oder Quote).
+   Ältere Stände kennen nur preliminary für die jüngste Woche; daraus wird der erste Eintrag. */
+function prelimList(a) {
+  const s = lastState(a); if (!s) return [];
+  const list = Array.isArray(s.prelim) ? s.prelim.filter((p) => p && p.k && p.d) : [];
+  if (s.preliminary && s.k && !list.some((p) => p.k === s.k)) {
+    const why = /^Spotpreis/.test(s.src || '') ? 'spot' : /^Live-Kurs/.test(s.src || '') ? 'live' : null;
+    list.push({ k: s.k, d: s.preliminary, c: s.c, label: s.prelimLabel || null, why, src: s.src || '', fallback: !!s.fallback, primaryError: s.primaryError || null });
+  }
+  return list.sort((x, y) => (x.k < y.k ? -1 : x.k > y.k ? 1 : 0));
+}
+/* „Schluss 02.10.“ bzw. „Schlüsse 02.10. und 09.10.“ für Meldungen */
+function prelimDays(pl) { const d = pl.map((p) => ds(p.d)); return (d.length > 1 ? 'Schlüsse ' + d.slice(0, -1).join(', ') + ' und ' + d[d.length - 1] : 'Schluss ' + d[0]); }
+/* Herkunft eines ersetzten vorläufigen Schlusses ohne den Zusatz „…, das LBMA-Fixing fehlt noch“ bzw. „…, die Tageskerze vom Sonntag fehlt noch“ */
+const labelPast = (l) => String(l || '').replace(/, (das LBMA-Fixing|die Tageskerze vom Sonntag) fehlt noch$/, '');
+/* Kennung einer Korrektur oder Datenrevision mit Zustandswechsel: Gibt es in derselben Woche schon eine, bekommt die nächste -2, -3 … (vorher ging
+   eine zweite Korrektur derselben Woche ohne Eintrag und Push verloren). Ein wiederholter Lauf mit demselben Datenstand erzeugt dieselbe Kennung. */
+function freshId(base) { if (!EVENTS.some((e) => e.id === base)) return base; let n = 2; while (EVENTS.some((e) => e.id === base + '-' + n)) n++; return base + '-' + n; }
 function summarizeAsset(a, E, extra) {
   const L = E.last, r = CFG.assets[a].rule;
   return Object.assign({
@@ -352,11 +395,11 @@ const round = (x, d) => (x == null || !isFinite(x) ? null : Math.round(x * Math.
 const stTxt = (st) => (st === 1 ? 'investiert' : 'Cash');
 function subset(S, keep) { const idx = S.k.map((k, i) => (keep(k) ? i : -1)).filter((i) => i >= 0); return { k: idx.map((i) => S.k[i]), d: idx.map((i) => S.d[i]), c: idx.map((i) => S.c[i]) }; }
 /* Gebucht bleibt gebucht (config signal.keepBooked, Bitcoin und Gold; von Justus am 26.09.2026 festgelegt): Eine Quelle überschreibt schon
-   gebuchte Wochen nicht, auch nicht eine andere Quelle mit leicht anderem Schluss. Ausnahme: eine vorläufig gebuchte Woche (allowK), die der
-   endgültige Schluss ersetzt. Der FTSE bleibt ausgenommen: Seine bereinigte Reihe verschiebt sich mit jeder Ausschüttung und wird neu übernommen. */
-function mergeFor(a, stored, fresh, allowK) {
-  const c = CFG.assets[a];
-  if (c.signal.keepBooked) { const have = {}; stored.k.forEach((k) => { have[k] = 1; }); fresh = subset(fresh, (k) => !have[k] || k === allowK); }
+   gebuchte Wochen nicht, auch nicht eine andere Quelle mit leicht anderem Schluss. Ausnahme: vorläufig gebuchte Wochen (allow, Liste der Montage),
+   die der endgültige Schluss ersetzt. Der FTSE bleibt ausgenommen: Seine bereinigte Reihe verschiebt sich mit jeder Ausschüttung und wird neu übernommen. */
+function mergeFor(a, stored, fresh, allow) {
+  const c = CFG.assets[a], ok = {}; (Array.isArray(allow) ? allow : allow ? [allow] : []).forEach((k) => { ok[k] = 1; });
+  if (c.signal.keepBooked) { const have = {}; stored.k.forEach((k) => { have[k] = 1; }); fresh = subset(fresh, (k) => !have[k] || !!ok[k]); }
   return ENG.mergeWeekly(stored, fresh, !!c.signal.adj);
 }
 function sameSeries(x, y) {
@@ -365,12 +408,13 @@ function sameSeries(x, y) {
   return true;
 }
 function stateAt(S, E, k) { const j = S.k.indexOf(k); return j >= 0 && E.st[j] != null ? E.st[j] : null; }
-/* Schon gebuchte Wochen (bis prevK), deren Regelzustand sich durch neue Daten geändert hat; skipK: die vorläufige Woche (wird als Korrektur gemeldet) */
-function revisedWeeks(a, stored, merged, E, prevK, skipK) {
+/* Schon gebuchte Wochen (bis prevK), deren Regelzustand sich durch neue Daten geändert hat; skip: die vorläufigen Wochen (werden als Korrektur gemeldet) */
+function revisedWeeks(a, stored, merged, E, prevK, skip) {
   if (prevK == null || !stored.k.length) return [];
-  const E0 = ENG.evalRule(stored, CFG.assets[a].rule), pos = {}, out = [];
+  const E0 = ENG.evalRule(stored, CFG.assets[a].rule), pos = {}, out = [], no = {};
+  (Array.isArray(skip) ? skip : skip ? [skip] : []).forEach((k) => { no[k] = 1; });
   merged.k.forEach((k, j) => { pos[k] = j; });
-  for (let i = 0; i < stored.k.length; i++) { const k = stored.k[i], j = pos[k]; if (k > prevK || k === skipK || j == null) continue; if (E0.st[i] != null && E.st[j] != null && E0.st[i] !== E.st[j]) out.push(k); }
+  for (let i = 0; i < stored.k.length; i++) { const k = stored.k[i], j = pos[k]; if (k > prevK || no[k] || j == null) continue; if (E0.st[i] != null && E.st[j] != null && E0.st[i] !== E.st[j]) out.push(k); }
   return out;
 }
 /* Wochen buchen: zusammenführen, Regel rechnen, speichern, melden.
@@ -378,8 +422,8 @@ function revisedWeeks(a, stored, merged, E, prevK, skipK) {
    Meldungen: Hat sich der Zustand der zuletzt gebuchten Woche geändert (vorläufiger Schluss korrigiert oder rückwirkende Datenänderung),
    gibt es genau eine Nachricht mit dem Ergebnis; sonst die neuen Wechsel als Kauf- oder Verkaufssignal. */
 function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
-  const c = CFG.assets[a], prelimK = prev && prev.preliminary && prev.k ? prev.k : null;
-  const merged = mergeFor(a, stored, fresh, prelimK);
+  const c = CFG.assets[a], pl = prelimList(a), allow = pl.map((p) => p.k);
+  const merged = mergeFor(a, stored, fresh, allow);
   const lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
   /* Keine Lücken: Jede Woche nach der zuletzt gespeicherten bis zur gebuchten braucht einen Schluss */
   if (lastStored) { const have = {}; merged.k.forEach((k) => { have[k] = 1; }); for (let k = addDays(lastStored, 7); k <= targetK; k = addDays(k, 7)) if (!have[k]) { const reason = 'Schluss der Woche ab ' + ds(k) + ' fehlt in der Kursreihe'; markPending(a, targetK, reason); note(name(a) + ': ' + reason); return { done: false, pending: true }; } }
@@ -388,15 +432,32 @@ function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
   if (E.st.length < 60) { fail(name(a), 'zu wenige Wochen: ' + E.st.length); return { done: false }; }
   saveSeries(a, merged, src.src);
   const L = E.last, prevK = prev && prev.k ? prev.k : lastStored, prevSt = prev && prev.st != null ? prev.st : null;
-  const wasPrelim = !!(prelimK && prelimK === prevK);
   const srcPrelimK = src.preliminary ? mondayOf(src.preliminary) : null;
+  /* Vorläufige Wochen, die diese Buchung endgültig macht: in den frischen Daten enthalten und nicht selbst wieder vorläufig */
+  const inFresh = {}; fresh.k.forEach((k) => { inFresh[k] = 1; });
+  const fin = pl.filter((p) => inFresh[p.k] && p.k !== srcPrelimK).map((p) => { const j = merged.k.indexOf(p.k); return Object.assign({}, p, { cNew: j >= 0 ? merged.c[j] : null, dNew: j >= 0 ? merged.d[j] : p.d }); }).filter((p) => p.cNew != null);
+  const finChg = fin.filter((p) => round(p.cNew, 2) !== round(p.c, 2) || p.dNew !== p.d);
+  const finTxt = finChg.map((p) => ds(p.dNew) + ' ' + usd(a, p.cNew) + ' statt vorläufig ' + usd(a, p.c) + (p.dNew !== p.d ? ' (' + ds(p.d) + ')' : ''));
+  const wasPrelim = allow.includes(prevK);
   const stPrevNow = prevK ? stateAt(merged, E, prevK) : null;
-  const rev = revisedWeeks(a, stored, merged, E, prevK, wasPrelim ? prevK : null);
+  /* Rückwirkende Änderungen ab der ersten korrigierten vorläufigen Woche gehören zur Korrektur, nicht zur Datenrevision */
+  const firstFin = finChg.length ? finChg[0].k : null;
+  const rev = revisedWeeks(a, stored, merged, E, prevK, allow).filter((k) => !firstFin || k < firstFin);
   const newSw = E.sw.filter((s) => prevK == null || s.k > prevK);
   const flipPrev = prevSt != null && stPrevNow != null && stPrevNow !== prevSt;
   const pushEv = (ev, push) => { if (addEvent(ev) && push) queuePush({ id: ev.id, title: push.title, body: push.body, tag: 'signal-' + a, url: './#status', ts: NOW.toISOString() }); };
   if (!flipPrev) {
-    if (wasPrelim) { const j = merged.k.indexOf(prevK); if (srcPrelimK === prevK) vlog(a + ': Schluss weiterhin vorläufig (' + src.preliminary + ')'); else if (j >= 0) note(name(a) + ': endgültiger Schluss ' + ds(merged.d[j]) + ' ' + usd(a, merged.c[j]) + ' bestätigt den vorläufigen Stand'); }
+    fin.forEach((p) => {
+      if (finChg.includes(p)) return;
+      note(name(a) + ': endgültiger Schluss ' + ds(p.dNew) + ' ' + usd(a, p.cNew) + ' bestätigt den vorläufigen Stand');
+    });
+    /* Ein endgültiger Schluss weicht vom vorläufigen ab, ohne dass sich die Regel dreht: Eintrag unter „Signale“, keine Push-Nachricht (nur Bitcoin
+       und Gold; beim FTSE verschiebt jede Ausschüttung die bereinigte Reihe, dort genügt die Notiz im Laufprotokoll) */
+    finChg.forEach((p) => {
+      if (c.signal.keepBooked) addEvent({ id: 'fin-' + a + '-' + p.k, kind: 'info', a, k: p.k, d: p.dNew, title: name(a) + ': Endgültiger Wochenschluss ' + ds(p.dNew), text: 'Endgültiger Wochenschluss ' + ds(p.dNew) + ' ' + usd(a, p.cNew) + ' statt vorläufig ' + usd(a, p.c) + (p.label ? ' (' + labelPast(p.label) + ')' : '') + '. Die Regel bleibt ' + stTxt(L.st) + '; für dich ändert sich nichts.', c: round(p.cNew, 4) });
+      note(name(a) + ': endgültiger Schluss ' + ds(p.dNew) + ' ' + usd(a, p.cNew) + ' ersetzt den vorläufigen (' + usd(a, p.c) + '), Regel unverändert');
+    });
+    if (wasPrelim && srcPrelimK === prevK) vlog(a + ': Schluss weiterhin vorläufig (' + src.preliminary + ')');
     if (rev.length) {
       addEvent({ id: 'rev-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Datenrevision', text: 'Die Kursquelle (' + src.src + ') liefert für ' + rev.length + ' frühere Woche(n) andere Schlüsse (ab ' + ds(rev[0]) + '); der Regelzustand dieser Wochen ist rückwirkend anders. Der Zustand zum Wochenschluss ' + ds(prev.d) + ' bleibt ' + stTxt(prevSt) + '.', c: round(L.c, 4), m: round(L.m, 4) });
       note(name(a) + ': Datenrevision, ' + rev.length + ' Woche(n) rückwirkend anders, Zustand unverändert');
@@ -408,24 +469,35 @@ function bookWeeks(a, stored, fresh, prev, targetK, src, comp) {
   } else {
     /* Der Zustand der zuletzt gebuchten Woche ist jetzt ein anderer: eine Nachricht mit dem Ergebnis (neue Wechsel stecken darin) */
     const j = merged.k.indexOf(prevK), stillPrelim = srcPrelimK === prevK;
-    const why = wasPrelim
-      ? (stillPrelim ? 'Neuer vorläufiger Wochenschluss ' : 'Endgültiger Wochenschluss ') + ds(merged.d[j]) + ' ' + usd(a, merged.c[j]) + ' statt vorläufig ' + usd(a, prev.c) + '.'
+    const parts = [];
+    if (finTxt.length) parts.push((finTxt.length > 1 ? 'Endgültige Wochenschlüsse ' : 'Endgültiger Wochenschluss ') + finTxt.join(', ') + '.');
+    if (stillPrelim) parts.push('Neuer vorläufiger Wochenschluss ' + ds(merged.d[j]) + ' ' + usd(a, merged.c[j]) + ' statt vorläufig ' + usd(a, prev.c) + '.');
+    const corr = parts.length > 0;
+    const why = corr ? parts.join(' ')
       : 'Die Kursquelle (' + src.src + ') liefert für ' + Math.max(1, rev.length) + ' frühere Woche(n) andere Schlüsse' + (rev.length ? ' (ab ' + ds(rev[0]) + ')' : '') + '; rückwirkend war die Regel zum Wochenschluss ' + ds(prev.d) + ' ' + stTxt(stPrevNow) + ' statt ' + stTxt(prevSt) + '.';
     const extra = L.k > prevK ? ' Dazu der neue Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + (srcPrelimK === L.k ? ' (vorläufig: ' + (src.prelimLabel || 'vorläufiger Kurs') + ')' : '') + '.' : '';
+    /* Weiter vorläufige Wochen (z. B. die LBMA liefert nur Fixings bis Donnerstag, der Spot-Schluss vom Freitag bleibt) gehören in die Nachricht */
+    const keepPl = pl.filter((p) => !fin.some((f) => f.k === p.k) && p.k !== srcPrelimK && merged.k.includes(p.k));
+    const keepTxt = keepPl.length ? (keepPl.length > 1 ? ' Die ' + prelimDays(keepPl) + ' bleiben vorläufig.' : ' Der ' + prelimDays(keepPl) + ' bleibt vorläufig.') : '';
     const net = L.st !== prevSt;
-    const body = why + extra + (net ? ' Laut Regel jetzt ' + stTxt(L.st) + ' statt ' + stTxt(prevSt) + '.' : ' Damit ist die Regel wieder ' + stTxt(L.st) + '; für dich ändert sich nichts.');
-    const kindT = wasPrelim ? 'Korrektur' : 'Datenrevision', id = (wasPrelim ? 'korr-' : 'rev-') + a + '-' + L.d;
-    pushEv({ id, kind: net ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': ' + (wasPrelim ? 'Korrektur des Wochenschlusses' : 'Datenrevision'), text: body, c: round(L.c, 4), m: round(L.m, 4) }, net ? { title: name(a) + ': ' + kindT, body } : null);
+    const body = why + extra + keepTxt + (net ? ' Laut Regel jetzt ' + stTxt(L.st) + ' statt ' + stTxt(prevSt) + '.' : ' Damit ist die Regel wieder ' + stTxt(L.st) + '; für dich ändert sich nichts.');
+    const kindT = corr ? 'Korrektur' : 'Datenrevision', id = freshId((corr ? 'korr-' : 'rev-') + a + '-' + L.d);
+    pushEv({ id, kind: net ? (L.st === 1 ? 'kauf' : 'verkauf') : 'info', a, k: L.k, d: L.d, title: name(a) + ': ' + (corr ? 'Korrektur des Wochenschlusses' : 'Datenrevision'), text: body, c: round(L.c, 4), m: round(L.m, 4) }, net ? { title: name(a) + ': ' + kindT, body } : null);
     note(name(a) + ': ' + kindT + ', Zustand zum ' + ds(prev.d) + ' jetzt ' + stTxt(stPrevNow) + (net ? ', ZUSTAND GEDREHT' : ', unterm Strich unverändert'));
   }
   /* Grenzfall: Abstand des Schlusses zur Schwelle dieser Woche (ENG.edgeCase), dasselbe Maß wie Chip und Erklärung auf der Seite (27.09.2026);
      beim Band die Schwelle des Zustands vor der Woche, sodass auch ein knapp ausgelöstes Signal als Grenzfall gilt */
   const ec = ENG.edgeCase(merged, c.rule), edge = !!ec && Math.abs(ec.rel) < (CFG.edge ? CFG.edge.pct : 0.005);
   if (edge && !newSw.length && !flipPrev) addEvent({ id: 'edge-' + a + '-' + L.d, kind: 'info', a, k: L.k, d: L.d, title: name(a) + ': Grenzfall', text: 'Wochenschluss ' + ds(L.d) + ' ' + usd(a, L.c) + ' liegt sehr nah an der Schwelle von rund ' + usd(a, ec.thr) + ' (' + (Math.abs(ec.rel) < 0.0001 ? 'weniger als 0,01' : (Math.floor(Math.abs(ec.rel) * 1e4) / 100).toFixed(2).replace('.', ',')) + ' % Abstand). Quelle: ' + src.src + '.' });
-  const prelimNow = srcPrelimK && L.k === srcPrelimK ? src.preliminary : null;
-  STATE.assets[a] = summarizeAsset(a, E, { src: src.src, fallback: !!src.fallback, primaryError: src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: prelimNow, prelimLabel: prelimNow ? (src.prelimLabel || null) : null });
+  /* Liste der vorläufigen Wochen fortschreiben: endgültig gewordene fallen weg, eine neu vorläufig gebuchte kommt dazu */
+  const finK = {}; fin.forEach((p) => { finK[p.k] = 1; });
+  const list = pl.filter((p) => !finK[p.k] && p.k !== srcPrelimK && merged.k.includes(p.k));
+  if (srcPrelimK && merged.k.includes(srcPrelimK)) { const j2 = merged.k.indexOf(srcPrelimK); list.push({ k: srcPrelimK, d: merged.d[j2], c: round(merged.c[j2], 4), label: src.prelimLabel || null, why: src.prelimWhy || null, src: src.src, fallback: !!src.fallback, primaryError: src.primaryError ? String(src.primaryError).slice(0, 200) : null }); }
+  list.sort((x, y) => (x.k < y.k ? -1 : x.k > y.k ? 1 : 0));
+  const lastP = list.find((p) => p.k === L.k) || null;
+  STATE.assets[a] = summarizeAsset(a, E, { src: lastP ? lastP.src : src.src, fallback: lastP ? !!lastP.fallback : !!src.fallback, primaryError: lastP ? lastP.primaryError || null : src.primaryError || null, pending: null, holiday: !!comp.holiday, partial: !!comp.partial, edge, preliminary: lastP ? lastP.d : null, prelimLabel: lastP ? lastP.label || null : null, prelim: list });
   RUN.changed = true;
-  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + stTxt(L.st) + (newSw.length && !flipPrev ? ', SIGNALWECHSEL' : '') + (prelimNow ? ' (vorläufig: ' + (src.prelimLabel || '') + ')' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : ''));
+  note(name(a) + ': Schluss ' + ds(L.d) + ' ' + usd(a, L.c) + ', SMA50 ' + usd(a, L.m) + ', ' + stTxt(L.st) + (newSw.length && !flipPrev ? ', SIGNALWECHSEL' : '') + (lastP ? ' (vorläufig: ' + (lastP.label || '') + ')' : '') + (src.fallback ? ' (Ersatz: ' + src.src + ')' : '') + (list.length && (!lastP || list.length > 1) ? ' · vorläufig auch: ' + list.filter((p) => p !== lastP).map((p) => ds(p.d)).join(', ') : ''));
   return { done: true, E, newSw };
 }
 /* Gold: Fehlt das LBMA-Fixing noch (die LBMA veröffentlicht es meist erst spät abends), zählt sofort der Spotpreis kurz nach dem Fixing
@@ -443,7 +515,7 @@ async function spotFallback(a, base, prev, dueK, reason) {
   /* Die nächtliche Fehlermeldung „ohne Wochenschluss“ ist damit überholt */
   STATE.queue = (STATE.queue || []).filter((q) => q.id !== 'err-' + a + '-' + dueK);
   note(name(a) + ': LBMA-Fixing fehlt (' + String(reason).slice(0, 80) + '), vorläufiger Wochenschluss aus dem ' + label.split(', das')[0]);
-  return bookWeeks(a, base, { k: [dueK], d: [snap.d], c: [snap.p] }, prev, dueK, { src: 'Spotpreis ' + (snap.src || 'gold-api.com') + ' ' + snap.t + ' (vorläufig, LBMA-Fixing fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: snap.d, prelimLabel: label }, { ok: true });
+  return bookWeeks(a, base, { k: [dueK], d: [snap.d], c: [snap.p] }, prev, dueK, { src: 'Spotpreis ' + (snap.src || 'gold-api.com') + ' ' + snap.t + ' (vorläufig, LBMA-Fixing fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: snap.d, prelimLabel: label, prelimWhy: 'spot' }, { ok: true });
 }
 /* Bitcoin: Liefert kurz nach dem Wochenschluss keine Quelle die Tageskerze vom Sonntag (Coinbase, Kraken, Yahoo, Alpha Vantage), gilt vorläufig
    der Live-Kurs (Coinbase, sonst Kraken), aber nur in der ersten Stunde nach 0 Uhr UTC, danach weicht er zu weit vom Schluss ab. Die Tageskerze
@@ -461,23 +533,51 @@ async function btcLiveFallback(reason) {
   const label = 'Live-Kurs ' + t.slice(11, 16) + ' Uhr UTC (' + srcName + '), die Tageskerze vom Sonntag fehlt noch';
   note(name(a) + ': Tageskerze vom Sonntag fehlt (' + String(reason).slice(0, 90) + '), vorläufiger Wochenschluss aus dem ' + label.split(', die')[0]);
   STATE.queue = (STATE.queue || []).filter((p) => p.id !== 'err-' + a + '-' + dueK);
-  return bookWeeks(a, stored, { k: [dueK], d: [sun], c: [q.price] }, prev, dueK, { src: 'Live-Kurs ' + srcName + ' ' + t + ' (vorläufig, Tageskerze fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: sun, prelimLabel: label }, { ok: true });
+  return bookWeeks(a, stored, { k: [dueK], d: [sun], c: [q.price] }, prev, dueK, { src: 'Live-Kurs ' + srcName + ' ' + t + ' (vorläufig, Tageskerze fehlt)', fallback: true, primaryError: String(reason).slice(0, 200), preliminary: sun, prelimLabel: label, prelimWhy: 'live' }, { ok: true });
+}
+/* Bitcoin: Gegenprobe des Wochenschlusses mit Kraken (Justus 07.10.2026: „Ja, ab 1 % vorläufig“; config signal.crossPct). Weicht der Sonntagsschluss
+   der Hauptquelle um mehr als 1 % vom Kraken-Schluss ab, wird er nur vorläufig gebucht; ein Signal kommt dann mit „vorläufig“. Die nächsten Läufe
+   prüfen erneut: Passen die Quellen dann zusammen, wird der Schluss endgültig. Ab der Wochenübersicht (Montag 7:53 Uhr Berlin) gilt bei weiter
+   bestehender Abweichung der Schluss der Hauptquelle endgültig (vereinbarte Quelle), mit einem Hinweis unter „Signale“ und in der Wochenübersicht.
+   Kein Abgleich, wenn schon eine Ersatzquelle oder der Live-Kurs gebucht wird oder Kraken nicht antwortet (dann wie bisher). Liefert ein neues src
+   (vorläufig) oder null (unverändert buchen). */
+async function btcCrossCheck(dueK, src, fresh) {
+  const pct = CFG.assets.btc.signal.crossPct, j = fresh.k.indexOf(dueK);
+  if (!(pct > 0) || src.fallback || src.preliminary || j < 0) return null;
+  const sun = addDays(dueK, 6), main = fresh.c[j], who = /^coinbase/i.test(src.src || '') ? 'Coinbase' : String(src.src || 'Hauptquelle').split(' ')[0];
+  let kr;
+  try { kr = cleanDaily(await F.kraken('XBTUSD', 14)); } catch (e) { note('Bitcoin: Gegenprobe Kraken nicht möglich (' + e.message.slice(0, 60) + ')'); return null; }
+  const i = kr.dates.indexOf(sun);
+  if (i < 0) { note('Bitcoin: Gegenprobe Kraken ohne Sonntagskerze ' + ds(sun)); return null; }
+  const ref = kr.closes[i], dev = main / ref - 1, dtxt = de(Math.abs(dev) * 100, 2) + ' %';
+  if (Math.abs(dev) <= pct) { vlog('Bitcoin: Gegenprobe Kraken ' + usd('btc', ref) + ', Abweichung ' + dtxt); return null; }
+  const decide = STEP0 === 'mo-notify' || !(BERLIN.dow === 0 && BERLIN.hour < MON_PUSH);
+  if (decide) {
+    note('Bitcoin: ' + who + ' ' + usd('btc', main) + ' und Kraken ' + usd('btc', ref) + ' weichen um ' + dtxt + ' ab; laut Regel zählt ' + who + ', der Schluss ' + ds(sun) + ' gilt endgültig');
+    addEvent({ id: 'crossfin-btc-' + dueK, kind: 'info', a: 'btc', k: dueK, d: sun, title: 'Bitcoin: Wochenschluss mit Abweichung', text: 'Wochenschluss ' + ds(sun) + ': ' + who + ' ' + usd('btc', main) + ', Kraken ' + usd('btc', ref) + ' (' + dtxt + ' Abweichung). Laut Regel zählt ' + who + ' (vereinbarte Quelle); der Schluss gilt damit endgültig.', short: 'Der Bitcoin-Schluss ' + ds(sun) + ' weicht um ' + dtxt + ' von Kraken ab, es gilt ' + who + '.' });
+    return null;
+  }
+  const label = who + ' ' + usd('btc', main) + ' weicht um ' + dtxt + ' vom Kraken-Schluss ' + usd('btc', ref) + ' ab';
+  note('Bitcoin: Sonntagsschluss ' + label + ', nur vorläufig gebucht (endgültig, sobald beide passen, sonst mit der Wochenübersicht)');
+  return Object.assign({}, src, { preliminary: sun, prelimLabel: label, prelimWhy: 'cross' });
 }
 /* opt.retry: Zwischenversuch (btc-close fasst nach); ein Fehlschlag wird dann noch nicht als Fehler oder „fehlt noch“ eingetragen.
-   opt.quiet: Ticker; der Ersatz-Spotpreis darf buchen, ein Fehlschlag wird nicht eingetragen (das machen die geplanten Wochenschluss-Läufe). */
+   opt.quiet: Ticker; der Ersatz-Spotpreis darf buchen, ein Fehlschlag wird nicht eingetragen (das machen die geplanten Wochenschluss-Läufe).
+   Vorläufig gebuchte Wochen (prelimList) werden bei jedem Aufruf geprüft, auch frühere: Liefert die Hauptquelle sie, werden sie endgültig. */
 async function closeAsset(a, opt) {
   const c = CFG.assets[a], cutoff = dueCutoff(a), stored = storedSeries(a), prev = lastState(a), retry = !!(opt && opt.retry), quiet = !!(opt && opt.quiet);
   const dueK = addDays(cutoff, -7);                                   /* jüngste fällige Woche */
   const lastStored = stored.k.length ? stored.k[stored.k.length - 1] : null;
+  const pl = prelimList(a);                                           /* vorläufig gebuchte Wochen, auch frühere */
   const already = !!(lastStored && lastStored >= dueK && prev && prev.k >= dueK && !prev.pending);
-  const prelimNow = !!(already && prev.preliminary);
-  if (already && !prev.preliminary) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
-  if (prelimNow) vlog(a + ': Woche ' + dueK + ' vorläufig gebucht (' + prev.preliminary + '), prüfe auf endgültigen Schluss');
+  const prelimNow = !!(already && pl.some((p) => p.k === dueK));     /* die fällige Woche selbst ist vorläufig gebucht */
+  if (already && !pl.length) { vlog(a + ': Woche ' + dueK + ' schon verarbeitet'); return { done: true, already: true }; }
+  if (pl.length) vlog(a + ': vorläufig gebucht ' + pl.map((p) => p.k).join(', ') + ', prüfe auf endgültige Schlüsse');
   let src;
   try { src = await loadSignalSeries(a, opt); }
   catch (e) {
     const reason = 'Kursabruf fehlgeschlagen: ' + e.message;
-    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + e.message.slice(0, 80) + ')'); return { done: true, already: true }; }
+    if (already) { note(name(a) + ': ' + prelimDays(pl) + (pl.length > 1 ? ' bleiben' : ' bleibt') + ' vorläufig (' + e.message.slice(0, 80) + ')'); return { done: true, already: true }; }
     if (retry) { vlog(a + ': ' + reason); return { done: false, error: e.message }; }
     const fb = await spotFallback(a, stored, prev, dueK, reason); if (fb) return fb;
     if (quiet) { vlog(a + ': ' + reason); return { done: false, error: e.message }; }
@@ -489,15 +589,19 @@ async function closeAsset(a, opt) {
   /* Für die Vollständigkeit zählt der letzte (gültige) Tageskurs, der zur fälligen Woche gehört */
   const lastInWeek = daily.dates.filter((d) => mondayOf(d) === dueK).pop() || null;
   const comp = weekComplete(a, dueK, lastInWeek, daily.dates.length ? daily.dates[daily.dates.length - 1] : null);
+  /* Bitcoin-Schluss wegen Abweichung zu Kraken vorläufig: Eine Ersatzquelle entscheidet das nicht, nur die Hauptquelle (btcCrossCheck) */
+  const crossP = pl.find((p) => p.k === dueK && p.why === 'cross');
+  if (prelimNow && crossP && src.fallback) { note(name(a) + ': Schluss ' + ds(crossP.d) + ' bleibt vorläufig (Abweichung zwischen Coinbase und Kraken; entschieden wird mit der Hauptquelle)'); return { done: true, already: true, stillPrelim: true }; }
   if (!comp.ok) {
-    if (prelimNow) { note(name(a) + ': Schluss ' + ds(prev.d) + ' bleibt vorläufig (' + comp.reason + ')'); return { done: true, already: true, stillPrelim: true }; }
-    /* Frühere Wochen trotzdem übernehmen (ohne die unvollständige) – als Buchung, damit rückwirkende Änderungen und neue Wechsel gemeldet werden */
+    /* Frühere Wochen trotzdem übernehmen (ohne die unvollständige) – als Buchung, damit rückwirkende Änderungen, neue Wechsel und endgültige
+       Schlüsse früher vorläufiger Wochen gemeldet werden */
     let base = stored, prevB = prev;
     const older = subset(fresh, (k) => k < dueK);
     if (older.k.length) {
-      const trial = mergeFor(a, stored, older, prev && prev.preliminary ? prev.k : null);
-      if (!sameSeries(stored, trial)) { const r = bookWeeks(a, stored, older, prev, older.k[older.k.length - 1], src, { ok: true }); if (r.done) { base = storedSeries(a); prevB = lastState(a); } }
+      const trial = mergeFor(a, stored, older, pl.map((p) => p.k)), finOlder = pl.some((p) => p.k < dueK && older.k.includes(p.k));
+      if (!sameSeries(stored, trial) || finOlder) { const r = bookWeeks(a, stored, older, prev, older.k[older.k.length - 1], src, { ok: true }); if (r.done) { base = storedSeries(a); prevB = lastState(a); } }
     }
+    if (already) { if (prelimNow) note(name(a) + ': Schluss ' + ds(pl.find((p) => p.k === dueK).d) + ' bleibt vorläufig (' + comp.reason + ')'); return { done: true, already: true, stillPrelim: prelimNow }; }
     if (retry) { vlog(a + ': ' + comp.reason); return { done: false, pending: true, reason: comp.reason }; }
     const fb = await spotFallback(a, base, prevB, dueK, comp.reason); if (fb) return fb;
     if (quiet) { vlog(a + ': ' + comp.reason); return { done: false, pending: true, reason: comp.reason }; }
@@ -505,6 +609,8 @@ async function closeAsset(a, opt) {
     note(name(a) + ': Wochenschluss ' + ds(c.week === 'sun' ? addDays(dueK, 6) : (lastTradingDay(a, dueK) || addDays(dueK, 4))) + ' fehlt noch (' + comp.reason + ')');
     return { done: false, pending: true };
   }
+  /* Bitcoin: Gegenprobe mit Kraken, wenn die fällige Woche jetzt gebucht oder ein vorläufiger Schluss bestätigt wird */
+  if (a === 'btc' && (!already || prelimNow)) { const cc = await btcCrossCheck(dueK, src, fresh); if (cc) src = cc; }
   return bookWeeks(a, stored, fresh, prev, dueK, src, comp);
 }
 function markPending(a, k, reason) {
@@ -885,6 +991,20 @@ async function goldCross() {
   } catch (e) { RUN.summary.push('Gegenprobe COMEX nicht möglich (' + e.message.slice(0, 80) + ')'); vlog('Gegenprobe Gold: ' + e.message); }
 }
 
+/* ---------- Dauerausfall der LBMA melden (Prüfbericht 02.10.2026 Punkt 3, Justus 07.10.2026) ----------
+   Steht Gold noch vorläufig auf dem Spotpreis und war die LBMA in diesem Lauf nicht erreichbar, gibt es einmal je Woche einen Fehler-Eintrag und
+   eine Push-Nachricht (aus dem letzten Montagslauf 2:23 UTC mit der Wochenübersicht um 7:53 Uhr, sonst mit mo-notify). Der Lauf gilt dann als
+   fehlerhaft (Fußzeile der Seite). Bis dahin gelten die Spot-Schlüsse vorläufig (Justus: „Erst beobachten“). */
+function lbmaAlert() {
+  const o = STATE.outage && STATE.outage.lbma, pl = prelimList('gold');
+  if (!o || !pl.length || o.last !== NOW.toISOString()) return;       /* nur, wenn die LBMA in diesem Lauf fehlschlug */
+  const weeks = pl.map((p) => ds(p.d) + ' ' + usd('gold', p.c)).join(', ');
+  const text = 'Die LBMA ist seit ' + dtB(o.since) + ' nicht erreichbar (' + o.err + '). Vorläufig mit dem Spotpreis nach dem Fixing gebucht: ' + weeks + '. Sobald die LBMA wieder antwortet, ersetzt das Fixing diese Schlüsse; ändert sich dadurch die Regel, kommt eine Nachricht.';
+  fail('Gold', 'LBMA-Fixing nicht abrufbar seit ' + dtB(o.since) + ', Wochenschluss vorläufig (' + weeks + ')');
+  const id = 'err-lbma-' + THIS_MON;
+  if (addEvent({ id, kind: 'fehler', a: 'gold', k: pl[pl.length - 1].k, d: TODAY, title: 'Gold: LBMA-Fixing fehlt', text })) queuePush({ id, title: 'Investus: LBMA-Fixing fehlt', body: text, tag: 'err-gold', url: './#status', ts: NOW.toISOString() });
+}
+
 /* ---------- Wochenübersicht (Montag) ---------- */
 function weeklySummary() {
   if (!CFG.push.weeklySummary) return;
@@ -893,10 +1013,16 @@ function weeklySummary() {
   const parts = A.map((a) => { const s = STATE.assets[a]; return s ? CFG.assets[a].short + ' ' + (s.st ? 'investiert' : 'Cash') : null; }).filter(Boolean);
   const sig = EVENTS.filter((e) => (e.kind === 'kauf' || e.kind === 'verkauf') && e.k >= addDays(THIS_MON, -7));
   const pend = A.filter((a) => STATE.assets[a] && STATE.assets[a].pending).map((a) => name(a));
-  const prel = A.filter((a) => STATE.assets[a] && !STATE.assets[a].pending && STATE.assets[a].preliminary).map((a) => name(a) + ' (' + (STATE.assets[a].prelimLabel || 'vorläufiger Kurs') + ')');
-  let body = parts.join(' · ') + '. ' + (sig.length ? sig.map((e) => e.title).join('; ') + '.' : 'Keine neuen Signale.');
+  /* vorläufige Wochen je Anlage (prelimList). Ein früher vorläufiges Signal, dessen Woche inzwischen endgültig ist, steht ohne „(vorläufig)“ da:
+     „(inzwischen endgültig)“, wenn der Wechsel in der endgültigen Reihe noch besteht, sonst „(zurückgenommen)“ (die Korrektur steht daneben) */
+  const prel = A.filter((a) => STATE.assets[a] && !STATE.assets[a].pending).map((a) => { const pl = prelimList(a); if (!pl.length) return null; const last = pl[pl.length - 1]; return name(a) + ' (' + (pl.length > 1 ? prelimDays(pl) + '; zuletzt ' : '') + (last.label || 'vorläufiger Kurs') + ')'; }).filter(Boolean);
+  const swNow = {}, stillSw = (e) => { if (!swNow[e.a]) swNow[e.a] = ENG.evalRule(storedSeries(e.a), CFG.assets[e.a].rule).sw; return swNow[e.a].some((s) => s.k === e.k && s.to === (e.kind === 'kauf' ? 1 : 0)); };
+  const sigTitle = (e) => (e.preliminary && !prelimList(e.a).some((p) => p.k === e.k) ? e.title.replace(' (vorläufig)', '') + (stillSw(e) ? ' (inzwischen endgültig)' : ' (zurückgenommen)') : e.title);
+  let body = parts.join(' · ') + '. ' + (sig.length ? sig.map(sigTitle).join('; ') + '.' : 'Keine neuen Signale.');
   (CFG.oneTimeHints || []).forEach((h) => { if (h.date === TODAY && STATE.assets[h.asset] && STATE.assets[h.asset].st === h.ifState) body += ' ' + h.text; });
   if (prel.length) body += ' Vorläufig: ' + prel.join('; ') + '.';
+  if (STATE.outage && STATE.outage.lbma) body += ' Das LBMA-Fixing ist seit ' + dtB(STATE.outage.lbma.since) + ' nicht abrufbar.';
+  const cf = EVENTS.find((e) => e.id === 'crossfin-btc-' + addDays(THIS_MON, -7)); if (cf && cf.short) body += ' ' + cf.short;
   if (pend.length) body += ' Noch offen: ' + pend.join(', ') + '.';
   addEvent({ id, kind: 'info', a: null, k: THIS_MON, d: TODAY, title: 'Wochenstart ' + ds(THIS_MON), text: body });
   queuePush({ id, title: 'Investus · Wochenstart ' + ds(THIS_MON), body, tag: 'week', url: './#status', ts: NOW.toISOString() });
@@ -1009,10 +1135,12 @@ async function main() {
       await closeAsset('gold'); await closeAsset('ftse');
       await goldCross();
       await eurQuotes(['btc', 'eurusd']);
+      if (OPT.final) lbmaAlert();
       if (OPT.final) { A.forEach((a) => { const p = STATE.assets[a] && STATE.assets[a].pending; if (p) { const id = 'err-' + a + '-' + p.k; if (addEvent({ id, kind: 'fehler', a, k: p.k, d: TODAY, title: name(a) + ': Wochenschluss fehlt', text: p.reason + '. Die Seite zeigt den Stand der Vorwoche; die nächsten Läufe versuchen es weiter.' })) queuePush({ id, title: 'Investus: ' + name(a) + ' ohne Wochenschluss', body: p.reason + '. Es wird weiter versucht.', tag: 'err-' + a, url: './#signale', ts: NOW.toISOString() }); } }); }
       flushOnly = isBtcPush;                                           /* Bitcoin sofort, alles andere um mondayAt mit mo-notify */
     } else if (step === 'mo-notify') {
       for (const a of A) await closeAsset(a);
+      lbmaAlert();
       weeklySummary();
     } else if (step === 'live') {
       /* Krypto-Tagesschluss (24 Uhr UTC) einmal am Tag nachtragen, sobald der Vortag fehlt: Sonst rechnen die Tagesansicht und der Vergleich
@@ -1026,7 +1154,7 @@ async function main() {
       /* Montag: Die Nachrichten vom Wochenende gehen um 7:53 Uhr (Berlin) mit mo-notify hinaus. Fällt dieser Lauf aus oder verdrängt GitHub ihn,
          holt der nächste Ticker-Lauf das nach (Wochenschlüsse, Wochenübersicht, Warteschlange). Sonst verschickt der Ticker, was noch wartet. */
       const monHold = BERLIN.dow === 0 && BERLIN.hour < MON_PUSH;
-      if (BERLIN.dow === 0 && !monHold && CFG.push.weeklySummary && !EVENTS.some((e) => e.id === 'week-' + THIS_MON)) { note('Montag: Wochenübersicht fehlt noch, der Ticker holt mo-notify nach'); ALLOW_FB = true; for (const a of A) await closeAsset(a); weeklySummary(); }
+      if (BERLIN.dow === 0 && !monHold && CFG.push.weeklySummary && !EVENTS.some((e) => e.id === 'week-' + THIS_MON)) { note('Montag: Wochenübersicht fehlt noch, der Ticker holt mo-notify nach'); ALLOW_FB = true; for (const a of A) await closeAsset(a); lbmaAlert(); weeklySummary(); }
       flush = !monHold;
     } else if (step === 'eod') {
       for (const a of A) await closeAsset(a);

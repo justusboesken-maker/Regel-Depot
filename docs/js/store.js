@@ -3,7 +3,8 @@
    tx.cash: Betrag, um den die Buchung beim Eintragen das Cash des Bausteins tatsächlich verändert hat (Löschen bucht genau das zurück; fehlt er, z. B. bei importierten Buchungen, ändert Löschen das Cash nicht).
    tx.hist: nur nachgetragen (die Bewegung ist im heutigen Cash schon enthalten).
    Umbuchung: {type:'umbuchung', a: von-Baustein, to: nach-Baustein, amount}; tx.cash = −amount (Wirkung auf a), to erhält +amount.
-   tx.reb: Datum des Rebalancings, mit dem die Buchung eingetragen wurde (Knopf „Vorgeschlagenes Rebalancing umgesetzt“). */
+   tx.reb: Datum des Rebalancings, mit dem die Buchung eingetragen wurde (Knopf „Vorgeschlagenes Rebalancing umgesetzt“).
+   tx.tax: beim Verkauf von Trade Republic einbehaltene Steuer in Euro (mindert das Cash, nicht den Gewinn; seit 07.10.2026). */
 (function (root) {
   'use strict';
   var KEY = 'regelDepot.v1', BKEY = KEY + '.backups', CKEY = KEY + '.corrupt';
@@ -53,6 +54,7 @@
       out.units = u; out.price = p;
     }
     var fee = num(t.fee); if (fee != null && !(fee >= 0)) return { err: where + ': Gebühr ' + show(t.fee) + ' ungültig' }; out.fee = fee || 0;
+    var wt = num(t.tax); if (wt != null) { if (!(wt >= 0)) return { err: where + ': Steuer ' + show(t.tax) + ' ungültig' }; if (type === 'verkauf' && wt > 0) out.tax = wt; }
     var ca = num(t.cash); if (ca != null && isFinite(ca)) out.cash = ca;
     if (type !== 'umbuchung' && (t.hist === true || t.hist === 'true' || (cashMove && t.cash == null && /\(nachgetragen[,)]/.test(out.note)))) out.hist = true;
     if (t.reb) { var rb = E().parseDate(t.reb); if (rb) out.reb = rb; }

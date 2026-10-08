@@ -176,8 +176,9 @@
     }
     return { q: q, g20: g20, taxable20: g20 * (1 - cfg.tfs), sg: sg, lg: lg, parts: parts };
   }
-  /* Größter Verkaufswert ohne Steuer und ohne Abzug (FIFO, ohne Lose zu überspringen) */
-  function taxFreeMax(lots, px, date, a, cfg, ty) {
+  /* Größter Verkaufswert ohne Steuer und ohne Abzug (FIFO, ohne Lose zu überspringen). acc0: kurzfristige § 23-Gewinne des Jahres vor diesem
+     Verkauf (ohne Angabe ty.s23Before); so nutzen mehrere Verkäufe am selben Stichtag die Freigrenze gemeinsam (Prüfbericht 02.10.2026 Punkt 4) */
+  function taxFreeMax(lots, px, date, a, cfg, ty, acc0) {
     var val = 0;
     if (a === 'ftse') {
       var room = Math.max(0, ty.pbFree);
@@ -188,7 +189,7 @@
       }
       return val;
     }
-    var limit = cfg.fg - (cfg.buffer || 0) - 0.01, acc = ty.s23Before; /* Summe muss unter 1.000 € bleiben */
+    var limit = cfg.fg - (cfg.buffer || 0) - 0.01, acc = acc0 != null ? acc0 : ty.s23Before; /* Summe muss unter 1.000 € bleiben */
     for (var j = 0; j < lots.length; j++) {
       var L = lots[j];
       if (isLongTerm(L.d, date)) { val += L.units * px; continue; }
@@ -200,10 +201,45 @@
     return val;
   }
 
+  /* Krypto-Baustein mit Beimischung (Justus 26.09.2026: Verkäufe anteilig aus Bitcoin und Beimischung): groups = Lose je Coin in Bitcoin-Äquivalent
+     (gleicher Kurs px, gleiche Kosten in Euro). Ein Verkauf im Wert v verteilt sich nach dem Wert der Gruppen, jede Gruppe verkauft FIFO für sich, so
+     wie die Seite die Orders bucht (Prüfbericht 02.10.2026 Punkt 5; vorher rechnete die Vorschau FIFO über alle Coins nach Datum). */
+  function groupShares(groups, px) { var vs = groups.map(function (g) { return units(g) * px; }), V = vs.reduce(function (s, v) { return s + v; }, 0); return vs.map(function (v) { return V > 0 ? v / V : 0; }); }
+  function simSellGroups(groups, v, px, date, a, cfg) {
+    if (!groups || groups.length < 2) return simSell((groups && groups[0]) || [], v, px, date, a, cfg);
+    var sh = groupShares(groups, px), out = { q: 0, g20: 0, taxable20: 0, sg: 0, lg: 0, parts: [] };
+    groups.forEach(function (g, i) { if (!(sh[i] > 0)) return; var x = simSell(g, v * sh[i], px, date, a, cfg); out.q += x.q; out.g20 += x.g20; out.taxable20 += x.taxable20; out.sg += x.sg; out.lg += x.lg; out.parts = out.parts.concat(x.parts); });
+    return out;
+  }
+  /* Wie taxFreeMax für einen anteiligen Verkauf über mehrere Gruppen (§ 23): Abschnitte zwischen den Losgrenzen aller Gruppen; je Abschnitt wächst der
+     kurzfristige Gewinn linear mit dem Verkaufswert. Ohne Lose zu überspringen, bis der Rest zur Freigrenze aufgebraucht ist. */
+  function taxFreeMaxGroups(groups, px, date, a, cfg, ty, acc0) {
+    if (!groups || groups.length < 2 || a === 'ftse') return taxFreeMax((groups && groups[0]) || [], px, date, a, cfg, ty, acc0);
+    var sh = groupShares(groups, px), limit = cfg.fg - (cfg.buffer || 0) - 0.01, acc = acc0 != null ? acc0 : ty.s23Before, pts = [], VT = 0;
+    groups.forEach(function (g, i) { VT += units(g) * px; if (!(sh[i] > 0)) return; var cum = 0; g.forEach(function (l) { cum += l.units * px; pts.push(cum / sh[i]); }); });
+    pts.push(VT); pts.sort(function (x, y) { return x - y; });
+    var v0 = 0;
+    for (var p = 0; p < pts.length; p++) {
+      var v1 = Math.min(pts[p], VT); if (v1 <= v0 + 1e-9) continue;
+      var mid = (v0 + v1) / 2, rate = 0;
+      groups.forEach(function (g, i) {
+        if (!(sh[i] > 0)) return;
+        var at = mid * sh[i], cum = 0;
+        for (var j = 0; j < g.length; j++) { cum += g[j].units * px; if (at < cum) { if (!isLongTerm(g[j].d, date)) rate += sh[i] * (px - g[j].cpu) / px; break; } }
+      });
+      if (rate > 0) { var room = limit - acc; if (room <= 0) return v0; var dv = room / rate; if (v0 + dv < v1) return v0 + dv; }
+      acc += rate * (v1 - v0); v0 = v1;
+    }
+    return VT;
+  }
+
   /* ---------- Rebalancing (A-1, A-2, O-15) ----------
-     o: {date, w:{ftse,btc,gold}, st:{}, px:{} (EUR), pos:{} (FIFO-Lose), cash:{}, cfg, ty, variant:'frei'|'voll'} */
+     o: {date, w:{ftse,btc,gold}, st:{}, px:{} (EUR), pos:{} (FIFO-Lose), cash:{}, cfg, ty, variant:'frei'|'voll', groups:{btc:[Lose je Coin]} (optional)} */
   function rebalance(o) {
-    var A = ['ftse', 'btc', 'gold'], cfg = o.cfg, ty = o.ty, rows = {}, T = 0;
+    var A = ['ftse', 'btc', 'gold'], cfg = o.cfg, ty = o.ty, rows = {}, T = 0, GR = o.groups || {};
+    function grouped(a) { return GR[a] && GR[a].length > 1; }
+    function sim(a, v) { return grouped(a) ? simSellGroups(GR[a], v, o.px[a], o.date, a, cfg) : simSell(o.pos[a], v, o.px[a], o.date, a, cfg); }
+    function capOf(a, acc) { return grouped(a) ? taxFreeMaxGroups(GR[a], o.px[a], o.date, a, cfg, ty, acc) : taxFreeMax(o.pos[a], o.px[a], o.date, a, cfg, ty, acc); }
     A.forEach(function (a) {
       var lots = o.pos[a] || [], u = units(lots), V = u * (o.px[a] || 0), C = o.cash[a] || 0;
       rows[a] = { a: a, st: o.st[a], units: u, V: V, C: C, S: V + C, sell: 0, buy: 0, cashTo: 0, ruleSale: false, g20: 0, t20: 0, sg: 0, lg: 0 };
@@ -212,6 +248,10 @@
     A.forEach(function (a) { rows[a].G = T * o.w[a]; });
     /* Regel-Verkauf: Regel draußen, Position aber noch da */
     A.forEach(function (a) { var r = rows[a]; if (r.st === 0 && r.V > 0) { r.ruleSale = true; r.sell = r.V; } });
+    /* § 23-Freigrenze gemeinsam für Bitcoin und Gold (Prüfbericht 02.10.2026 Punkt 4; vorher bekam jede Anlage den ganzen Rest): zuerst die Gewinne
+       offener Regel-Verkäufe, dann die gedeckelten Verkäufe nacheinander, Bitcoin vor Gold */
+    var acc23 = ty.s23Before;
+    A.forEach(function (a) { var r = rows[a]; if (r.ruleSale && a !== 'ftse') acc23 += sim(a, r.V).sg; });
     var supply = 0, demand = 0;
     A.forEach(function (a) {
       var r = rows[a], desired = r.S - r.G;
@@ -219,8 +259,9 @@
         var fromCash = Math.min(desired, r.C + (r.ruleSale ? r.V : 0));
         var rest = desired - fromCash;
         if (r.st === 1 && rest > 0) {
-          var cap = o.variant === 'frei' ? taxFreeMax(o.pos[a], o.px[a], o.date, a, cfg, ty) : Infinity;
+          var cap = o.variant === 'frei' ? capOf(a, acc23) : Infinity;
           r.sellWanted = rest; r.sell = Math.min(rest, cap); r.capped = r.sell < rest - 0.5;
+          if (a !== 'ftse' && r.sell > 0) acc23 += sim(a, r.sell).sg;
         }
         r.give = fromCash + (r.st === 1 ? r.sell : 0);
         supply += r.give;
@@ -236,7 +277,7 @@
       if (r.want) { r.get = r.want * f; if (r.st === 1) r.buy = (r.buyOwn || 0) + r.get; else r.cashTo = r.get; }
       else if (r.st === 1 && r.buyOwn) r.buy = r.buyOwn;
       if (r.st === 0 && !r.want) { r.cashTo = -(r.give || 0) + (r.ruleSale ? r.V : 0); }
-      if (r.sell > 0) { var sm = simSell(o.pos[a], r.sell, o.px[a], o.date, a, cfg); r.sellUnits = sm.q; r.g20 = sm.g20; r.t20 = sm.taxable20; r.sg = sm.sg; r.lg = sm.lg; r.anyShort = sm.parts.some(function (x) { return !x.long; }); }
+      if (r.sell > 0) { var sm = sim(a, r.sell); r.sellUnits = sm.q; r.g20 = sm.g20; r.t20 = sm.taxable20; r.sg = sm.sg; r.lg = sm.lg; r.anyShort = sm.parts.some(function (x) { return !x.long; }); }
       if (r.buy > 0) r.buyUnits = r.buy / (o.px[a] || 1);
       r.after = r.st === 1 ? (r.V - r.sell + r.buy) : (r.C + (r.ruleSale ? r.V : 0) + (r.want ? r.get : -(r.give || 0)));
     });
@@ -543,7 +584,7 @@
     iso: iso, addDays: addDays, mondayOf: mondayOf, daysBetween: daysBetween, oneYearAfter: oneYearAfter, isLongTerm: isLongTerm, taxFreeFrom: taxFreeFrom,
     fromRows: fromRows, toRows: toRows, weeklyFromDaily: weeklyFromDaily, mergeWeekly: mergeWeekly, slice: slice, append: append,
     evalRule: evalRule, flipThreshold: flipThreshold, whatIf: whatIf, edgeCase: edgeCase,
-    book: book, units: units, cost: cost, taxYear: taxYear, tax23: tax23, tax20: tax20, simSell: simSell, taxFreeMax: taxFreeMax, rebalance: rebalance, rebalDates: rebalDates, quarterOf: quarterOf, vorab: vorab
+    book: book, units: units, cost: cost, taxYear: taxYear, tax23: tax23, tax20: tax20, simSell: simSell, taxFreeMax: taxFreeMax, simSellGroups: simSellGroups, taxFreeMaxGroups: taxFreeMaxGroups, rebalance: rebalance, rebalDates: rebalDates, quarterOf: quarterOf, vorab: vorab
   };
   if (typeof module !== 'undefined' && module.exports) module.exports = ENG;
   else root.ENG = ENG;
