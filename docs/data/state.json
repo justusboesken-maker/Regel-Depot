@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-10-23T13:39:31.953Z",
+ "updated": "2026-10-23T13:48:33.466Z",
  "assets": {
   "ftse": {
    "k": "2026-10-12",
@@ -154,27 +154,27 @@
  "cross": {},
  "warn": {
   "ftse": {
-   "t": "2026-10-16T13:47:48.349Z",
-   "forWeek": "2026-10-12",
-   "price": 185.97,
-   "priceTime": "2026-10-16T13:29:00.000Z",
-   "thr": 174.2707,
-   "dist": 0.067133,
+   "t": "2026-10-23T13:48:33.466Z",
+   "forWeek": "2026-10-19",
+   "price": 182.54,
+   "priceTime": "2026-10-23T13:26:00.000Z",
+   "thr": 174.8142,
+   "dist": 0.044194,
    "level": "none",
    "would": null,
-   "text": "FTSE All-World steht gerade bei 185,97 $ (EODHD, etwa 15–20 Minuten verzögert). Schwelle für den Wochenschluss am Freitag: 174,27 $, 6,7 % darüber. Schließt die Woche so, bleibt die Regel investiert.",
+   "text": "FTSE All-World steht gerade bei 182,54 $ (EODHD, etwa 15–20 Minuten verzögert). Schwelle für den Wochenschluss am Freitag: 174,81 $, 4,4 % darüber. Schließt die Woche so, bleibt die Regel investiert.",
    "src": "eodhd VWRD.LSE live"
   },
   "gold": {
-   "t": "2026-10-16T13:47:48.349Z",
-   "forWeek": "2026-10-12",
-   "price": 4175.2998,
-   "priceTime": "2026-10-16T13:47:37Z",
-   "thr": 4475.2367,
-   "dist": -0.067021,
+   "t": "2026-10-23T13:48:33.466Z",
+   "forWeek": "2026-10-19",
+   "price": 4020.3,
+   "priceTime": "2026-10-23T13:48:13Z",
+   "thr": 4479.2837,
+   "dist": -0.102468,
    "level": "none",
    "would": null,
-   "text": "Gold steht gerade bei 4.175,30 $ (Spotpreis (gold-api.com)). Schwelle für den Wochenschluss am Freitag: 4.475,24 $, 6,7 % darunter. Schließt die Woche so, bleibt die Regel auf Cash.",
+   "text": "Gold steht gerade bei 4.020,30 $ (Spotpreis (gold-api.com)). Schwelle für den Wochenschluss am Freitag: 4.479,28 $, 10,2 % darunter. Schließt die Woche so, bleibt die Regel auf Cash.",
    "src": "gold-api.com XAU/USD spot"
   },
   "btc": {
@@ -191,7 +191,7 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-warn",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-10-12",
