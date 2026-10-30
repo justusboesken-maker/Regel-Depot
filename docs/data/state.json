@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-10-30T11:17:47.402Z",
+ "updated": "2026-10-30T15:05:14.903Z",
  "assets": {
   "ftse": {
    "k": "2026-10-19",
@@ -164,15 +164,15 @@
  "cross": {},
  "warn": {
   "ftse": {
-   "t": "2026-10-23T13:48:33.466Z",
-   "forWeek": "2026-10-19",
-   "price": 182.54,
-   "priceTime": "2026-10-23T13:26:00.000Z",
-   "thr": 174.8142,
-   "dist": 0.044194,
+   "t": "2026-10-30T15:05:14.903Z",
+   "forWeek": "2026-10-26",
+   "price": 182.73,
+   "priceTime": "2026-10-30T14:42:00.000Z",
+   "thr": 175.2602,
+   "dist": 0.042621,
    "level": "none",
    "would": null,
-   "text": "FTSE All-World steht gerade bei 182,54 $ (EODHD, etwa 15–20 Minuten verzögert). Schwelle für den Wochenschluss am Freitag: 174,81 $, 4,4 % darüber. Schließt die Woche so, bleibt die Regel investiert.",
+   "text": "FTSE All-World steht gerade bei 182,73 $ (EODHD, etwa 15–20 Minuten verzögert). Schwelle für den Wochenschluss am Freitag: 175,26 $, 4,3 % darüber. Schließt die Woche so, bleibt die Regel investiert.",
    "src": "eodhd VWRD.LSE live"
   },
   "gold": {
@@ -201,7 +201,7 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-warn",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-10-19",
