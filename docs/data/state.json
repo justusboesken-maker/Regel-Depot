@@ -1,15 +1,15 @@
 {
  "version": 1,
- "updated": "2026-10-30T17:57:24.269Z",
+ "updated": "2026-10-30T18:20:32.709Z",
  "assets": {
   "ftse": {
-   "k": "2026-10-19",
-   "d": "2026-10-23",
-   "c": 183.14,
-   "m": 174.9808,
-   "dist": 0.046629,
+   "k": "2026-10-26",
+   "d": "2026-10-30",
+   "c": 182.15,
+   "m": 175.398,
+   "dist": 0.038495,
    "st": 1,
-   "up": 78,
+   "up": 79,
    "dn": 0,
    "changed": false,
    "lastSwitch": {
@@ -20,17 +20,17 @@
     "m": 132.5619
    },
    "next": {
-    "above": 175.2602,
-    "bandUp": 180.6286,
-    "bandDown": 169.8984
+    "above": 175.7885,
+    "bandUp": 181.173,
+    "bandDown": 170.4105
    },
    "rule": {
     "type": "confirm",
     "n": 2
    },
-   "weeks": 753,
-   "updated": "2026-10-23T17:16:11.462Z",
-   "src": "alphavantage VWRD.LON weekly adjusted + Schlusskurs 2026-10-23 von EODHD (Tagesschluss)",
+   "weeks": 754,
+   "updated": "2026-10-30T18:20:32.709Z",
+   "src": "alphavantage VWRD.LON weekly adjusted + Schlusskurs 2026-10-30 von EODHD (Tagesschluss)",
    "fallback": false,
    "primaryError": null,
    "pending": null,
@@ -211,7 +211,7 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-close",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-10-26",
@@ -224,7 +224,7 @@
  "outage": {
   "lbma": {
    "since": "2026-10-02T14:22:34.478Z",
-   "last": "2026-10-30T17:57:24.269Z",
+   "last": "2026-10-30T18:20:32.709Z",
    "err": "LBMA HTTP 403 (3 Versuche)"
   }
  }
