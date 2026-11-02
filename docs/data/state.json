@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-11-02T09:39:19.144Z",
+ "updated": "2026-11-02T13:21:53.995Z",
  "assets": {
   "ftse": {
    "k": "2026-10-26",
@@ -210,18 +210,9 @@
    "src": "coinbase BTC-USD spot"
   }
  },
- "queue": [
-  {
-   "id": "err-lbma-2026-11-02",
-   "title": "Investus: LBMA-Fixing fehlt",
-   "body": "Die LBMA ist seit 02.10., 16:22 Uhr nicht erreichbar (LBMA HTTP 403 (3 Versuche)). Vorläufig mit dem Spotpreis nach dem Fixing gebucht: 02.10. 4.187,70 $, 09.10. 4.187,40 $, 16.10. 4.192,40 $, 23.10. 3.990,90 $, 30.10. 3.884,70 $. Sobald die LBMA wieder antwortet, ersetzt das Fixing diese Schlüsse; ändert sich dadurch die Regel, kommt eine Nachricht.",
-   "tag": "err-gold",
-   "url": "./#status",
-   "ts": "2026-11-02T09:39:19.144Z"
-  }
- ],
- "step": "mo-close",
- "pendingQueue": 1,
+ "queue": [],
+ "step": "live",
+ "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-10-26",
   "d": "2026-10-30",
@@ -233,7 +224,7 @@
  "outage": {
   "lbma": {
    "since": "2026-10-02T14:22:34.478Z",
-   "last": "2026-11-02T09:39:19.144Z",
+   "last": "2026-11-02T13:21:53.995Z",
    "err": "LBMA HTTP 403 (3 Versuche)"
   }
  }
