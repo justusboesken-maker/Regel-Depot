@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-11-02T16:37:31.724Z",
+ "updated": "2026-11-02T22:43:02.886Z",
  "assets": {
   "ftse": {
    "k": "2026-10-26",
@@ -211,7 +211,7 @@
   }
  },
  "queue": [],
- "step": "mo-notify",
+ "step": "live",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-10-26",
@@ -224,7 +224,7 @@
  "outage": {
   "lbma": {
    "since": "2026-10-02T14:22:34.478Z",
-   "last": "2026-11-02T16:37:31.724Z",
+   "last": "2026-11-02T22:43:02.886Z",
    "err": "LBMA HTTP 403 (3 Versuche)"
   }
  }
