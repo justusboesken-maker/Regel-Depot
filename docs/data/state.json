@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-11-20T13:56:38.816Z",
+ "updated": "2026-11-20T21:45:12.286Z",
  "assets": {
   "ftse": {
    "k": "2026-11-09",
@@ -81,14 +81,14 @@
    "prelim": []
   },
   "gold": {
-   "k": "2026-11-09",
-   "d": "2026-11-13",
-   "c": 3880.27,
-   "m": 4459.3614,
-   "dist": -0.12986,
+   "k": "2026-11-16",
+   "d": "2026-11-20",
+   "c": 3527.17,
+   "m": 4445.0448,
+   "dist": -0.206494,
    "st": 0,
    "up": 0,
-   "dn": 11,
+   "dn": 12,
    "changed": false,
    "lastSwitch": {
     "k": "2026-06-29",
@@ -98,25 +98,25 @@
     "m": 4290.081
    },
    "next": {
-    "above": 4463.7769,
-    "bandUp": 4600.5069,
-    "bandDown": 4327.2143
+    "above": 4447.0467,
+    "bandUp": 4583.2642,
+    "bandDown": 4310.9959
    },
    "rule": {
     "type": "confirm",
     "n": 4
    },
-   "weeks": 1141,
-   "updated": "2026-11-13T20:26:28.377Z",
-   "src": "Spotpreis gold-api.com 2026-11-13T20:27:25Z (vorläufig, LBMA-Fixing fehlt)",
+   "weeks": 1142,
+   "updated": "2026-11-20T21:45:12.286Z",
+   "src": "Spotpreis gold-api.com 2026-11-20T21:46:06Z (vorläufig, LBMA-Fixing fehlt)",
    "fallback": true,
    "primaryError": "Kursabruf fehlgeschlagen: LBMA HTTP 403 (3 Versuche)",
    "pending": null,
    "holiday": false,
    "partial": false,
    "edge": false,
-   "preliminary": "2026-11-13",
-   "prelimLabel": "Spotpreis 13.11. 20:27 Uhr London (gold-api.com), das LBMA-Fixing fehlt noch",
+   "preliminary": "2026-11-20",
+   "prelimLabel": "Spotpreis 20.11. 21:46 Uhr London (gold-api.com), das LBMA-Fixing fehlt noch",
    "prelim": [
     {
      "k": "2026-09-28",
@@ -187,6 +187,16 @@
      "src": "Spotpreis gold-api.com 2026-11-13T20:27:25Z (vorläufig, LBMA-Fixing fehlt)",
      "fallback": true,
      "primaryError": "Kursabruf fehlgeschlagen: LBMA HTTP 403 (3 Versuche)"
+    },
+    {
+     "k": "2026-11-16",
+     "d": "2026-11-20",
+     "c": 3527.17,
+     "label": "Spotpreis 20.11. 21:46 Uhr London (gold-api.com), das LBMA-Fixing fehlt noch",
+     "why": "spot",
+     "src": "Spotpreis gold-api.com 2026-11-20T21:46:06Z (vorläufig, LBMA-Fixing fehlt)",
+     "fallback": true,
+     "primaryError": "Kursabruf fehlgeschlagen: LBMA HTTP 403 (3 Versuche)"
     }
    ]
   }
@@ -234,17 +244,17 @@
  "step": "live",
  "pendingQueue": 0,
  "goldSnap": {
-  "k": "2026-11-09",
-  "d": "2026-11-13",
-  "p": 3880.27,
-  "t": "2026-11-13T20:27:25Z",
+  "k": "2026-11-16",
+  "d": "2026-11-20",
+  "p": 3527.17,
+  "t": "2026-11-20T21:46:06Z",
   "src": "gold-api.com",
   "late": true
  },
  "outage": {
   "lbma": {
    "since": "2026-10-02T14:22:34.478Z",
-   "last": "2026-11-20T13:56:38.816Z",
+   "last": "2026-11-20T21:45:12.286Z",
    "err": "LBMA HTTP 403 (3 Versuche)"
   }
  }
