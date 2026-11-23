@@ -1,6 +1,6 @@
 {
  "version": 1,
- "updated": "2026-11-22T20:40:05.262Z",
+ "updated": "2026-11-23T00:50:35.097Z",
  "assets": {
   "ftse": {
    "k": "2026-11-16",
@@ -228,20 +228,20 @@
    "src": "gold-api.com XAU/USD spot"
   },
   "btc": {
-   "t": "2026-11-15T23:57:50.706Z",
-   "forWeek": "2026-11-09",
-   "price": 65224.875,
-   "priceTime": "2026-11-15T23:57:51.331Z",
-   "thr": 72884.245,
-   "dist": -0.10509,
-   "level": "switch",
-   "would": 0,
-   "text": "Bitcoin steht gerade bei 65.225 $. Schwelle für den Wochenschluss am Sonntag um 24 Uhr UTC: 72.884 $, 10,5 % darunter. Schließt die Woche so, gibt es ein Verkaufssignal (Handel am Montag, 16.11.).",
+   "t": "2026-11-23T00:50:35.097Z",
+   "forWeek": "2026-11-23",
+   "price": 60983.165,
+   "priceTime": "2026-11-23T00:50:35.783Z",
+   "thr": 76959.642,
+   "dist": -0.207596,
+   "level": "none",
+   "would": null,
+   "text": "Bitcoin steht gerade bei 60.983 $. Schwelle für den Wochenschluss am Sonntag um 24 Uhr UTC: 76.960 $, 20,8 % darunter. Schließt die Woche so, bleibt die Regel auf Cash.",
    "src": "coinbase BTC-USD spot"
   }
  },
  "queue": [],
- "step": "live",
+ "step": "so-warn",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-11-16",
