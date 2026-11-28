@@ -1,35 +1,35 @@
 {
  "version": 1,
- "updated": "2026-11-27T23:21:56.825Z",
+ "updated": "2026-11-28T00:42:23.284Z",
  "assets": {
   "ftse": {
-   "k": "2026-11-16",
-   "d": "2026-11-20",
-   "c": 169,
-   "m": 176.3392,
-   "dist": -0.04162,
-   "st": 1,
+   "k": "2026-11-23",
+   "d": "2026-11-27",
+   "c": 174.72,
+   "m": 176.5868,
+   "dist": -0.010572,
+   "st": 0,
    "up": 0,
-   "dn": 1,
-   "changed": false,
+   "dn": 2,
+   "changed": true,
    "lastSwitch": {
-    "k": "2025-05-05",
-    "d": "2025-05-09",
-    "to": 1,
-    "c": 135.9336,
-    "m": 132.5619
+    "k": "2026-11-23",
+    "d": "2026-11-27",
+    "to": 0,
+    "c": 174.72,
+    "m": 176.5868
    },
    "next": {
-    "above": 176.6249,
-    "bandUp": 182.0351,
-    "bandDown": 171.2213
+    "above": 176.8606,
+    "bandUp": 182.278,
+    "bandDown": 171.4498
    },
    "rule": {
     "type": "confirm",
     "n": 2
    },
-   "weeks": 757,
-   "updated": "2026-11-20T23:22:59.267Z",
+   "weeks": 758,
+   "updated": "2026-11-28T00:42:23.284Z",
    "src": "alphavantage VWRD.LON weekly adjusted",
    "fallback": false,
    "primaryError": null,
@@ -251,7 +251,7 @@
   }
  },
  "queue": [],
- "step": "live",
+ "step": "fr-close",
  "pendingQueue": 0,
  "goldSnap": {
   "k": "2026-11-23",
@@ -264,7 +264,7 @@
  "outage": {
   "lbma": {
    "since": "2026-10-02T14:22:34.478Z",
-   "last": "2026-11-27T23:21:56.825Z",
+   "last": "2026-11-28T00:42:23.284Z",
    "err": "LBMA HTTP 403 (3 Versuche)"
   }
  }
